@@ -1,0 +1,9 @@
+config/settings.py
+.env
+chroma_demo.py
+data/chroma_db/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.egg-info/

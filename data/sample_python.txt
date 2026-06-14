@@ -1,0 +1,59 @@
+# Python 编程语言基础
+
+## 简介
+
+Python 是一种高级、解释型、通用编程语言，由 Guido van Rossum 于 1991 年创建。Python 的设计哲学强调代码可读性和简洁性，使用显著的缩进来表示代码块。Python 支持多种编程范式，包括面向对象、函数式和过程式编程。
+
+## 核心特性
+
+1. **动态类型**：变量无需声明类型，解释器在运行时自动推断。
+2. **自动内存管理**：通过垃圾回收机制自动管理内存。
+3. **丰富的标准库**：内置大量模块，涵盖文件 I/O、网络通信、数据处理等。
+4. **跨平台**：可在 Windows、macOS、Linux 等主流操作系统上运行。
+5. **可扩展性**：可以调用 C/C++ 编写的库，性能关键部分可用底层语言实现。
+
+## 基本语法
+
+### 变量和数据类型
+```python
+name = "Alice"        # 字符串
+age = 25              # 整数
+height = 1.68         # 浮点数
+is_student = True     # 布尔值
+hobbies = ["读书", "编程", "跑步"]  # 列表
+```
+
+### 控制流
+```python
+if age >= 18:
+    print("成年人")
+else:
+    print("未成年人")
+
+for hobby in hobbies:
+    print(f"爱好：{hobby}")
+
+while count > 0:
+    count -= 1
+```
+
+### 函数定义
+```python
+def greet(name, greeting="你好"):
+    return f"{greeting}，{name}！"
+```
+
+## 常用数据结构
+
+- **列表（list）**：有序可变序列，可包含不同类型的元素。
+- **元组（tuple）**：有序不可变序列。
+- **字典（dict）**：键值对映射，键唯一且不可变。
+- **集合（set）**：无序不重复元素集合，支持集合运算。
+
+## 流行应用领域
+
+1. **Web 开发**：Django、Flask、FastAPI 等框架。
+2. **数据科学**：NumPy、Pandas、Matplotlib 等库。
+3. **机器学习与 AI**：scikit-learn、PyTorch、TensorFlow。
+4. **自动化脚本**：系统管理、文件处理、爬虫。
+5. **DevOps**：自动化部署、配置管理。

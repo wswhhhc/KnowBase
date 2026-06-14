@@ -1,0 +1,48 @@
+# LangChain 框架入门
+
+## 什么是 LangChain
+
+LangChain 是一个用于开发大语言模型（LLM）应用的框架，于 2022 年 10 月首次发布。它提供了模块化的组件和工具，帮助开发者构建从简单提示词调用到复杂多步骤 Agent 的各种应用。
+
+## 核心组件
+
+### 1. 模型 I/O
+封装了对 LLM 的调用接口，支持多种模型提供商（OpenAI、Anthropic、DeepSeek 等）。主要组件包括：
+- **LLM**：纯文本模型接口。
+- **ChatModel**：对话模型接口，支持消息角色（system、user、assistant）。
+- **PromptTemplate**：提示词模板，支持变量插值和格式化。
+- **OutputParser**：解析模型输出为结构化数据。
+
+### 2. 数据连接
+用于连接和预处理外部数据源：
+- **Document Loaders**：加载各种格式的文档（PDF、TXT、Markdown、HTML 等）。
+- **Text Splitters**：将长文档分割成合适的片段，常用 RecursiveCharacterTextSplitter。
+- **Vector Stores**：向量数据库接口，支持 Chroma、FAISS、Pinecone 等。
+- **Embeddings**：文本嵌入模型接口，将文本转换为向量表示。
+
+### 3. 链（Chains）
+将多个组件串联成处理流水线，例如检索增强生成（RAG）链：检索文档 → 构建提示词 → 调用 LLM → 解析输出。
+
+### 4. 记忆（Memory）
+为对话系统提供历史记忆能力，支持多种记忆类型：
+- ConversationBufferMemory：保存完整对话历史。
+- ConversationSummaryMemory：对历史进行摘要。
+- VectorStoreRetrieverMemory：基于向量检索的相关记忆。
+
+## 检索增强生成（RAG）
+
+RAG 是 LangChain 最核心的应用模式之一，通过将外部知识库与 LLM 结合来提升回答质量。标准流程：
+
+1. 加载文档 → 2. 分割文本 → 3. 生成嵌入 → 4. 存入向量库
+5. 用户提问 → 6. 检索相关文档 → 7. 构建上下文提示词 → 8. LLM 生成回答
+
+## LangGraph
+
+LangGraph 是 LangChain 生态中的流程编排框架，用于构建有状态的多步骤工作流。与传统的 Chain 不同，LangGraph 支持：
+
+- **有向图结构**：节点和边的灵活组合，支持条件分支和循环。
+- **状态管理**：在图的各个节点间传递和更新状态。
+- **流式输出**：支持逐步输出中间结果，提升用户体验。
+- **人机协作**：可以在工作流中插入人工审批节点。
+
+LangGraph 非常适合构建复杂的问答系统、多步骤推理 Agent 和自动化工作流。
