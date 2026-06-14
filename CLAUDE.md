@@ -5,50 +5,84 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# 运行 Streamlit 应用
-uv run streamlit run src/app.py
+# 运行 FastAPI 后端
+cd backend && uv run uvicorn src.api.main:app --reload --port 8000
 
-# 运行所有测试
-uv run python -m unittest discover -s tests
+# 运行 React 前端
+cd frontend && npm run dev
+
+# 运行所有测试（从 backend 目录）
+cd backend && uv run python -m unittest discover -s tests
 
 # 运行单个测试文件
-uv run python -m unittest tests.test_graph
-uv run python -m unittest tests.test_knowledge_base
-uv run python -m unittest tests.test_loaders
-uv run python -m unittest tests.test_metrics
-uv run python -m unittest tests.test_routing
-uv run python -m unittest tests.test_settings
-uv run python -m unittest tests.test_utils
-
-# 运行单个测试方法
-uv run python -m unittest tests.test_graph.GraphRoutingTests.test_run_query_uses_thread_memory_for_followup
+cd backend && uv run python -m unittest tests.test_graph
+cd backend && uv run python -m unittest tests.test_knowledge_base
 
 # 包同步（安装依赖）
-uv sync
+cd backend && uv sync
+cd frontend && npm install
 
 # 离线 RAG 评估
-uv run python -m src.evaluate
+cd backend && uv run python -m src.evaluate
 ```
 
 ## Architecture
 
-**KnowBase** — LangChain + LangGraph 知识库问答助手，Streamlit UI + Chroma 本地向量库 + BM25 混合检索。
+**KnowBase** — LangChain + LangGraph 知识库问答助手。
+
+### 项目结构
+
+```
+KnowBase/
+├── backend/              # FastAPI 后端（前后端分离架构）
+│   ├── config/           # pydantic-settings 配置
+│   ├── src/
+│   │   ├── api/          # FastAPI 路由层
+│   │   │   ├── main.py           # 应用入口 + CORS
+│   │   │   ├── deps.py           # KnowledgeBase 依赖注入
+│   │   │   ├── models.py         # Pydantic 请求/响应模型
+│   │   │   └── routes/
+│   │   │       ├── chat.py           # SSE 流式聊天
+│   │   │       ├── conversations.py  # 对话 CRUD
+│   │   │       ├── documents.py      # 上传/URL导入/来源管理
+│   │   │       ├── knowledge_base.py # 知识库浏览
+│   │   │       └── metrics.py        # 查询日志
+│   │   ├── graph.py          # LangGraph 工作流
+│   │   ├── knowledge_base.py # Chroma + BM25 核心
+│   │   ├── conversations.py  # 对话管理模块
+│   │   ├── loaders.py        # 文档加载器
+│   │   ├── web_search.py     # Tavily 搜索
+│   │   ├── metrics.py        # JSONL 日志
+│   │   └── utils.py          # 工具函数
+│   └── tests/
+├── frontend/             # React + Vite + Tailwind 前端
+│   └── src/
+│       ├── components/
+│       │   ├── ui/       # shadcn/ui 组件
+│       │   ├── ChatArea.tsx
+│       │   └── Sidebar.tsx
+│       ├── hooks/
+│       │   ├── useChat.ts    # SSE 流式聊天 hook
+│       │   └── useData.ts    # 对话/文档管理 hook
+│       └── lib/
+│           ├── api.ts        # API 客户端
+│           └── utils.ts      # 工具函数
+├── config/               # 共享配置（pydantic-settings）
+└── data/                 # 共享数据（chroma/checkpoints/logs）
+```
 
 ### 核心模块
 
 | 模块 | 职责 |
 |------|------|
-| **`src/app.py`** | Streamlit 入口。初始化知识库，管理对话/消息，调用 LangGraph 工作流并显示流式输出。会话持久化到 SQLite。 |
-| **`src/graph.py`** | LangGraph 工作流定义。节点：问题路由 → 查询改写 → 混合检索 → 重排序 → 生成回答 → 质量检查 →（联网搜索兜底/扩检重试）。`SqliteSaver` 保存线程状态。 |
-| **`src/knowledge_base.py`** | 知识库核心。Chroma 向量库存储/检索，jieba BM25 索引，RRF 融合排序。`chunk_id` 基于 `source:chunk_index:content_hash[:16]` 稳定生成，基于 hash 去重。 |
-| **`src/loaders.py`** | 多格式文档加载器。支持 `.txt` / `.md` / `.pdf` / `.docx` / `.html(.htm)`。新增 `load_url()` 支持从 URL 抓取网页内容。 |
-| **`src/conversations.py`** | 对话管理。SQLite 存储对话元数据和消息记录，支持 CRUD 和 Markdown 导出。 |
-| **`src/kb_browser.py`** | 知识库内容浏览子页面。按来源筛选、关键词搜索、查看文档片段内容。 |
-| **`src/web_search.py`** | 联网搜索模块。基于 Tavily API（可选），由用户在侧边栏开关控制。 |
-| **`src/utils.py`** | 文件上传校验（扩展名白名单和大小限制）和临时保存。 |
-| **`src/metrics.py`** | RAG 查询本地 JSONL 日志，记录每次查询的耗时、检索数量、质量决策。 |
-| **`src/evaluate.py`** | 离线评估脚本，读取 `docs/rag_eval_dataset.jsonl`，输出 groundedness/correctness 等指标。 |
-| **`src/metrics_dashboard.py`** | 指标面板，展示耗时分布、每日趋势、质量通过率、最近查询。 |
+| **`backend/src/api/`** | FastAPI REST API，SSE 流式聊天，CORS 代理到前端 |
+| **`backend/src/graph.py`** | LangGraph 工作流定义。节点：问题路由 → 查询改写 → 混合检索 → 重排序 → 生成回答 → 质量检查 →（联网搜索兜底/扩检重试）。`SqliteSaver` 保存线程状态。 |
+| **`backend/src/knowledge_base.py`** | 知识库核心。Chroma 向量库存储/检索，jieba BM25 索引，RRF 融合排序。`chunk_id` 基于 `source:chunk_index:content_hash[:16]` 稳定生成，基于 hash 去重。 |
+| **`backend/src/loaders.py`** | 多格式文档加载器。支持 `.txt` / `.md` / `.pdf` / `.docx` / `.html(.htm)`。新增 `load_url()` 支持从 URL 抓取网页内容。 |
+| **`backend/src/conversations.py`** | 对话管理。SQLite 存储对话元数据和消息记录，支持 CRUD 和 Markdown 导出。 |
+| **`backend/src/web_search.py`** | 联网搜索模块。基于 Tavily API（可选）。 |
+| **`backend/src/utils.py`** | 文件上传校验（扩展名白名单和大小限制）和临时保存。 |
+| **`backend/src/metrics.py`** | RAG 查询本地 JSONL 日志，记录每次查询的耗时、检索数量、质量决策。 |
 | **`config/settings.py`** | pydantic-settings 驱动，从 `.env` 读取配置。`CHROMA_API_KEY` 会回退作为 `SILICONFLOW_API_KEY`。 |
 
 ### LangGraph 工作流数据流

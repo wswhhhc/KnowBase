@@ -1,4 +1,14 @@
-.env
+# Backend
+backend/.env
+backend/data/
+backend/__pycache__/
+backend/**/__pycache__/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
 chroma_demo.py
 data/chroma_db/
 data/chroma_db_backup_*/
