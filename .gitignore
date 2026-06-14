@@ -2,6 +2,10 @@
 chroma_demo.py
 data/chroma_db/
 data/chroma_db_backup_*/
+data/checkpoints.db*
+data/.thread_id
+data/rag_logs/
+scripts/
 .venv/
 __pycache__/
 */__pycache__/

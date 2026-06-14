@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     langsmith_api_key: str = Field(default="", validation_alias="LANGSMITH_API_KEY")
     langsmith_project: str = Field(default="knowbase", validation_alias="LANGSMITH_PROJECT")
 
+    checkpoint_db_path: str = Field(
+        default=str(ROOT_DIR / "data" / "checkpoints.db"),
+        validation_alias="CHECKPOINT_DB_PATH",
+    )
+
     @field_validator("chroma_persist_dir", "data_dir", mode="before")
     @classmethod
     def _resolve_path(cls, value: str | Path) -> Path:
@@ -122,6 +127,7 @@ RRF_K = settings.rrf_k
 ENABLE_QUALITY_CHECK = settings.enable_quality_check
 MAX_RETRIES = settings.max_retries
 MAX_UPLOAD_MB = settings.max_upload_mb
+CHECKPOINT_DB_PATH = settings.checkpoint_db_path
 LANGSMITH_TRACING = settings.langsmith_tracing
 LANGSMITH_API_KEY = settings.langsmith_api_key
 LANGSMITH_PROJECT = settings.langsmith_project

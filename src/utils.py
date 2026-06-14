@@ -6,7 +6,7 @@ from pathlib import Path
 from config.settings import MAX_UPLOAD_MB
 
 
-ALLOWED_UPLOAD_EXTENSIONS = {".txt", ".md"}
+ALLOWED_UPLOAD_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".html", ".htm"}
 
 
 def sanitize_upload_filename(filename: str) -> str:
@@ -23,7 +23,7 @@ def validate_upload(uploaded_file, max_upload_mb: int = MAX_UPLOAD_MB) -> str:
     safe_name = sanitize_upload_filename(uploaded_file.name)
     ext = Path(safe_name).suffix.lower()
     if ext not in ALLOWED_UPLOAD_EXTENSIONS:
-        raise ValueError("仅支持 .txt 和 .md 文件。")
+        raise ValueError("仅支持 .txt、.md、.pdf、.docx、.html 文件。")
 
     size = getattr(uploaded_file, "size", None)
     if size is not None and size > max_upload_mb * 1024 * 1024:

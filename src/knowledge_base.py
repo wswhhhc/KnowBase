@@ -11,7 +11,6 @@ from typing import List, Optional, Tuple
 
 import jieba
 from langchain_chroma import Chroma
-from langchain_community.document_loaders import TextLoader
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -29,6 +28,7 @@ from config.settings import (
     TOP_K_RETRIEVAL,
     require_siliconflow_api_key,
 )
+from src.loaders import load_document
 
 
 @dataclass(frozen=True)
@@ -166,17 +166,11 @@ class KnowledgeBase:
         return total
 
     def ingest_file(self, file_path: str, source_name: str | None = None) -> int:
-        """Ingest a single .txt or .md file and return the number of new chunks."""
-        path = Path(file_path)
-        ext = path.suffix.lower()
-        if ext not in {".txt", ".md"}:
-            raise ValueError(f"不支持的文件格式：{ext}")
+        """Ingest a file and return the number of new chunks.
 
-        display_source = Path(source_name or path.name).name
-        loader = TextLoader(str(path), encoding="utf-8")
-        docs = loader.load()
-        for doc in docs:
-            doc.metadata["source"] = display_source
+        Supported formats: .txt, .md, .pdf, .docx, .html (.htm).
+        """
+        docs = load_document(file_path, source_name=source_name)
         return self._process_documents(docs)
 
     def add_document(self, file_path: str) -> int:
@@ -309,7 +303,39 @@ class KnowledgeBase:
         )
         return sorted(counts.items())
 
+    def delete_source(self, source_name: str) -> int:
+        """Delete all chunks belonging to a source file.
+
+        Returns the number of chunks removed.
+        """
+        source_name = Path(source_name).name
+        before = sum(
+            1
+            for doc in self.all_docs
+            if Path(doc.metadata.get("source", "")).name == source_name
+        )
+
+        # Chroma: delete by metadata filter
+        self.vector_store.delete(filter={"source": source_name})
+
+        # In-memory: rebuild from remaining chunks
+        self.all_docs = [
+            doc
+            for doc in self.all_docs
+            if Path(doc.metadata.get("source", "")).name != source_name
+        ]
+        self._rebuild_indexes()
+        return before
+
     def clear(self):
+        """Clear all persisted and in-memory knowledge base state."""
+        self.vector_store.delete_collection()
+        self.vector_store = self._init_vector_store()
+        self.bm25_index = None
+        self.bm25_docs = []
+        self.all_docs = []
+        self.doc_by_id = {}
+        self.existing_chunk_ids = set()
         """Clear all persisted and in-memory knowledge base state."""
         self.vector_store.delete_collection()
         self.vector_store = self._init_vector_store()

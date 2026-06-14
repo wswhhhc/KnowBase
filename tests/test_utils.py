@@ -24,10 +24,18 @@ class UploadUtilityTests(unittest.TestCase):
             validate_upload(upload, max_upload_mb=3)
 
     def test_validate_upload_rejects_unsupported_extensions(self):
-        upload = FakeUpload("notes.pdf", size=1024)
+        upload = FakeUpload("notes.xyz", size=1024)
 
         with self.assertRaises(ValueError):
             validate_upload(upload, max_upload_mb=3)
+
+    def test_validate_upload_accepts_new_formats(self):
+        for ext in [".txt", ".md", ".pdf", ".docx", ".html", ".htm"]:
+            upload = FakeUpload(f"notes{ext}", size=1024)
+            try:
+                validate_upload(upload, max_upload_mb=3)
+            except ValueError:
+                self.fail(f"validate_upload rejected valid extension: {ext}")
 
 
 if __name__ == "__main__":

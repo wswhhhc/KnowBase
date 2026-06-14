@@ -1,6 +1,7 @@
 """KnowBase — Streamlit Web 主入口"""
 
 import sys
+import time
 from uuid import uuid4
 from pathlib import Path
 
@@ -11,9 +12,11 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import streamlit as st
 
+from config.settings import ROOT_DIR
 from src.knowledge_base import KnowledgeBase
 from src.graph import run_query
 from src.utils import save_uploaded_file
+from src.metrics import log_query
 
 
 # ---------- 页面配置 ----------
@@ -25,6 +28,29 @@ st.set_page_config(
 )
 
 st.title("📚 KnowBase 知识库问答助手")
+
+
+# ---------- 持久化线程 ID ----------
+
+_THREAD_ID_FILE = ROOT_DIR / "data" / ".thread_id"
+
+
+def _load_or_create_thread_id() -> str:
+    """Return a stable thread ID persisted in the data directory."""
+    try:
+        if _THREAD_ID_FILE.exists():
+            tid = _THREAD_ID_FILE.read_text(encoding="utf-8").strip()
+            if tid:
+                return tid
+    except OSError:
+        pass
+    tid = str(uuid4())
+    try:
+        _THREAD_ID_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _THREAD_ID_FILE.write_text(tid, encoding="utf-8")
+    except OSError:
+        pass
+    return tid
 
 
 # ---------- 初始化 ----------
@@ -41,7 +67,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "thread_id" not in st.session_state:
-    st.session_state.thread_id = str(uuid4())
+    st.session_state.thread_id = _load_or_create_thread_id()
 
 if "kb_ready" not in st.session_state:
     with st.spinner("正在加载知识库..."):
@@ -64,11 +90,6 @@ with st.sidebar:
 
     if st.session_state.kb_ready:
         st.success(f"知识库已加载：{st.session_state.doc_count} 个片段")
-        source_counts = st.session_state.kb.source_counts()
-        if source_counts:
-            with st.expander("已入库来源", expanded=True):
-                for source, count in source_counts:
-                    st.caption(f"{source}：{count} 个片段")
     else:
         st.error(f"知识库加载失败：{st.session_state.kb_error}")
 
@@ -76,10 +97,11 @@ with st.sidebar:
     st.subheader("上传文档")
 
     uploaded_file = st.file_uploader(
-        "选择文件（.txt / .md）",
-        type=["txt", "md"],
+        "选择文件（支持 .txt / .md / .pdf / .docx / .html）",
+        type=["txt", "md", "pdf", "docx", "html"],
         accept_multiple_files=False,
         disabled=not st.session_state.kb_ready,
+        key="doc_uploader",
     )
 
     if uploaded_file and st.button(
@@ -91,11 +113,34 @@ with st.sidebar:
             try:
                 file_path = save_uploaded_file(uploaded_file)
                 chunk_count = st.session_state.kb.ingest_file(file_path, source_name=Path(file_path).name)
+                prev_count = st.session_state.doc_count
                 st.session_state.doc_count = st.session_state.kb.document_count
-                st.success(f"✅ {uploaded_file.name} 已入库（{chunk_count} 个片段）")
+                if chunk_count == 0:
+                    st.info(f"⏭️ {uploaded_file.name} 已存在，未重复添加")
+                else:
+                    st.success(f"✅ {uploaded_file.name} 已入库（{chunk_count} 个新片段）")
                 st.rerun()
             except Exception as e:
                 st.error(f"处理失败: {e}")
+
+    # ---------- 来源管理 ----------
+    if st.session_state.kb_ready and st.session_state.doc_count > 0:
+        source_counts = st.session_state.kb.source_counts()
+        if source_counts:
+            st.divider()
+            st.subheader("文档来源")
+
+            for source, count in source_counts:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.caption(f"{source}：{count}")
+                with col2:
+                    delete_key = f"del_{source}"
+                    if st.button("删除", key=delete_key, help=f"删除 {source}"):
+                        removed = st.session_state.kb.delete_source(source)
+                        st.session_state.doc_count = st.session_state.kb.document_count
+                        st.success(f"已删除 {source}（{removed} 个片段）")
+                        st.rerun()
 
     if st.session_state.kb_ready and st.session_state.doc_count > 0:
         st.divider()
@@ -125,17 +170,41 @@ with st.sidebar:
 # ---------- 主界面：对话区 ----------
 
 # 显示对话历史
-for msg in st.session_state.messages:
+for msg_idx, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
         if "sources" in msg and msg["sources"]:
             with st.expander("📎 引用来源"):
                 for s in msg["sources"]:
                     score_text = f" · score={s.get('score', 0):.4f}" if s.get("score") is not None else ""
-                    st.caption(f"**{s['source']}**{score_text}")
+                    loc_parts = []
+                    if s.get("chunk_index"):
+                        loc_parts.append(f"分段 #{s['chunk_index']}")
+                    if s.get("page"):
+                        loc_parts.append(f"第 {s['page']} 页")
+                    loc_text = f"（{', '.join(loc_parts)}）" if loc_parts else ""
+                    st.caption(f"**{s['source']}**{loc_text}{score_text}")
                     st.text(s["content"][:300] + ("..." if len(s["content"]) > 300 else ""))
         if msg.get("quality_reason"):
             st.caption(f"质量检查：{msg['quality_reason']}")
+
+        # Feedback buttons for assistant messages
+        if msg["role"] == "assistant" and msg.get("sources"):
+            feedback = msg.get("_feedback")
+            fb_key = f"fb_{msg_idx}"
+            col1, col2, col3 = st.columns([1, 1, 4])
+            if feedback is None:
+                with col1:
+                    if st.button("👍 有用", key=f"{fb_key}_up"):
+                        st.session_state.messages[msg_idx]["_feedback"] = "helpful"
+                        st.rerun()
+                with col2:
+                    if st.button("👎 无用", key=f"{fb_key}_down"):
+                        st.session_state.messages[msg_idx]["_feedback"] = "unhelpful"
+                        st.rerun()
+            else:
+                feedback_label = {"helpful": "✅ 有用", "unhelpful": "❌ 无用"}.get(feedback, feedback)
+                st.caption(f"反馈：{feedback_label}")
 
 # 输入框
 if prompt := st.chat_input("请输入你的问题..."):
@@ -166,6 +235,7 @@ if prompt := st.chat_input("请输入你的问题..."):
     with st.chat_message("assistant"):
         with st.spinner("正在思考..."):
             try:
+                t0 = time.monotonic()
                 progress_placeholder = st.empty()
                 answer = ""
                 sources = []
@@ -205,7 +275,13 @@ if prompt := st.chat_input("请输入你的问题..."):
                     with st.expander("📎 引用来源"):
                         for s in sources:
                             score_text = f" · score={s.get('score', 0):.4f}" if s.get("score") is not None else ""
-                            st.caption(f"**{s['source']}**{score_text}")
+                            loc_parts = []
+                            if s.get("chunk_index"):
+                                loc_parts.append(f"分段 #{s['chunk_index']}")
+                            if s.get("page"):
+                                loc_parts.append(f"第 {s['page']} 页")
+                            loc_text = f"（{', '.join(loc_parts)}）" if loc_parts else ""
+                            st.caption(f"**{s['source']}**{loc_text}{score_text}")
                             st.text(s["content"][:300] + ("..." if len(s["content"]) > 300 else ""))
                 if quality_reason:
                     st.caption(f"质量检查：{quality_reason}")
@@ -217,6 +293,24 @@ if prompt := st.chat_input("请输入你的问题..."):
                     "sources": sources,
                     "quality_reason": quality_reason,
                 })
+
+                # 记录指标
+                elapsed = time.monotonic() - t0
+                try:
+                    log_query(
+                        question=prompt,
+                        thread_id=st.session_state.thread_id,
+                        question_type="knowledge_base",
+                        retrieval_count=len(sources),
+                        retry_count=0,
+                        quality_ok=not bool(quality_reason),
+                        quality_reason=quality_reason,
+                        source_count=len(sources),
+                        elapsed_ms=int(elapsed * 1000),
+                        answer=answer,
+                    )
+                except Exception:
+                    pass  # metrics logging is best-effort
 
             except Exception as e:
                 error_msg = f"出错了: {str(e)}"

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import MagicMock, patch
 
 from langchain_core.documents import Document
 
@@ -74,6 +75,78 @@ class KnowledgeBaseTests(unittest.TestCase):
 
         self.assertEqual([item.chunk_id for item in fused], ["chunk-b", "chunk-a", "chunk-c"])
         self.assertGreater(fused[0].score, fused[1].score)
+
+
+class KnowledgeBaseDeleteAndCountTests(unittest.TestCase):
+    """Tests for delete_source, source_counts, and reindex after removal."""
+
+    def setUp(self):
+        patcher1 = patch("src.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
+        patcher2 = patch("src.knowledge_base.OpenAIEmbeddings")
+        patcher3 = patch("src.knowledge_base.Chroma")
+        self.addCleanup(patcher1.stop)
+        self.addCleanup(patcher2.stop)
+        self.addCleanup(patcher3.stop)
+        patcher1.start()
+        patcher2.start()
+        mock_chroma = patcher3.start()
+
+        self.mock_chroma_instance = MagicMock()
+        self.mock_chroma_instance.get.return_value = {
+            "documents": [], "metadatas": [], "ids": [],
+        }
+        mock_chroma.return_value = self.mock_chroma_instance
+
+        self.kb = KnowledgeBase()
+
+        # Inject sample documents directly
+        self.kb.all_docs = [
+            Document(
+                page_content="a1",
+                metadata={"source": "alpha.txt", "chunk_id": "alpha.txt:0:aaa"},
+            ),
+            Document(
+                page_content="a2",
+                metadata={"source": "alpha.txt", "chunk_id": "alpha.txt:1:bbb"},
+            ),
+            Document(
+                page_content="b1",
+                metadata={"source": "beta.txt", "chunk_id": "beta.txt:0:ccc"},
+            ),
+        ]
+        self.kb._rebuild_indexes()
+
+    def test_source_counts_after_multiple_sources(self):
+        counts = dict(self.kb.source_counts())
+        self.assertEqual(counts.get("alpha.txt"), 2)
+        self.assertEqual(counts.get("beta.txt"), 1)
+
+    def test_delete_source_removes_only_target_source(self):
+        self.kb.delete_source("alpha.txt")
+        remaining = [doc.metadata["source"] for doc in self.kb.all_docs]
+        self.assertNotIn("alpha.txt", remaining)
+        self.assertIn("beta.txt", remaining)
+        self.assertEqual(len(self.kb.all_docs), 1)
+
+    def test_delete_source_decrements_total_count(self):
+        self.kb.delete_source("alpha.txt")
+        self.assertEqual(self.kb.document_count, 1)
+
+    def test_delete_source_updates_bm25_index(self):
+        self.kb.delete_source("alpha.txt")
+        self.assertIsNotNone(self.kb.bm25_index)
+        self.assertEqual(len(self.kb.bm25_docs), 1)
+
+    def test_delete_source_calls_chroma_delete(self):
+        self.kb.delete_source("beta.txt")
+        self.mock_chroma_instance.delete.assert_called_once_with(
+            filter={"source": "beta.txt"}
+        )
+
+    def test_delete_source_nonexistent_source_is_noop(self):
+        before = self.kb.document_count
+        self.kb.delete_source("nonexistent.txt")
+        self.assertEqual(self.kb.document_count, before)
 
 
 if __name__ == "__main__":
