@@ -15,9 +15,10 @@ uv run python -m unittest discover -s tests
 uv run python -m unittest tests.test_graph
 uv run python -m unittest tests.test_knowledge_base
 uv run python -m unittest tests.test_loaders
+uv run python -m unittest tests.test_metrics
 uv run python -m unittest tests.test_routing
-uv run python -m unittest tests.test_utils
 uv run python -m unittest tests.test_settings
+uv run python -m unittest tests.test_utils
 
 # 运行单个测试方法
 uv run python -m unittest tests.test_graph.GraphRoutingTests.test_run_query_uses_thread_memory_for_followup

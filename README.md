@@ -105,11 +105,19 @@ KnowBase/
 │  ├─ web_search.py         # Tavily 联网搜索
 │  ├─ kb_browser.py         # 知识库内容浏览
 │  ├─ metrics.py            # 查询日志记录
-│  ├── evaluate.py           # 离线评估脚本
+│  ├─ evaluate.py           # 离线评估脚本
 │  └─ metrics_dashboard.py  # 指标面板
 ├─ tests/
-│  └─ test_*.py             # 55 个单元测试
+│  ├─ test_graph.py
+│  ├─ test_knowledge_base.py
+│  ├─ test_loaders.py
+│  ├─ test_metrics.py
+│  ├─ test_routing.py
+│  ├─ test_settings.py
+│  └─ test_utils.py
 ├─ .env
+├─ .gitignore
+├─ uv.lock
 └─ pyproject.toml
 ```
 
