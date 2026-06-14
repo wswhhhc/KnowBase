@@ -336,11 +336,21 @@ class KnowledgeBase:
         self.all_docs = []
         self.doc_by_id = {}
         self.existing_chunk_ids = set()
-        """Clear all persisted and in-memory knowledge base state."""
-        self.vector_store.delete_collection()
-        self.vector_store = self._init_vector_store()
-        self.bm25_index = None
-        self.bm25_docs = []
-        self.all_docs = []
-        self.doc_by_id = {}
-        self.existing_chunk_ids = set()
+
+    def search_content(self, query: str) -> List[Document]:
+        """Full-text search across all in-memory documents.
+
+        Returns documents where any query keyword appears in the content.
+        Useful for the knowledge base browser UI.
+        """
+        if not query or not self.all_docs:
+            return []
+        keywords = [kw.strip().lower() for kw in query.split() if kw.strip()]
+        if not keywords:
+            return []
+        results = []
+        for doc in self.all_docs:
+            text = doc.page_content.lower()
+            if any(kw in text for kw in keywords):
+                results.append(doc)
+        return results[:50]

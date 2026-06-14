@@ -118,3 +118,53 @@ _LOADER_MAP = {
     ".html": _load_html,
     ".htm": _load_html,
 }
+
+
+def load_url(url: str, source_name: str | None = None) -> List[Document]:
+    """Fetch a URL and extract its main content as LangChain Documents.
+
+    Strips navigation, ads, and other boilerplate via BeautifulSoup.
+    The URL itself is stored as the ``source`` metadata.
+    """
+    import requests
+
+    display_source = source_name or url
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+    resp = requests.get(url, headers=headers, timeout=30)
+    resp.raise_for_status()
+    resp.encoding = resp.apparent_encoding or "utf-8"
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
+        tag.decompose()
+
+    # Try to find main content area
+    main = (
+        soup.find("article")
+        or soup.find("main")
+        or soup.find(class_=lambda c: c and any(k in (c or "").lower() for k in ("content", "article", "post")))
+        or soup.body
+    )
+
+    try:
+        from markdownify import markdownify as md
+
+        text = md(str(main or soup), heading_style="ATX")
+    except ImportError:
+        text = (main or soup).get_text(separator="\n", strip=True)
+
+    title_tag = soup.find("title")
+    title = title_tag.get_text(strip=True) if title_tag else url
+
+    return [
+        Document(
+            page_content=text.strip(),
+            metadata={"source": display_source, "title": title, "url": url},
+        )
+    ]

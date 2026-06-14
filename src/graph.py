@@ -1,4 +1,4 @@
-"""LangGraph workflow for routed RAG, conversational memory, and QA checks."""
+"""LangGraph workflow for routed RAG, conversational memory, web search, and QA checks."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from functools import partial
 import json
 import re
 import sqlite3
-from typing import Annotated, Iterable, List, Literal, TypedDict
+from typing import Annotated, Generator, Iterable, List, Literal, TypedDict
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -49,6 +49,18 @@ class GraphState(TypedDict):
     quality_ok: bool
     quality_reason: str
     retry_strategy: str
+    web_search_results: List[dict]
+    web_context: str
+    web_search_error: str
+    used_web_search: bool
+    web_search_enabled: bool
+
+
+class RouteDecision(BaseModel):
+    """Structured route classification result."""
+
+    question_type: Literal["knowledge_base", "chat_memory", "conversation_summary", "clarification"] = "knowledge_base"
+    reason: str = ""
 
 
 class RerankDecision(BaseModel):
@@ -319,6 +331,12 @@ def route_after_retrieval(state: GraphState) -> Literal["rerank_docs", "handle_m
     return "rerank_docs" if state.get("documents") else "handle_missing_context"
 
 
+def route_after_rerank(state: GraphState) -> Literal["web_search", "generate_answer"]:
+    if state.get("web_search_enabled", False) and not state.get("used_web_search", False):
+        return "web_search"
+    return "generate_answer"
+
+
 def handle_missing_context(state: GraphState) -> dict:
     question = state.get("rewritten_question") or state["question"]
     answer = (
@@ -326,14 +344,16 @@ def handle_missing_context(state: GraphState) -> dict:
         "你可以换一种问法，补充更具体的关键词，或者上传包含这部分信息的文档后再试。"
         f"\n\n当前问题：{question}"
     )
-    return {
+    update = {
         "answer": answer,
         "sources": [],
         "quality_ok": False,
         "quality_reason": "没有检索到相关文档。",
         "retry_strategy": "insufficient_context",
-        "messages": [AIMessage(content=answer)],
     }
+    if not state.get("web_search_enabled", False) or state.get("used_web_search", False):
+        update["messages"] = [AIMessage(content=answer)]
+    return update
 
 
 def handle_clarification(state: GraphState) -> dict:
@@ -351,6 +371,33 @@ def handle_clarification(state: GraphState) -> dict:
         "retry_strategy": "none",
         "messages": [AIMessage(content=answer)],
     }
+
+
+def _web_search_context(state: GraphState) -> dict:
+    """Search web for the current question and return context."""
+    from src.web_search import format_search_results, web_search as _web_search
+
+    query = state.get("rewritten_question") or state["question"]
+    results, error = _web_search(query, max_results=5)
+    web_context = format_search_results(results)
+    return {
+        "web_search_results": results,
+        "web_context": web_context,
+        "web_search_error": error,
+        "used_web_search": True,
+        "quality_reason": (
+            f"联网搜索完成：找到 {len(results)} 条结果。"
+            if results
+            else (error or "联网搜索未返回结果。")
+        ),
+    }
+
+
+def _tavily_configured() -> bool:
+    """Check if Tavily API key is configured for web search."""
+    from config.settings import TAVILY_API_KEY, _is_configured_api_key
+
+    return _is_configured_api_key(TAVILY_API_KEY)
 
 
 def rerank_docs(state: GraphState) -> dict:
@@ -387,16 +434,58 @@ def rerank_docs(state: GraphState) -> dict:
 
 def generate_answer(state: GraphState) -> dict:
     context = state.get("context", "")
+    web_context = state.get("web_context", "")
+    web_search_error = state.get("web_search_error", "")
     question = state.get("rewritten_question") or state["question"]
+    used_web_search = state.get("used_web_search", False)
+
+    # Merge web search results into context
+    if web_context:
+        context = f"{context}\n\n{web_context}" if context else web_context
+    elif used_web_search and web_search_error and not context:
+        answer = (
+            "知识库里没有找到足够相关的内容，联网搜索也没有可用结果。"
+            f"\n\n联网搜索状态：{web_search_error}"
+        )
+        return {
+            "answer": answer,
+            "sources": [],
+            "quality_ok": False,
+            "quality_reason": web_search_error,
+        }
+
+    system_msg = (
+        "你是知识库问答助手。"
+        + ("可以基于知识库和网络搜索结果回答。回答末尾标注引用来源。用中文回答。"
+           if used_web_search and web_context
+           else "只能基于参考文档回答；证据不足就说不知道。回答末尾用【来源：文件名·分段号】标注引用位置。用中文回答。")
+    )
 
     llm = _get_llm()
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是知识库问答助手。只能基于参考文档回答；证据不足就说不知道。回答末尾用【来源：文件名·分段号】标注引用位置。用中文回答。"),
+        ("system", system_msg),
         ("human", "参考文档：\n{context}\n\n用户问题：{question}"),
     ])
     result = llm.invoke(prompt.format(context=context, question=question))
     answer = str(result.content).strip()
-    return {"answer": answer}
+    sources = state.get("sources", [])
+    if web_context:
+        sources = sources + [
+            {
+                "index": len(sources) + i,
+                "chunk_id": item.get("url", ""),
+                "source": item.get("title") or item.get("url") or "网络来源",
+                "chunk_index": "",
+                "page": "",
+                "content": item.get("content", "")[:300],
+                "score": item.get("score"),
+                "vector_score": None,
+                "bm25_score": None,
+                "url": item.get("url", ""),
+            }
+            for i, item in enumerate(state.get("web_search_results", []), 1)
+        ]
+    return {"answer": answer, "sources": sources}
 
 
 def check_quality(state: GraphState) -> dict:
@@ -411,8 +500,12 @@ def check_quality(state: GraphState) -> dict:
 
     answer = state.get("answer", "")
     context = state.get("context", "")
+    web_context = state.get("web_context", "")
     question = state.get("rewritten_question") or state["question"]
     retry_count = state.get("retry_count", 0)
+    used_web_search = state.get("used_web_search", False)
+    if web_context:
+        context = f"{context}\n\n{web_context}" if context else web_context
 
     llm = _get_llm()
     prompt = ChatPromptTemplate.from_messages([
@@ -434,23 +527,38 @@ def check_quality(state: GraphState) -> dict:
     }
     if decision.quality_passed or retry_count + 1 >= MAX_RETRIES:
         update["messages"] = [AIMessage(content=answer)]
-    else:
-        strategy = decision.retry_strategy
-        if strategy == "expand_retrieval":
-            update["retrieval_k"] = min(
-                (state.get("retrieval_k") or TOP_K_RETRIEVAL) + TOP_K_RETRIEVAL,
-                TOP_K_RETRIEVAL * 4,
-            )
-            update["score_threshold"] = None
-        elif strategy == "rewrite_query":
-            # Keep existing retrieval_k but force a re-rewrite
-            update["score_threshold"] = None
-        # insufficient_context and other unknown strategies go to end via should_retry
+        return update
+
+    if used_web_search:
+        update["messages"] = [AIMessage(content=answer)]
+        update["retry_strategy"] = "none"
+        return update
+
+    # Quality failed — check if we should try web search first
+    if not used_web_search and state.get("web_search_enabled", False):
+        update["retry_strategy"] = "web_search"
+        # Don't count web_search attempt toward retry_count
+        update["retry_count"] = retry_count
+        return update
+
+    strategy = decision.retry_strategy
+    if strategy == "expand_retrieval":
+        update["retrieval_k"] = min(
+            (state.get("retrieval_k") or TOP_K_RETRIEVAL) + TOP_K_RETRIEVAL,
+            TOP_K_RETRIEVAL * 4,
+        )
+        update["score_threshold"] = None
+    elif strategy == "rewrite_query":
+        update["score_threshold"] = None
     return update
 
 
-def should_retry(state: GraphState) -> Literal["rewrite_query", "retrieve_docs", "end"]:
-    if not state.get("quality_ok", True) and state.get("retry_count", 0) < MAX_RETRIES:
+def should_retry(state: GraphState) -> Literal["web_search", "rewrite_query", "retrieve_docs", "end"]:
+    if state.get("quality_ok", True):
+        return "end"
+    if state.get("retry_strategy") == "web_search":
+        return "web_search"
+    if state.get("retry_count", 0) < MAX_RETRIES:
         retry_strategy = state.get("retry_strategy", "expand_retrieval")
         if retry_strategy == "rewrite_query":
             return "rewrite_query"
@@ -469,6 +577,7 @@ def build_graph(knowledge_base: KnowledgeBase):
     workflow.add_node("handle_missing_context", handle_missing_context)
     workflow.add_node("handle_clarification", handle_clarification)
     workflow.add_node("rerank_docs", rerank_docs)
+    workflow.add_node("web_search", _web_search_context)
     workflow.add_node("generate_answer", generate_answer)
     workflow.add_node("check_quality", check_quality)
 
@@ -489,13 +598,26 @@ def build_graph(knowledge_base: KnowledgeBase):
         route_after_retrieval,
         {"rerank_docs": "rerank_docs", "handle_missing_context": "handle_missing_context"},
     )
-    workflow.add_edge("rerank_docs", "generate_answer")
+    workflow.add_conditional_edges(
+        "rerank_docs",
+        route_after_rerank,
+        {"web_search": "web_search", "generate_answer": "generate_answer"},
+    )
     workflow.add_edge("generate_answer", "check_quality")
     workflow.add_edge("answer_from_history", END)
     workflow.add_edge("summarize_history", END)
-    workflow.add_edge("handle_missing_context", END)
     workflow.add_edge("handle_clarification", END)
-    workflow.add_conditional_edges("check_quality", should_retry, {"rewrite_query": "rewrite_query", "retrieve_docs": "retrieve_docs", "end": END})
+    workflow.add_conditional_edges(
+        "handle_missing_context",
+        lambda s: "web_search" if not s.get("used_web_search") and s.get("web_search_enabled", False) else "end",
+        {"web_search": "web_search", "end": END},
+    )
+    workflow.add_edge("web_search", "generate_answer")
+    workflow.add_conditional_edges(
+        "check_quality",
+        should_retry,
+        {"web_search": "web_search", "rewrite_query": "rewrite_query", "retrieve_docs": "retrieve_docs", "end": END},
+    )
 
     return workflow.compile(checkpointer=_CHECKPOINTER)
 
@@ -524,6 +646,11 @@ def _initial_state(question: str) -> GraphState:
         "quality_ok": True,
         "quality_reason": "",
         "retry_strategy": "none",
+        "web_search_results": [],
+        "web_context": "",
+        "web_search_error": "",
+        "used_web_search": False,
+        "web_search_enabled": False,
     }
 
 
@@ -531,10 +658,32 @@ def _graph_config(thread_id: str) -> dict:
     return {"configurable": {"thread_id": thread_id}}
 
 
-def _stream_query(question: str, thread_id: str, knowledge_base: KnowledgeBase) -> Iterable[dict]:
+def _state_with_overrides(question: str, **overrides) -> GraphState:
+    state = _initial_state(question)
+    state.update(overrides)
+    return state
+
+
+def _stream_query(question: str, thread_id: str, knowledge_base: KnowledgeBase, **state_overrides) -> Iterable[dict]:
     graph = get_graph(knowledge_base)
-    for update in graph.stream(_initial_state(question), config=_graph_config(thread_id), stream_mode="updates"):
+    for update in graph.stream(_state_with_overrides(question, **state_overrides), config=_graph_config(thread_id), stream_mode="updates"):
         yield update
+
+
+def _stream_query_with_tokens(
+    question: str, thread_id: str, knowledge_base: KnowledgeBase, **state_overrides
+) -> Generator[tuple[str, dict], None, None]:
+    """Stream graph updates AND token-level LLM output.
+
+    Yields (mode, data) tuples where mode is "updates" or "messages".
+    """
+    graph = get_graph(knowledge_base)
+    for mode, data in graph.stream(
+        _state_with_overrides(question, **state_overrides),
+        config=_graph_config(thread_id),
+        stream_mode=["updates", "messages"],
+    ):
+        yield (mode, data)
 
 
 def run_query(
@@ -543,10 +692,22 @@ def run_query(
     knowledge_base: KnowledgeBase,
     *,
     stream: bool = False,
-) -> dict | Iterable[dict]:
-    """Execute one question against the cached LangGraph workflow."""
+    stream_tokens: bool = False,
+    web_search_enabled: bool = False,
+) -> dict | Iterable[dict] | Generator[tuple[str, dict], None, None]:
+    """Execute one question against the cached LangGraph workflow.
+
+    Args:
+        stream: If True, yield node-level updates.
+        stream_tokens: If True, yield (mode, data) tuples with token-level LLM output.
+        web_search_enabled: If True, enable web search fallback.
+    """
+    overrides = {"web_search_enabled": web_search_enabled}
+    if stream_tokens:
+        return _stream_query_with_tokens(question, thread_id, knowledge_base, **overrides)
     if stream:
-        return _stream_query(question, thread_id, knowledge_base)
+        return _stream_query(question, thread_id, knowledge_base, **overrides)
 
     graph = get_graph(knowledge_base)
-    return graph.invoke(_initial_state(question), config=_graph_config(thread_id))
+    state = _state_with_overrides(question, **overrides)
+    return graph.invoke(state, config=_graph_config(thread_id))

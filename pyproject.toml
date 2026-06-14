@@ -22,6 +22,7 @@ dependencies = [
     "python-docx>=1.0.0",
     "beautifulsoup4>=4.0.0",
     "markdownify>=0.11.0",
+    "tavily>=0.5.0",
 ]
 
 [tool.uv]
