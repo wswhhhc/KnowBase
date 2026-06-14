@@ -1,165 +1,320 @@
-"""知识库管理模块：文档加载、分割、嵌入存储、混合检索、重排序"""
+"""Knowledge base ingestion, persistence, hybrid retrieval, and reranking support."""
 
-import os
-from typing import List, Optional, Tuple
+from __future__ import annotations
+
+from collections import Counter
+from dataclasses import dataclass
+from datetime import UTC, datetime
+import hashlib
 from pathlib import Path
+from typing import List, Optional, Tuple
 
-from langchain_core.documents import Document
-from langchain_community.document_loaders import TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+import jieba
 from langchain_chroma import Chroma
+from langchain_community.document_loaders import TextLoader
+from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from rank_bm25 import BM25Okapi
 
 from config.settings import (
-    SILICONFLOW_API_KEY, SILICONFLOW_BASE_URL,
-    EMBEDDING_MODEL, CHROMA_PERSIST_DIR,
-    CHUNK_SIZE, CHUNK_OVERLAP,
-    TOP_K_RETRIEVAL, BM25_WEIGHT, VECTOR_WEIGHT, DATA_DIR,
+    CHROMA_PERSIST_DIR,
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    DATA_DIR,
+    EMBEDDING_MODEL,
+    RRF_K,
+    SCORE_THRESHOLD,
+    SILICONFLOW_BASE_URL,
+    TOP_K_RETRIEVAL,
+    require_siliconflow_api_key,
 )
 
 
+@dataclass(frozen=True)
+class RetrievalResult:
+    """A retrieved chunk plus retrieval diagnostics."""
+
+    chunk_id: str
+    document: Document
+    score: float
+    vector_score: float | None = None
+    bm25_score: float | None = None
+
+
+@dataclass(frozen=True)
+class FusionScore:
+    """RRF output before mapping back to documents."""
+
+    chunk_id: str
+    score: float
+    vector_score: float | None = None
+    bm25_score: float | None = None
+
+
+def _content_hash(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _chunk_id(source: str, chunk_index: int, content_hash: str) -> str:
+    return f"{Path(source).name}:{chunk_index}:{content_hash[:16]}"
+
+
+def _document_chunk_id(doc: Document) -> str:
+    chunk_id = doc.metadata.get("chunk_id")
+    if chunk_id:
+        return str(chunk_id)
+    source = Path(doc.metadata.get("source", "unknown")).name
+    chunk_index = int(doc.metadata.get("chunk_index", 0))
+    content_hash = doc.metadata.get("content_hash") or _content_hash(doc.page_content)
+    chunk_id = _chunk_id(source, chunk_index, content_hash)
+    doc.metadata.setdefault("source", source)
+    doc.metadata.setdefault("chunk_index", chunk_index)
+    doc.metadata.setdefault("content_hash", content_hash)
+    doc.metadata.setdefault("chunk_id", chunk_id)
+    return chunk_id
+
+
+def rrf_fuse(
+    vector_ranked: list[tuple[str, float]],
+    bm25_ranked: list[tuple[str, float]],
+    limit: int,
+    k: int = RRF_K,
+) -> list[FusionScore]:
+    """Fuse ranked vector and BM25 results with reciprocal rank fusion."""
+    scores: dict[str, float] = {}
+    vector_scores = dict(vector_ranked)
+    bm25_scores = dict(bm25_ranked)
+
+    for ranked in (vector_ranked, bm25_ranked):
+        for rank, (chunk_id, _raw_score) in enumerate(ranked, start=1):
+            scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (k + rank)
+
+    return [
+        FusionScore(
+            chunk_id=chunk_id,
+            score=score,
+            vector_score=vector_scores.get(chunk_id),
+            bm25_score=bm25_scores.get(chunk_id),
+        )
+        for chunk_id, score in sorted(scores.items(), key=lambda item: item[1], reverse=True)[:limit]
+    ]
+
+
 class KnowledgeBase:
-    """知识库，管理文档的加载、存储和检索"""
+    """Manage document ingestion, vector storage, BM25 indexing, and retrieval."""
 
     def __init__(self):
+        api_key = require_siliconflow_api_key()
         self.embeddings = OpenAIEmbeddings(
             model=EMBEDDING_MODEL,
-            openai_api_key=SILICONFLOW_API_KEY,
+            openai_api_key=api_key,
             openai_api_base=SILICONFLOW_BASE_URL,
         )
         self.vector_store = self._init_vector_store()
         self.bm25_index: Optional[BM25Okapi] = None
         self.bm25_docs: List[Document] = []
-        self.all_docs: List[Document] = []
+        self.all_docs: List[Document] = self._load_existing_documents()
+        self.doc_by_id: dict[str, Document] = {}
+        self.existing_chunk_ids: set[str] = set()
+        self._rebuild_indexes()
 
     def _init_vector_store(self) -> Chroma:
-        """初始化向量数据库（持久化模式）"""
+        """Initialize the persistent vector store."""
         return Chroma(
             persist_directory=CHROMA_PERSIST_DIR,
             embedding_function=self.embeddings,
             collection_name="knowbase",
         )
 
-    def load_preset_documents(self) -> int:
-        """加载 data/ 目录下的所有预设文本文档"""
-        txt_files = sorted(Path(DATA_DIR).glob("sample_*.txt"))
-        if not txt_files:
-            return 0
+    def _load_existing_documents(self) -> List[Document]:
+        """Restore existing chunks from Chroma for UI counts and BM25."""
+        result = self.vector_store.get(include=["documents", "metadatas"])
+        return self._documents_from_chroma_result(result)
+
+    @staticmethod
+    def _documents_from_chroma_result(result: dict) -> List[Document]:
+        """Convert Chroma get() output into LangChain documents."""
+        contents = result.get("documents") or []
+        metadatas = result.get("metadatas") or []
+        ids = result.get("ids") or []
 
         docs = []
-        for file_path in txt_files:
-            loader = TextLoader(str(file_path), encoding="utf-8")
-            docs.extend(loader.load())
+        for index, content in enumerate(contents):
+            if not content:
+                continue
+            metadata = dict(metadatas[index] or {}) if index < len(metadatas) else {}
+            source = Path(metadata.get("source", "unknown")).name
+            content_hash = metadata.get("content_hash") or _content_hash(content)
+            chunk_index = int(metadata.get("chunk_index", index))
+            metadata.setdefault("source", source)
+            metadata.setdefault("content_hash", content_hash)
+            metadata.setdefault("chunk_index", chunk_index)
+            # Legacy Chroma rows used UUID ids and had no chunk_id metadata.
+            # Always backfill the stable id so restarts do not re-ingest samples.
+            metadata.setdefault("chunk_id", _chunk_id(source, chunk_index, content_hash))
+            metadata.setdefault("legacy_chroma_id", ids[index] if index < len(ids) else "")
+            docs.append(Document(page_content=content, metadata=metadata))
+        return docs
 
+    def load_preset_documents(self) -> int:
+        """Load sample text documents from data/ without duplicating existing chunks."""
+        txt_files = sorted(Path(DATA_DIR).glob("sample_*.txt"))
+        total = 0
+        for file_path in txt_files:
+            total += self.ingest_file(str(file_path), source_name=file_path.name)
+        return total
+
+    def ingest_file(self, file_path: str, source_name: str | None = None) -> int:
+        """Ingest a single .txt or .md file and return the number of new chunks."""
+        path = Path(file_path)
+        ext = path.suffix.lower()
+        if ext not in {".txt", ".md"}:
+            raise ValueError(f"不支持的文件格式：{ext}")
+
+        display_source = Path(source_name or path.name).name
+        loader = TextLoader(str(path), encoding="utf-8")
+        docs = loader.load()
+        for doc in docs:
+            doc.metadata["source"] = display_source
         return self._process_documents(docs)
 
-    def _process_documents(self, docs: List[Document]) -> int:
-        """分割文档并存入向量库和 BM25 索引"""
+    def add_document(self, file_path: str) -> int:
+        """Compatibility wrapper for older UI code."""
+        return self.ingest_file(file_path, source_name=Path(file_path).name)
+
+    @staticmethod
+    def _prepare_splits(docs: List[Document]) -> List[Document]:
+        """Split documents and attach stable chunk metadata."""
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=CHUNK_SIZE,
             chunk_overlap=CHUNK_OVERLAP,
-            separators=["\n## ", "\n### ", "\n\n", "\n", "。"],
+            separators=["\n## ", "\n### ", "\n\n", "\n", "。", ""],
         )
         splits = splitter.split_documents(docs)
+        per_source_counts: Counter[str] = Counter()
+        ingested_at = datetime.now(UTC).isoformat()
 
-        if not splits:
+        for split in splits:
+            source = Path(split.metadata.get("source", "unknown")).name
+            chunk_index = per_source_counts[source]
+            per_source_counts[source] += 1
+            content_hash = _content_hash(split.page_content)
+            split.metadata.update(
+                {
+                    "source": source,
+                    "chunk_index": chunk_index,
+                    "content_hash": content_hash,
+                    "chunk_id": _chunk_id(source, chunk_index, content_hash),
+                    "ingested_at": split.metadata.get("ingested_at", ingested_at),
+                }
+            )
+
+        return splits
+
+    def _process_documents(self, docs: List[Document]) -> int:
+        """Split documents, store new chunks in Chroma, and rebuild lexical indexes."""
+        splits = self._prepare_splits(docs)
+        new_splits = [
+            doc
+            for doc in splits
+            if doc.metadata["chunk_id"] not in self.existing_chunk_ids
+        ]
+
+        if not new_splits:
             return 0
 
-        # 存入 Chroma
-        self.vector_store.add_documents(splits)
+        ids = [doc.metadata["chunk_id"] for doc in new_splits]
+        self.vector_store.add_documents(new_splits, ids=ids)
+        self.all_docs.extend(new_splits)
+        self._rebuild_indexes()
+        return len(new_splits)
 
-        # 更新 BM25 索引
-        self.all_docs.extend(splits)
-        self._rebuild_bm25()
+    def _rebuild_indexes(self) -> None:
+        """Rebuild BM25 and id lookup state."""
+        self.doc_by_id = {
+            doc.metadata["chunk_id"]: doc
+            for doc in self.all_docs
+            if doc.metadata.get("chunk_id")
+        }
+        self.existing_chunk_ids = set(self.doc_by_id)
+        self.bm25_docs = list(self.doc_by_id.values())
+        if not self.bm25_docs:
+            self.bm25_index = None
+            return
 
-        return len(splits)
-
-    def add_document(self, file_path: str) -> int:
-        """动态添加单个文档到知识库"""
-        ext = Path(file_path).suffix.lower()
-        if ext == ".txt":
-            loader = TextLoader(file_path, encoding="utf-8")
-        elif ext == ".md":
-            loader = TextLoader(file_path, encoding="utf-8")
-        else:
-            raise ValueError(f"不支持的文件格式：{ext}")
-
-        docs = loader.load()
-        # 标记来源文件名（不含路径）
-        for d in docs:
-            d.metadata["source"] = Path(file_path).name
-        return self._process_documents(docs)
-
-    def _rebuild_bm25(self):
-        """重建 BM25 索引"""
-        tokenized = [self._tokenize(doc.page_content) for doc in self.all_docs]
+        tokenized = [self._tokenize(doc.page_content) for doc in self.bm25_docs]
         self.bm25_index = BM25Okapi(tokenized)
-        self.bm25_docs = self.all_docs
 
     @staticmethod
     def _tokenize(text: str) -> List[str]:
-        """简单中文分词（按字/词切分，适用于 BM25）"""
-        import re
-        # 保留中英文、数字，按空格和标点分割
-        tokens = re.findall(r'[\w]+|[一-鿿]', text.lower())
-        return tokens
+        """Tokenize Chinese and mixed-language text for BM25."""
+        return [token.strip().lower() for token in jieba.lcut(text) if token.strip()]
 
-    def hybrid_search(self, query: str, k: int = TOP_K_RETRIEVAL) -> List[Document]:
-        """混合检索：向量检索 + BM25 加权融合"""
-        # 向量检索
+    def hybrid_search(
+        self,
+        query: str,
+        k: int = TOP_K_RETRIEVAL,
+        *,
+        score_threshold: float | None = SCORE_THRESHOLD,
+    ) -> List[RetrievalResult]:
+        """Hybrid retrieval with vector search, BM25, and RRF fusion."""
         vector_results = self.vector_store.similarity_search_with_score(query, k=k * 2)
-        vector_scores = {doc.page_content: score for doc, score in vector_results}
-        vector_docs_map = {doc.page_content: doc for doc, _ in vector_results}
+        vector_ranked = [(_document_chunk_id(doc), score) for doc, score in vector_results]
+        vector_doc_map = {_document_chunk_id(doc): doc for doc, _score in vector_results}
 
-        # BM25 检索
-        query_tokens = self._tokenize(query)
-        bm25_scores = self.bm25_index.get_scores(query_tokens) if self.bm25_index else []
-        bm25_ranked = sorted(
-            zip(self.bm25_docs, bm25_scores),
-            key=lambda x: x[1], reverse=True,
-        )[:k * 2]
+        bm25_ranked: list[tuple[str, float]] = []
+        if self.bm25_index:
+            query_tokens = self._tokenize(query)
+            bm25_scores = self.bm25_index.get_scores(query_tokens)
+            bm25_ranked = [
+                (doc.metadata["chunk_id"], float(score))
+                for doc, score in sorted(
+                    zip(self.bm25_docs, bm25_scores),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )[: k * 2]
+                if score > 0
+            ]
 
-        # 分数归一化 + 加权融合
-        all_scores = {}
-        if vector_scores:
-            vs_max = max(vector_scores.values())
-            vs_min = min(vector_scores.values())
-            vs_range = vs_max - vs_min if vs_max != vs_min else 1
-            for content, score in vector_scores.items():
-                normalized = 1 - (score - vs_min) / vs_range  # Chroma 距离越小越好，反转
-                all_scores[content] = all_scores.get(content, 0) + normalized * VECTOR_WEIGHT
-
-        if bm25_ranked:
-            bm25_max = max(s for _, s in bm25_ranked) or 1
-            for doc, score in bm25_ranked:
-                normalized = score / bm25_max
-                all_scores[doc.page_content] = all_scores.get(doc.page_content, 0) + normalized * BM25_WEIGHT
-
-        # 合并所有文档去重排序
-        seen = set()
-        merged = []
-        for content, score in sorted(all_scores.items(), key=lambda x: x[1], reverse=True):
-            doc = vector_docs_map.get(content) or next(
-                (d for d in self.bm25_docs if d.page_content == content), None
+        fused = rrf_fuse(vector_ranked, bm25_ranked, limit=k)
+        results = []
+        for item in fused:
+            if score_threshold is not None and item.score < score_threshold:
+                continue
+            doc = vector_doc_map.get(item.chunk_id) or self.doc_by_id.get(item.chunk_id)
+            if doc is None:
+                continue
+            results.append(
+                RetrievalResult(
+                    chunk_id=item.chunk_id,
+                    document=doc,
+                    score=item.score,
+                    vector_score=item.vector_score,
+                    bm25_score=item.bm25_score,
+                )
             )
-            if doc and content not in seen:
-                seen.add(content)
-                merged.append(doc)
-            if len(merged) >= k:
-                break
-
-        return merged
+        return results
 
     @property
     def document_count(self) -> int:
-        """返回入库的文档片段数"""
+        """Return the number of indexed chunks."""
         return len(self.all_docs)
 
+    def source_counts(self) -> List[Tuple[str, int]]:
+        """Return chunk counts by source file."""
+        counts = Counter(
+            Path(doc.metadata.get("source", "未知来源")).name
+            for doc in self.all_docs
+        )
+        return sorted(counts.items())
+
     def clear(self):
-        """清空知识库"""
+        """Clear all persisted and in-memory knowledge base state."""
         self.vector_store.delete_collection()
         self.vector_store = self._init_vector_store()
         self.bm25_index = None
         self.bm25_docs = []
         self.all_docs = []
+        self.doc_by_id = {}
+        self.existing_chunk_ids = set()

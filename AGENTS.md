@@ -1,4 +1,4 @@
-# KnowBase — CLAUDE.md
+# KnowBase — AGENTS.md
 
 ## 项目概览
 
@@ -15,11 +15,14 @@ uv run streamlit run src/app.py
 - `src/app.py` — Streamlit 入口
 - `src/knowledge_base.py` — 知识库（加载/分割/嵌入/检索）
 - `src/graph.py` — LangGraph 工作流定义
-- `config/settings.py` — API Key 和模型配置
+- `src/utils.py` — 上传校验与通用工具
+- `config/settings.py` — `.env` 驱动的应用配置
+- `tests/` — 单元测试与回归测试
+- `docs/` — 需求文档与离线评估样例
 - `data/` — 预设文档 + Chroma 持久化数据
 
 ## 关键约定
 
 - 包管理用 **uv**，不用 pip
-- API Key 在 `config/settings.py` 中配置
+- API Key 在 `.env` 中配置
 - 知识库数据持久化在 `data/chroma_db/`

@@ -1,9 +1,12 @@
-config/settings.py
 .env
 chroma_demo.py
 data/chroma_db/
+data/chroma_db_backup_*/
 .venv/
 __pycache__/
+*/__pycache__/
 *.pyc
+*.log
+.gitconfig
 .DS_Store
 *.egg-info/

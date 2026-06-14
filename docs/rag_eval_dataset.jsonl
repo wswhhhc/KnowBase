@@ -1,0 +1,3 @@
+{"id":"kb_langgraph_memory","question":"LangGraph 如何保存会话记忆？","expected_answer":"应说明通过 checkpoint/thread_id 保存短期会话状态。","reference_sources":["sample_langchain.txt"],"evaluators":["correctness","groundedness","retrieval_relevance","answer_relevance"]}
+{"id":"kb_python_basics","question":"Python 适合做哪些类型的开发？","expected_answer":"应基于知识库内容说明 Python 的常见应用场景。","reference_sources":["sample_python.txt"],"evaluators":["correctness","groundedness","retrieval_relevance","answer_relevance"]}
+{"id":"kb_unknown","question":"知识库没有覆盖的问题应该如何回答？","expected_answer":"应明确说明证据不足，不应编造。","reference_sources":[],"evaluators":["groundedness","answer_relevance"]}

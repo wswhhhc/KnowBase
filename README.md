@@ -1,75 +1,99 @@
-# KnowBase 📚
+# KnowBase
 
-基于 **LangChain + LangGraph** 的知识库问答助手。支持预设知识库问答和动态上传文档。
+基于 LangChain + LangGraph 的知识库问答助手。项目使用 Streamlit UI、Chroma 本地向量库、BM25 + 向量混合检索，并通过硅基流动 OpenAI-compatible API 调用 LLM 和 embedding 模型。
 
 ## 功能
 
-- 预设知识库问答（内置 AI / Python / LangChain 三份文档）
-- 动态上传 .txt/.md 文档到知识库
-- 多轮对话
-- 来源引用标注
-
-## LangGraph 工作流
-
-```
-用户提问 → 查询改写 → 混合检索 → 重排序 → LLM 生成 → 质量检查 → 返回
-                                           ↻ 不合格则重试
-```
-
-5 个节点：
-1. **查询改写** — 结合对话历史优化问题
-2. **混合检索** — 向量检索 + BM25 加权融合
-3. **重排序** — LLM 精排
-4. **生成回答** — 带来源引用的回答
-5. **质量检查** — 检测幻觉/答非所问，不合格自动重试
-
-## 技术栈
-
-| 层 | 技术 |
-|------|------|
-| 框架 | LangChain |
-| 编排 | LangGraph |
-| UI | Streamlit |
-| 向量库 | Chroma |
-| Embedding | BAAI/bge-m3（硅基流动 API） |
-| LLM | DeepSeek-V4-Flash（硅基流动 API） |
+- 预设知识库问答和 `.txt` / `.md` 动态上传
+- LangGraph checkpoint 会话记忆
+- 查询改写、混合检索、结构化重排、答案生成、质量检查
+- Streaming 节点进度展示
+- 引用来源、chunk 分数和质量检查说明
+- LangSmith tracing 配置入口
 
 ## 快速开始
 
-### 1. 安装依赖
-
 ```bash
 cd KnowBase
-uv pip install -r requirements.txt
+uv sync
 ```
 
-### 2. 配置 API Key
+创建或编辑 `.env`：
 
-编辑 `config/settings.py`，填入你的硅基流动 API Key（已内置测试 Key）：
+```env
+SILICONFLOW_API_KEY=你的硅基流动密钥
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+LLM_MODEL=deepseek-ai/DeepSeek-V4-Flash
+EMBEDDING_MODEL=BAAI/bge-m3
 
-```python
-SILICONFLOW_API_KEY = "你的 API Key"
+# 可选
+LANGSMITH_TRACING=false
+LANGSMITH_API_KEY=
+MAX_UPLOAD_MB=5
+CHUNK_SIZE=500
+CHUNK_OVERLAP=100
+TOP_K_RETRIEVAL=5
+TOP_K_RERANK=3
 ```
 
-### 3. 启动
+启动：
 
 ```bash
 uv run streamlit run src/app.py
 ```
 
-浏览器打开 http://localhost:8501
+## LangGraph 工作流
+
+```text
+用户提问
+  -> 问题路由
+  -> 查询改写 / 会话记忆 / 会话总结
+  -> 混合检索
+  -> 结构化重排
+  -> 生成回答
+  -> 质量检查
+  -> 不合格时扩大检索重试
+```
+
+每个 Streamlit 会话会生成独立 `thread_id`，LangGraph checkpointer 会保存该线程内的消息历史。
+
+## 检索与入库
+
+- 每个 chunk 都带有 `chunk_id`、`source`、`chunk_index`、`content_hash`、`ingested_at`。
+- 相同来源和相同 chunk 不会重复入库。
+- 混合检索使用向量召回 + jieba BM25，并通过 RRF 融合排序。
+- 上传文件会执行文件名清洗、扩展名校验和大小限制。
+
+## 测试
+
+```bash
+uv run python -m unittest discover -s tests
+```
+
+离线 RAG 评估样例数据位于 `docs/rag_eval_dataset.jsonl`，可用于接入 LangSmith evaluate。
 
 ## 项目结构
 
-```
+```text
 KnowBase/
-├── config/settings.py       # 配置
-├── data/                    # 预设文档 + Chroma 持久化
-├── src/
-│   ├── app.py              # Streamlit 主界面
-│   ├── knowledge_base.py   # 知识库管理（加载/检索）
-│   ├── graph.py            # LangGraph 工作流
-│   └── utils.py            # 工具函数
-├── docs/requirements.md    # 需求文档
-└── requirements.txt
+├─ config/
+│  └─ settings.py           # typed settings / .env 配置入口
+├─ data/
+│  ├─ sample_*.txt          # 预置知识文档
+│  └─ chroma_db/            # Chroma 持久化库
+├─ docs/
+│  ├─ requirements.md       # 需求说明
+│  └─ rag_eval_dataset.jsonl
+├─ src/
+│  ├─ app.py                # Streamlit UI
+│  ├─ graph.py              # LangGraph 工作流
+│  ├─ knowledge_base.py     # 入库与检索
+│  └─ utils.py              # 上传校验等工具
+├─ tests/
+│  └─ test_*.py             # 单元与回归测试
+├─ .env
+├─ AGENTS.md
+├─ pyproject.toml
+├─ requirements.txt
+└─ uv.lock
 ```
