@@ -5,17 +5,19 @@ from __future__ import annotations
 from functools import partial
 import json
 import re
+import sqlite3
 from typing import Annotated, Iterable, List, Literal, TypedDict
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, ValidationError
 
 from config.settings import (
+    CHECKPOINT_DB_PATH,
     ENABLE_QUALITY_CHECK,
     LLM_MAX_TOKENS,
     LLM_MODEL,
@@ -65,7 +67,19 @@ class QualityDecision(BaseModel):
 
 
 _GRAPH_CACHE: dict[int, object] = {}
-_CHECKPOINTER = MemorySaver()
+
+
+def _init_checkpointer():
+    """Return a persistent SqliteSaver checkpointer.
+
+    Creates the checkpoint DB on first access. The connection lives for
+    the process lifetime; LangGraph handles concurrent writes internally.
+    """
+    conn = sqlite3.connect(CHECKPOINT_DB_PATH, check_same_thread=False)
+    return SqliteSaver(conn)
+
+
+_CHECKPOINTER = _init_checkpointer()
 
 
 def _get_llm():
@@ -78,42 +92,66 @@ def _get_llm():
     )
 
 
-SUMMARY_PATTERNS = (
-    r"总结",
-    r"概括",
-    r"回顾",
-    r"梳理",
+_SUMMARY_PATTERNS = (
+    r"总结", r"概括", r"回顾", r"梳理",
     r"整理.*(对话|聊天|内容|结论)",
 )
 
-MEMORY_PATTERNS = (
-    r"上一次.*(问|说|提到|回答)",
-    r"上一轮.*(问|说|提到|回答)",
-    r"刚才.*(问|说|提到|回答)",
-    r"刚刚.*(问|说|提到|回答)",
-    r"之前.*(问|说|提到|回答)",
-    r"前面.*(问|说|提到|回答)",
-    r"上一句.*(问|说|提到|回答)",
-    r"刚那个.*(问题|内容|回答|说法)",
-    r"你知道.*上一次.*吗",
-    r"我刚才.*问.*什么",
-    r"我刚刚.*问.*什么",
-    r"你刚才.*说.*什么",
-    r"你刚刚.*说.*什么",
+_MEMORY_PATTERNS = (
+    r"上一次.*(问|说|提到|回答)", r"上一轮.*(问|说|提到|回答)",
+    r"刚才.*(问|说|提到|回答)", r"刚刚.*(问|说|提到|回答)",
+    r"之前.*(问|说|提到|回答)", r"前面.*(问|说|提到|回答)",
+    r"上一句.*(问|说|提到|回答)", r"刚那个.*(问题|内容|回答|说法)",
+    r"你知道.*上一次.*吗", r"我刚才.*问.*什么",
+    r"我刚刚.*问.*什么", r"你刚才.*说.*什么", r"你刚刚.*说.*什么",
 )
 
 
 def detect_question_type(question: str, chat_history: List[tuple[str, str]]) -> str:
-    """Route the question to the best handler for this turn."""
+    """Regex-based question routing (fallback when LLM classifier is unavailable)."""
     normalized = re.sub(r"\s+", "", question.lower())
 
     if chat_history:
-        if any(re.search(pattern, normalized) for pattern in SUMMARY_PATTERNS):
+        if any(re.search(pattern, normalized) for pattern in _SUMMARY_PATTERNS):
             return "conversation_summary"
-        if any(re.search(pattern, normalized) for pattern in MEMORY_PATTERNS):
+        if any(re.search(pattern, normalized) for pattern in _MEMORY_PATTERNS):
             return "chat_memory"
 
     return "knowledge_base"
+
+
+def route_question(state: GraphState) -> dict:
+    """Classify the question using structured LLM routing, with regex fallback."""
+    history = _messages_to_turns(state.get("messages", []))
+
+    # Try LLM-based structured classification first
+    try:
+        llm = _get_llm()
+        history_text = _format_chat_history(history, limit=3) if history else "（无历史）"
+        prompt = ChatPromptTemplate.from_messages([
+            (
+                "system",
+                "你是问题分类器。根据用户问题和对话历史，判断意图类型。"
+                "只输出 JSON，格式为 {\"question_type\":\"类型\",\"reason\":\"原因\"}。\n\n"
+                "类型说明：\n"
+                "- knowledge_base：询问知识库内容、技术问题、事实查询。\n"
+                "- chat_memory：询问之前的对话内容（如'我刚才问了什么'）。\n"
+                "- conversation_summary：要求总结对话（如'总结一下'）。\n"
+                "- clarification：问题模糊需要澄清、或纯粹的问候闲聊。",
+            ),
+            ("human", "对话历史：\n{history}\n\n当前问题：{question}"),
+        ])
+        result = llm.invoke(
+            prompt.format(history=history_text, question=state["question"])
+        )
+        decision = RouteDecision.model_validate(_json_from_text(str(result.content)))
+        return {"question_type": decision.question_type}
+    except Exception:
+        pass
+
+    # Fallback to regex-based routing
+    question_type = detect_question_type(state["question"], history)
+    return {"question_type": question_type}
 
 
 def _messages_to_turns(messages: List[BaseMessage], exclude_last_human: bool = True) -> List[tuple[str, str]]:
@@ -176,18 +214,14 @@ def parse_quality_decision(text: str) -> QualityDecision:
         )
 
 
-def route_question(state: GraphState) -> dict:
-    history = _messages_to_turns(state.get("messages", []))
-    question_type = detect_question_type(state["question"], history)
-    return {"question_type": question_type}
-
-
-def route_after_classifier(state: GraphState) -> Literal["rewrite_query", "answer_from_history", "summarize_history"]:
+def route_after_classifier(state: GraphState) -> Literal["rewrite_query", "answer_from_history", "summarize_history", "handle_clarification"]:
     question_type = state.get("question_type", "knowledge_base")
     if question_type == "chat_memory":
         return "answer_from_history"
     if question_type == "conversation_summary":
         return "summarize_history"
+    if question_type == "clarification":
+        return "handle_clarification"
     return "rewrite_query"
 
 
@@ -245,12 +279,24 @@ def _format_context(results: list[RetrievalResult]) -> tuple[str, list[dict]]:
     for index, result in enumerate(results, 1):
         doc = result.document
         source = doc.metadata.get("source", "未知来源")
-        context_parts.append(f"[文档{index}]（ID：{result.chunk_id}，来源：{source}，分数：{result.score:.4f}）\n{doc.page_content}")
+        chunk_index = doc.metadata.get("chunk_index", "")
+        page = doc.metadata.get("page", "")
+        loc_parts = [f"来源：{source}"]
+        if chunk_index != "":
+            loc_parts.append(f"分段：{chunk_index}")
+        if page:
+            loc_parts.append(f"页码：{page}")
+        loc_str = "，".join(loc_parts)
+        context_parts.append(
+            f"[文档{index}]（ID：{result.chunk_id}，{loc_str}，分数：{result.score:.4f}）\n{doc.page_content}"
+        )
         sources.append(
             {
                 "index": index,
                 "chunk_id": result.chunk_id,
                 "source": source,
+                "chunk_index": chunk_index,
+                "page": page,
                 "content": doc.page_content[:300],
                 "score": result.score,
                 "vector_score": result.vector_score,
@@ -286,6 +332,23 @@ def handle_missing_context(state: GraphState) -> dict:
         "quality_ok": False,
         "quality_reason": "没有检索到相关文档。",
         "retry_strategy": "insufficient_context",
+        "messages": [AIMessage(content=answer)],
+    }
+
+
+def handle_clarification(state: GraphState) -> dict:
+    """Handle ambiguous or greeting-type queries that need human clarification."""
+    question = state["question"]
+    answer = (
+        f"你问的是「{question}」。这个问题比较模糊，能说得更具体一些吗？"
+        "你可以补充具体的关键词，或者描述你想了解的主题。"
+    )
+    return {
+        "answer": answer,
+        "sources": [],
+        "quality_ok": True,
+        "quality_reason": "clarification_response",
+        "retry_strategy": "none",
         "messages": [AIMessage(content=answer)],
     }
 
@@ -328,7 +391,7 @@ def generate_answer(state: GraphState) -> dict:
 
     llm = _get_llm()
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是知识库问答助手。只能基于参考文档回答；证据不足就说不知道。回答末尾用【来源：文件名】标注引用。用中文回答。"),
+        ("system", "你是知识库问答助手。只能基于参考文档回答；证据不足就说不知道。回答末尾用【来源：文件名·分段号】标注引用位置。用中文回答。"),
         ("human", "参考文档：\n{context}\n\n用户问题：{question}"),
     ])
     result = llm.invoke(prompt.format(context=context, question=question))
@@ -372,13 +435,25 @@ def check_quality(state: GraphState) -> dict:
     if decision.quality_passed or retry_count + 1 >= MAX_RETRIES:
         update["messages"] = [AIMessage(content=answer)]
     else:
-        update["retrieval_k"] = min((state.get("retrieval_k") or TOP_K_RETRIEVAL) + TOP_K_RETRIEVAL, TOP_K_RETRIEVAL * 4)
-        update["score_threshold"] = None
+        strategy = decision.retry_strategy
+        if strategy == "expand_retrieval":
+            update["retrieval_k"] = min(
+                (state.get("retrieval_k") or TOP_K_RETRIEVAL) + TOP_K_RETRIEVAL,
+                TOP_K_RETRIEVAL * 4,
+            )
+            update["score_threshold"] = None
+        elif strategy == "rewrite_query":
+            # Keep existing retrieval_k but force a re-rewrite
+            update["score_threshold"] = None
+        # insufficient_context and other unknown strategies go to end via should_retry
     return update
 
 
-def should_retry(state: GraphState) -> Literal["retrieve_docs", "end"]:
+def should_retry(state: GraphState) -> Literal["rewrite_query", "retrieve_docs", "end"]:
     if not state.get("quality_ok", True) and state.get("retry_count", 0) < MAX_RETRIES:
+        retry_strategy = state.get("retry_strategy", "expand_retrieval")
+        if retry_strategy == "rewrite_query":
+            return "rewrite_query"
         return "retrieve_docs"
     return "end"
 
@@ -392,6 +467,7 @@ def build_graph(knowledge_base: KnowledgeBase):
     workflow.add_node("summarize_history", summarize_history)
     workflow.add_node("retrieve_docs", partial(retrieve_docs, kb=knowledge_base))
     workflow.add_node("handle_missing_context", handle_missing_context)
+    workflow.add_node("handle_clarification", handle_clarification)
     workflow.add_node("rerank_docs", rerank_docs)
     workflow.add_node("generate_answer", generate_answer)
     workflow.add_node("check_quality", check_quality)
@@ -404,6 +480,7 @@ def build_graph(knowledge_base: KnowledgeBase):
             "rewrite_query": "rewrite_query",
             "answer_from_history": "answer_from_history",
             "summarize_history": "summarize_history",
+            "handle_clarification": "handle_clarification",
         },
     )
     workflow.add_edge("rewrite_query", "retrieve_docs")
@@ -417,7 +494,8 @@ def build_graph(knowledge_base: KnowledgeBase):
     workflow.add_edge("answer_from_history", END)
     workflow.add_edge("summarize_history", END)
     workflow.add_edge("handle_missing_context", END)
-    workflow.add_conditional_edges("check_quality", should_retry, {"retrieve_docs": "retrieve_docs", "end": END})
+    workflow.add_edge("handle_clarification", END)
+    workflow.add_conditional_edges("check_quality", should_retry, {"rewrite_query": "rewrite_query", "retrieve_docs": "retrieve_docs", "end": END})
 
     return workflow.compile(checkpointer=_CHECKPOINTER)
 
