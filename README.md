@@ -1,28 +1,25 @@
 # KnowBase
 
-基于 LangChain + LangGraph 的知识库问答助手。Streamlit UI、Chroma 本地向量库、候选集 BM25 + 向量混合检索，通过硅基流动 API 调用 LLM 和 embedding 模型。
+基于 LangChain + LangGraph 的知识库问答助手。**React 前端 + FastAPI 后端** 前后端分离架构，Chroma 本地向量库 + 候选集 BM25 混合检索，通过硅基流动 API 调用 LLM 和 embedding 模型。
 
 ## 功能
 
+- **双前端**：React 杂志编辑风 UI（默认） + Streamlit 经典界面（兼容）
 - 预设知识库问答和 `.txt` / `.md` / `.pdf` / `.docx` / `.html` 动态上传
 - URL 一键导入网页内容
-- LangGraph checkpoint 会话记忆 + 对话历史管理（新建/切换/删除/导出）
-- 流式输出回答，边生成边展示
+- SSE 流式输出回答，边生成边展示
 - 查询改写 → 候选集混合检索 → 条件式 LLM 精排 → 生成回答 → 分层质量检查
-- 联网搜索兜底（可选 Tavily，侧边栏开关控制）
+- 联网搜索兜底（可选 Tavily）
 - 检索策略：fast / balanced / high_quality
 - 邻居 chunk 上下文补全 + 标题追踪
-- 知识库内容浏览与全文搜索
-- 指标面板（耗时分布、质量通过率、每日趋势）
+- 知识库内容浏览（杂志藏书阁风格网格）
+- 指标面板（编辑式数据看板，耗时分布/质量通过率/查询日志）
+- 浅色/深色模式切换
 - 离线 RAG 评估脚本
-- LangSmith tracing 配置入口
 
 ## 快速开始
 
-```bash
-cd KnowBase
-uv sync
-```
+### 1. 配置文件
 
 创建或编辑 `.env`：
 
@@ -34,18 +31,71 @@ EMBEDDING_MODEL=BAAI/bge-m3
 
 # 可选
 TAVILY_API_KEY=tvly-xxx            # 联网搜索兜底
-LANGSMITH_TRACING=false
-CHUNK_SIZE=800
-CHUNK_OVERLAP=50
-TOP_K_RETRIEVAL=5
-TOP_K_RERANK=3
-VECTOR_CANDIDATE_K=30
 ```
 
-启动：
+### 2. 启动开发环境（推荐）
+
+```bash
+# 一键启动（后端 8000 + 前端 5173）
+bash scripts/dev.sh          # macOS / Linux
+scripts\dev.bat              # Windows
+
+# 或分别启动：
+cd backend && uv run uvicorn src.api.main:app --reload --port 8000
+cd frontend && npm run dev
+```
+
+打开 http://localhost:5173
+
+### 3. 旧版 Streamlit（可选）
 
 ```bash
 uv run streamlit run src/app.py
+```
+
+## 项目结构
+
+```
+KnowBase/
+├── backend/                    # FastAPI 后端
+│   ├── config/                 # pydantic-settings 配置
+│   ├── src/
+│   │   ├── api/                # REST API 路由层
+│   │   │   ├── main.py         # 应用入口 + CORS
+│   │   │   ├── deps.py         # 依赖注入
+│   │   │   ├── models.py       # Pydantic 模型
+│   │   │   └── routes/
+│   │   │       ├── chat.py           # SSE 流式聊天
+│   │   │       ├── conversations.py  # 对话 CRUD
+│   │   │       ├── documents.py      # 文档上传/URL导入
+│   │   │       ├── knowledge_base.py # 知识库浏览
+│   │   │       └── metrics.py        # 查询日志
+│   │   ├── graph.py            # LangGraph 工作流
+│   │   ├── knowledge_base.py   # Chroma + BM25 核心
+│   │   ├── conversations.py    # 对话管理模块
+│   │   ├── loaders.py          # 文档加载器
+│   │   ├── web_search.py       # Tavily 搜索
+│   │   ├── metrics.py          # JSONL 日志
+│   │   └── utils.py            # 工具函数
+│   └── tests/
+├── frontend/                   # React + Vite + Tailwind 前端
+│   └── src/
+│       ├── components/
+│       │   ├── ui/             # shadcn/ui 组件
+│       │   ├── ChatArea.tsx    # 对话界面
+│       │   ├── Sidebar.tsx     # 侧栏导航
+│       │   ├── BrowserPage.tsx # 知识库浏览
+│       │   └── DashboardPage.tsx # 指标面板
+│       ├── hooks/
+│       │   ├── useChat.ts      # SSE 流式聊天 hook
+│       │   ├── useData.ts      # 数据管理 hook
+│       │   └── useTheme.ts     # 主题切换 hook
+│       └── lib/
+│           ├── api.ts          # API 客户端
+│           └── utils.ts        # 工具函数
+├── config/                     # 共享配置
+├── data/                       # 共享数据（chroma/checkpoints/logs）
+└── scripts/                    # 启动脚本
 ```
 
 ## LangGraph 工作流
@@ -61,63 +111,27 @@ uv run streamlit run src/app.py
   → 不合格 → 联网搜索 / 扩检索重试 → 重新生成
 ```
 
-每个 Streamlit 会话生成独立 `thread_id`，LangGraph checkpointer 保存线程消息历史。
-
-## 检索与入库
-
-- 切片策略：`RecursiveCharacterTextSplitter`（chunk_size=800, overlap=50），支持标题/段落/句末分割
-- 每个 chunk 都带有 `chunk_id`、`source`、`source_type`、`chunk_index`、`section`（所属标题）、`content_hash`、`ingested_at`
-- 相同来源和相同 chunk 不会重复入库（基于 chunk_id 去重）
-- 混合检索：向量召回 N=30 条 → 候选集上做 BM25 → RRF 融合取 TopK
-- 检索时自动补全前后邻居 chunk 作为上下文，减少断章取义
-- 支持按 `source_type`（local_file / web_page）过滤检索范围
-
 ## 测试
 
 ```bash
-# 全部测试
-uv run python -m unittest discover -s tests
+cd backend && uv run python -m unittest discover -s tests
 
 # 离线评估
-uv run python -m src.evaluate
+cd backend && uv run python -m src.evaluate
 ```
 
-## 项目结构
+## 技术栈
 
-```text
-KnowBase/
-├─ config/
-│  └─ settings.py           # typed settings / .env 配置入口
-├─ data/
-│  ├─ sample_*.txt          # 预置知识文档
-│  ├─ chroma_db/            # Chroma 持久化库
-│  ├─ rag_logs/             # 查询日志 JSONL
-│  └─ eval_reports/         # 离线评估报告
-├─ docs/
-│  ├─ requirements.md
-│  └─ rag_eval_dataset.jsonl
-├─ src/
-│  ├─ app.py                # Streamlit 主入口
-│  ├─ graph.py              # LangGraph 工作流
-│  ├─ knowledge_base.py     # 入库与检索
-│  ├─ loaders.py            # 多格式文档加载器 + URL 抓取
-│  ├─ conversations.py      # 对话历史 SQLite 管理
-│  ├─ web_search.py         # Tavily 联网搜索
-│  ├─ kb_browser.py         # 知识库内容浏览
-│  ├─ metrics.py            # 查询日志记录
-│  ├─ evaluate.py           # 离线评估脚本
-│  └─ metrics_dashboard.py  # 指标面板
-├─ tests/
-│  ├─ test_graph.py
-│  ├─ test_knowledge_base.py
-│  ├─ test_loaders.py
-│  ├─ test_metrics.py
-│  ├─ test_routing.py
-│  ├─ test_settings.py
-│  └─ test_utils.py
-├─ .env
-├─ .gitignore
-├─ uv.lock
-└─ pyproject.toml
-```
-
+| 层 | 技术 |
+|----|------|
+| 前端框架 | React 19 + TypeScript |
+| 构建工具 | Vite 6 |
+| UI 组件 | shadcn/ui + Radix + Tailwind CSS |
+| 动效 | framer-motion |
+| 字体 | Instrument Serif / Inter Tight / JetBrains Mono |
+| 后端框架 | FastAPI + uvicorn |
+| 流式传输 | SSE (sse-starlette) |
+| AI 引擎 | LangChain + LangGraph |
+| 向量库 | Chroma (本地) |
+| 搜索引擎 | BM25 (jieba + rank-bm25) |
+| 检索融合 | RRF 倒数排序融合 |

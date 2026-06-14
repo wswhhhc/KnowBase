@@ -28,47 +28,51 @@ cd backend && uv run python -m src.evaluate
 
 ## Architecture
 
-**KnowBase** — LangChain + LangGraph 知识库问答助手。
+**KnowBase** — LangChain + LangGraph 知识库问答助手。React 前端 + FastAPI 后端前后端分离架构。
 
 ### 项目结构
 
 ```
 KnowBase/
-├── backend/              # FastAPI 后端（前后端分离架构）
-│   ├── config/           # pydantic-settings 配置
+├── backend/                    # FastAPI 后端
+│   ├── config/                 # pydantic-settings 配置
 │   ├── src/
-│   │   ├── api/          # FastAPI 路由层
-│   │   │   ├── main.py           # 应用入口 + CORS
-│   │   │   ├── deps.py           # KnowledgeBase 依赖注入
-│   │   │   ├── models.py         # Pydantic 请求/响应模型
+│   │   ├── api/                # FastAPI 路由层
+│   │   │   ├── main.py         # 应用入口 + CORS
+│   │   │   ├── deps.py         # KnowledgeBase 依赖注入
+│   │   │   ├── models.py       # Pydantic 请求/响应模型
 │   │   │   └── routes/
 │   │   │       ├── chat.py           # SSE 流式聊天
 │   │   │       ├── conversations.py  # 对话 CRUD
 │   │   │       ├── documents.py      # 上传/URL导入/来源管理
 │   │   │       ├── knowledge_base.py # 知识库浏览
 │   │   │       └── metrics.py        # 查询日志
-│   │   ├── graph.py          # LangGraph 工作流
-│   │   ├── knowledge_base.py # Chroma + BM25 核心
-│   │   ├── conversations.py  # 对话管理模块
-│   │   ├── loaders.py        # 文档加载器
-│   │   ├── web_search.py     # Tavily 搜索
-│   │   ├── metrics.py        # JSONL 日志
-│   │   └── utils.py          # 工具函数
+│   │   ├── graph.py            # LangGraph 工作流
+│   │   ├── knowledge_base.py   # Chroma + BM25 核心
+│   │   ├── conversations.py    # 对话管理模块
+│   │   ├── loaders.py          # 文档加载器
+│   │   ├── web_search.py       # Tavily 搜索
+│   │   ├── metrics.py          # JSONL 日志
+│   │   └── utils.py            # 工具函数
 │   └── tests/
-├── frontend/             # React + Vite + Tailwind 前端
+├── frontend/                   # React + Vite + Tailwind 前端
 │   └── src/
 │       ├── components/
-│       │   ├── ui/       # shadcn/ui 组件
-│       │   ├── ChatArea.tsx
-│       │   └── Sidebar.tsx
+│       │   ├── ui/             # shadcn/ui 组件（button/input/dialog/scroll-area/select/separator/switch/tooltip/progress）
+│       │   ├── ChatArea.tsx    # 对话界面（SSE 流式显示、证据标签、引用来源、反馈、导出）
+│       │   ├── Sidebar.tsx     # 侧栏（对话列表/文档管理/导航切换）
+│       │   ├── BrowserPage.tsx # 知识库浏览（杂志网格布局、来源过滤、搜索、全文 Dialog）
+│       │   └── DashboardPage.tsx # 指标面板（统计卡片、小时分布图、质量分布、日志表格）
 │       ├── hooks/
-│       │   ├── useChat.ts    # SSE 流式聊天 hook
-│       │   └── useData.ts    # 对话/文档管理 hook
+│       │   ├── useChat.ts      # SSE 流式聊天 hook
+│       │   ├── useData.ts      # 对话/文档管理 hook
+│       │   └── useTheme.ts     # 浅色/深色模式切换 hook
 │       └── lib/
-│           ├── api.ts        # API 客户端
-│           └── utils.ts      # 工具函数
-├── config/               # 共享配置（pydantic-settings）
-└── data/                 # 共享数据（chroma/checkpoints/logs）
+│           ├── api.ts          # 全量 API 客户端
+│           └── utils.ts        # 工具函数
+├── config/                     # 共享配置（pydantic-settings）
+├── data/                       # 共享数据（chroma/checkpoints/logs）
+└── scripts/                    # dev.bat / dev.sh 启动脚本
 ```
 
 ### 核心模块
@@ -85,6 +89,34 @@ KnowBase/
 | **`backend/src/metrics.py`** | RAG 查询本地 JSONL 日志，记录每次查询的耗时、检索数量、质量决策。 |
 | **`config/settings.py`** | pydantic-settings 驱动，从 `.env` 读取配置。`CHROMA_API_KEY` 会回退作为 `SILICONFLOW_API_KEY`。 |
 
+### 前端架构
+
+- **App.tsx** — 视图控制器，管理 `activeView`（chat / browser / dashboard），传递 `sidebarOpen` 和 `theme`
+- **ChatArea.tsx** — SSE 流式对话，含证据标签、引用来源折叠面板、👍/👎 反馈、导出 Markdown、搜索策略切换、联网搜索开关
+- **Sidebar.tsx** — 三视图导航 + 对话列表（支持重命名/删除）+ 文档管理（上传/URL导入/来源管理）
+- **BrowserPage.tsx** — 杂志风格知识库浏览，响应式网格布局、来源过滤按钮组、关键词搜索、全文 Dialog
+- **DashboardPage.tsx** — 数据看板，小时分布柱状图、质量分布进度条、最近查询列表、查询日志表格、1/7/30 天切换
+- **useTheme.ts** — localStorage 持久化 + `prefers-color-scheme` 初始检测
+
+### API 端点一览
+
+| 端点 | 功能 |
+|------|------|
+| `POST /api/chat/stream` | SSE 流式聊天（事件：node / token / sources / done） |
+| `GET/POST/DELETE /api/conversations` | 对话 CRUD |
+| `PATCH /api/conversations/:id` | 重命名对话 |
+| `GET /api/conversations/:id/messages` | 消息列表 |
+| `POST /api/conversations/:id/messages/:msg_id/feedback` | 消息反馈 |
+| `GET /api/conversations/:id/export` | 导出 Markdown |
+| `POST /api/documents/upload` | 文件上传 |
+| `POST /api/documents/ingest-url` | URL 导入 |
+| `DELETE /api/documents/source/:name` | 删除来源 |
+| `POST /api/documents/clear` | 清空知识库 |
+| `GET /api/knowledge-base/stats` | 知识库统计 |
+| `GET /api/knowledge-base/chunks` | 知识库浏览 |
+| `GET /api/knowledge-base/sources` | 来源列表 |
+| `GET /api/metrics/logs` | 查询日志 |
+
 ### LangGraph 工作流数据流
 
 ```
@@ -95,27 +127,20 @@ KnowBase/
   → check_quality(规则层→LLM审核→不合格→web_search→扩检索重试→重新生成)
 ```
 
-路由分支（`route_after_classifier`）：`knowledge_base` → 检索问答；`chat_memory` → 回答历史；`conversation_summary` → 总结；`clarification` → 模糊提示。
-
-流式输出：`run_query(stream_tokens=True)` 通过 `stream_mode=["updates", "messages"]` 同时输出节点进度和 LLM token。
-
 ### 对话状态管理
 
 - **LangGraph** 通过 `SqliteSaver` 持久化每个 `thread_id` 的线程状态（checkpoint），支持对话记忆。
-- **Streamlit** 管理 UI 层的消息列表 `st.session_state.messages`。
+- **React** 前端通过 `useChat` hook 管理消息列表和 SSE 流式状态。
 - **对话模块**（`conversations.py`）将用户/助手消息持久化到 `data/conversations.db`，支持新建/切换/删除/导出。
-- 重命名：首次消息自动截取前 30 字作为对话标题。
 
 ### 检索增强细节
 
-- `hybrid_search`：向量召回 N=30 条候选（`VECTOR_CANDIDATE_K`），在候选集上构建临时 BM25 索引并打分，RRF 融合取 TopK。不再对全库做 BM25。
+- `hybrid_search`：向量召回 N=30 条候选（`VECTOR_CANDIDATE_K`），在候选集上构建临时 BM25 索引并打分，RRF 融合取 TopK。
 - 邻居 chunk 补全：检索结果自动带上同一来源中前后各 1 个 chunk，减少断章取义。
-- 标题追踪：切片时检测 `#`/`##` 标题，记录到 chunk metadata 的 `section` 字段，展示在来源上下文中。
+- 标题追踪：切片时检测 `#`/`##` 标题，记录到 chunk metadata 的 `section` 字段。
 - `rerank_docs`：条件式 LLM 精排。候选间 RRF 分数差大、问题短（<50 字）、策略为 `fast` 时跳过。
-- `score_threshold`：RRF 分数阈值过滤。
-- 分层质量检查：规则层（空召回/回答过短/已联网）→ LLM 审核 → Tavily 联网 → 扩检索重试，最多 `MAX_RETRIES` 次。
+- 分层质量检查：规则层 → LLM 审核 → Tavily 联网 → 扩检索重试，最多 `MAX_RETRIES` 次。
 - 搜索策略：`fast`（无 rerank）、`balanced`（默认、条件 rerank）、`high_quality`（必走 rerank）。
-- 切片：`RecursiveCharacterTextSplitter` 按标题/段落/句末分割，chunk_size=800, overlap=50。支持 `source_type` 过滤。
 
 ### 关键约定
 
@@ -123,7 +148,6 @@ KnowBase/
 - API Key 在 `.env` 中配置，`require_siliconflow_api_key()` 检查并抛出可读错误。
 - LLM 和 embedding 都通过硅基流动 OpenAI-compatible API 调用。
 - Chroma 持久化在 `data/chroma_db/`，`clear()` 会删除 collection 并重建。
-- `all_docs` 在内存中维护 BM25 索引，重启时从 Chroma 恢复（`_load_existing_documents`）。
 - 联网搜索 Tavily 为可选依赖，未配 Key 时不显示在 UI 中。
 - `.env` 中的 `CHROMA_API_KEY` 会回退作为 `SILICONFLOW_API_KEY`。
 
