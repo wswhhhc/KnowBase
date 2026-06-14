@@ -127,6 +127,7 @@ def load_url(url: str, source_name: str | None = None) -> List[Document]:
     The URL itself is stored as the ``source`` metadata.
     """
     import requests
+    from bs4 import BeautifulSoup
 
     display_source = source_name or url
     headers = {
@@ -139,6 +140,10 @@ def load_url(url: str, source_name: str | None = None) -> List[Document]:
     resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
     resp.encoding = resp.apparent_encoding or "utf-8"
+
+    final_url = getattr(resp, "url", url) or url
+    if "accounts.feishu.cn" in final_url or "/login" in final_url:
+        raise ValueError("目标页面跳转到了登录页。请确认该 URL 可公开访问，或使用可直接访问的网页链接。")
 
     soup = BeautifulSoup(resp.text, "html.parser")
     for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
@@ -159,12 +164,16 @@ def load_url(url: str, source_name: str | None = None) -> List[Document]:
     except ImportError:
         text = (main or soup).get_text(separator="\n", strip=True)
 
+    text = text.strip()
+    if not text:
+        raise ValueError("网页抓取成功，但未提取到正文内容。该页面可能依赖登录、前端渲染，或正文不可直接抓取。")
+
     title_tag = soup.find("title")
     title = title_tag.get_text(strip=True) if title_tag else url
 
     return [
         Document(
-            page_content=text.strip(),
+            page_content=text,
             metadata={"source": display_source, "title": title, "url": url},
         )
     ]

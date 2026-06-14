@@ -23,6 +23,8 @@ from config.settings import (
     LLM_MODEL,
     LLM_TEMPERATURE,
     MAX_RETRIES,
+    RERANK_QUERY_LENGTH,
+    RERANK_SCORE_GAP_THRESHOLD,
     SCORE_THRESHOLD,
     SILICONFLOW_BASE_URL,
     TOP_K_RERANK,
@@ -54,6 +56,8 @@ class GraphState(TypedDict):
     web_search_error: str
     used_web_search: bool
     web_search_enabled: bool
+    search_strategy: str
+    search_filter: dict
 
 
 class RouteDecision(BaseModel):
@@ -157,13 +161,33 @@ def route_question(state: GraphState) -> dict:
             prompt.format(history=history_text, question=state["question"])
         )
         decision = RouteDecision.model_validate(_json_from_text(str(result.content)))
-        return {"question_type": decision.question_type}
+        search_filter = _route_search_scope(state["question"], decision.question_type)
+        return {"question_type": decision.question_type, "search_filter": search_filter}
     except Exception:
         pass
 
     # Fallback to regex-based routing
     question_type = detect_question_type(state["question"], history)
-    return {"question_type": question_type}
+    search_filter = _route_search_scope(state["question"], question_type)
+    return {"question_type": question_type, "search_filter": search_filter}
+
+
+# Scope routing rules: (keywords, source_type) pairs
+_SCOPE_RULES: list[tuple[tuple[str, ...], str]] = [
+    (("考勤", "请假", "制度", "规范", "休假", "加班", "报销", "办公"), "local_file"),
+    (("飞书", "文档", "手册"), "local_file"),
+]
+
+
+def _route_search_scope(question: str, question_type: str) -> dict:
+    """Route to a search filter based on question content and type."""
+    if question_type != "knowledge_base":
+        return {}
+    normalized = re.sub(r"\s+", "", question.lower())
+    for keywords, source_type in _SCOPE_RULES:
+        if any(kw in normalized for kw in keywords):
+            return {"source_type": source_type}
+    return {}
 
 
 def _messages_to_turns(messages: List[BaseMessage], exclude_last_human: bool = True) -> List[tuple[str, str]]:
@@ -322,7 +346,13 @@ def retrieve_docs(state: GraphState, kb: KnowledgeBase) -> dict:
     query = state.get("rewritten_question") or state["question"]
     retrieval_k = state.get("retrieval_k") or TOP_K_RETRIEVAL
     score_threshold = state.get("score_threshold", SCORE_THRESHOLD)
-    docs = kb.hybrid_search(query, k=retrieval_k, score_threshold=score_threshold)
+    search_filter = state.get("search_filter") or None
+    docs = kb.hybrid_search(
+        query,
+        k=retrieval_k,
+        score_threshold=score_threshold,
+        filter=search_filter,
+    )
     context, sources = _format_context(docs)
     return {"documents": docs, "context": context, "sources": sources}
 
@@ -400,10 +430,57 @@ def _tavily_configured() -> bool:
     return _is_configured_api_key(TAVILY_API_KEY)
 
 
+def _should_rerank(state: GraphState) -> bool:
+    """Determine whether LLM rerank is needed.
+
+    Skip rerank when:
+    - search_strategy is 'fast' (never rerank)
+    - search_strategy is 'high_quality' (always rerank)
+    - candidate count <= TOP_K_RERANK (no selection needed)
+    - RRF score gap among candidates is large enough (good separation)
+    - Question is short and simple
+    """
+    strategy = state.get("search_strategy", "balanced")
+
+    # fast: never rerank
+    if strategy == "fast":
+        return False
+    # high_quality: always rerank
+    if strategy == "high_quality":
+        return True
+
+    docs = state.get("documents", [])
+    if len(docs) <= TOP_K_RERANK:
+        return False
+
+    # Check RRF score gap among candidates
+    scores = sorted(
+        [d.score for d in docs if hasattr(d, "score")],
+        reverse=True,
+    )
+    if len(scores) >= 2:
+        gap = scores[0] - scores[TOP_K_RERANK - 1] if len(scores) >= TOP_K_RERANK else scores[0] - scores[-1]
+        if gap >= RERANK_SCORE_GAP_THRESHOLD:
+            return False
+
+    # Check question length
+    query = state.get("rewritten_question") or state.get("question", "")
+    if len(query) < RERANK_QUERY_LENGTH:
+        return False
+
+    return True
+
+
 def rerank_docs(state: GraphState) -> dict:
     docs = state.get("documents", [])
     if not docs:
         return {}
+
+    # Skip LLM rerank when not needed — use top candidates directly
+    if not _should_rerank(state):
+        top = docs[:TOP_K_RERANK]
+        context, sources = _format_context(top)
+        return {"documents": top, "context": context, "sources": sources}
 
     query = state.get("rewritten_question") or state["question"]
     doc_ids = {result.chunk_id for result in docs}
@@ -488,6 +565,50 @@ def generate_answer(state: GraphState) -> dict:
     return {"answer": answer, "sources": sources}
 
 
+def _rule_check_quality(state: GraphState) -> dict | None:
+    """Rule-based quality checks. Returns update dict if rule matches, None otherwise."""
+    answer = state.get("answer", "")
+    context = state.get("context", "")
+    web_context = state.get("web_context", "")
+    sources = state.get("sources", [])
+    used_web_search = state.get("used_web_search", False)
+    documents = state.get("documents", [])
+
+    # No documents retrieved → insufficient context
+    if not documents and not web_context:
+        return {
+            "quality_ok": False,
+            "quality_reason": "未检索到相关文档。",
+            "retry_strategy": "insufficient_context",
+        }
+
+    # No sources referenced in answer but we have docs → likely missing citation
+    if sources and not any(
+        s.get("source") in answer or s.get("chunk_id") in answer
+        for s in sources[:3]
+    ):
+        # Not a hard fail — let LLM decide
+        pass
+
+    # Answer is too short with no substance
+    if len(answer.strip()) < 10 and sources:
+        return {
+            "quality_ok": False,
+            "quality_reason": "回答过短。",
+            "retry_strategy": "expand_retrieval",
+        }
+
+    # If web search was already used and we have sources, accept
+    if used_web_search and sources:
+        return {
+            "quality_ok": True,
+            "quality_reason": "基于网络搜索的回答。",
+            "retry_strategy": "none",
+        }
+
+    return None  # No rule matched, fall through to LLM
+
+
 def check_quality(state: GraphState) -> dict:
     if state.get("question_type") != "knowledge_base" or not ENABLE_QUALITY_CHECK:
         answer = state.get("answer", "")
@@ -507,6 +628,23 @@ def check_quality(state: GraphState) -> dict:
     if web_context:
         context = f"{context}\n\n{web_context}" if context else web_context
 
+    # Rule-based check first
+    rule_result = _rule_check_quality(state)
+    if rule_result is not None:
+        update = {
+            **rule_result,
+            "retry_count": retry_count + 1,
+        }
+        if rule_result.get("quality_ok") or retry_count + 1 >= MAX_RETRIES:
+            update["messages"] = [AIMessage(content=answer)]
+            return update
+        # Check if we should trigger web search
+        if not used_web_search and state.get("web_search_enabled", False):
+            update["retry_strategy"] = "web_search"
+            update["retry_count"] = retry_count
+        return update
+
+    # LLM quality check
     llm = _get_llm()
     prompt = ChatPromptTemplate.from_messages([
         ("system", "你是回答质量审核员。只输出 JSON，格式为 {{\"quality_passed\": true/false, \"quality_reason\": \"原因\", \"retry_strategy\": \"none|rewrite_query|expand_retrieval|insufficient_context\"}}。"),
@@ -651,6 +789,8 @@ def _initial_state(question: str) -> GraphState:
         "web_search_error": "",
         "used_web_search": False,
         "web_search_enabled": False,
+        "search_strategy": "balanced",
+        "search_filter": {},
     }
 
 
@@ -694,6 +834,7 @@ def run_query(
     stream: bool = False,
     stream_tokens: bool = False,
     web_search_enabled: bool = False,
+    search_strategy: str = "balanced",
 ) -> dict | Iterable[dict] | Generator[tuple[str, dict], None, None]:
     """Execute one question against the cached LangGraph workflow.
 
@@ -701,8 +842,12 @@ def run_query(
         stream: If True, yield node-level updates.
         stream_tokens: If True, yield (mode, data) tuples with token-level LLM output.
         web_search_enabled: If True, enable web search fallback.
+        search_strategy: 'fast', 'balanced', or 'high_quality'.
     """
-    overrides = {"web_search_enabled": web_search_enabled}
+    overrides = {
+        "web_search_enabled": web_search_enabled,
+        "search_strategy": search_strategy,
+    }
     if stream_tokens:
         return _stream_query_with_tokens(question, thread_id, knowledge_base, **overrides)
     if stream:

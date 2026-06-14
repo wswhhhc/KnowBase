@@ -82,6 +82,7 @@ for key, default in [
     ("doc_count", 0),
     ("kb_error", ""),
     ("show_browser", False),
+    ("show_dashboard", False),
     ("current_conv_id", None),
 ]:
     if key not in st.session_state:
@@ -227,6 +228,11 @@ with st.sidebar:
         st.session_state.show_browser = True
         st.rerun()
 
+    # 指标面板
+    if st.button("📊 指标面板", use_container_width=True):
+        st.session_state.show_dashboard = True
+        st.rerun()
+
     st.divider()
     st.subheader("上传文档")
 
@@ -251,14 +257,17 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"处理失败: {e}")
 
-    # ---------- URL 导入 ----------
-    st.subheader("导入网页")
+    # ---------- 公开网页导入 ----------
+    st.subheader("导入公开网页")
+    st.caption("仅支持无需登录、可直接访问的公开网页。推荐：MDN、Wikipedia、官方文档、普通博客文章。")
     url = st.text_input(
-        "粘贴网页 URL",
-        placeholder="https://example.com/article",
+        "粘贴公开网页 URL",
+        placeholder="https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Overview",
         key="url_input",
+        help="不支持飞书 wiki、Notion 私有页、需要登录或强依赖前端渲染的页面。",
     )
-    if url and st.button("抓取并导入", use_container_width=True):
+    st.caption("可测试示例：MDN HTTP 概述、维基百科词条、Python 官方教程。")
+    if url and st.button("抓取公开网页并导入", use_container_width=True):
         with st.spinner(f"正在抓取: {url}..."):
             try:
                 from src.loaders import load_url
@@ -266,8 +275,6 @@ with st.sidebar:
                 docs = load_url(url)
                 source_name = docs[0].metadata.get("title", url) if docs else url
                 splits = st.session_state.kb._prepare_splits(docs)
-                for split in splits:
-                    split.metadata["source"] = source_name[:80]
                 new_splits = [
                     s for s in splits
                     if s.metadata["chunk_id"] not in st.session_state.kb.existing_chunk_ids
@@ -283,7 +290,7 @@ with st.sidebar:
                     st.info(f"⏭️ {source_name[:40]} 内容已存在")
                 st.rerun()
             except Exception as e:
-                st.error(f"抓取失败: {e}")
+                st.error(f"公开网页导入失败: {e}")
 
     # ---------- 来源管理 ----------
     if st.session_state.kb_ready and st.session_state.doc_count > 0:
@@ -338,6 +345,13 @@ if st.session_state.get("show_browser"):
     from src.kb_browser import show as show_browser
 
     show_browser(st.session_state.kb)
+    st.stop()
+
+# 指标面板模式
+if st.session_state.get("show_dashboard"):
+    from src.metrics_dashboard import show as show_dashboard
+
+    show_dashboard()
     st.stop()
 
 # 显示对话历史

@@ -39,13 +39,14 @@ class Settings(BaseSettings):
     )
     data_dir: Path = Field(default=ROOT_DIR / "data", validation_alias="DATA_DIR")
 
-    chunk_size: int = Field(default=500, validation_alias="CHUNK_SIZE")
-    chunk_overlap: int = Field(default=100, validation_alias="CHUNK_OVERLAP")
+    chunk_size: int = Field(default=800, validation_alias="CHUNK_SIZE")
+    chunk_overlap: int = Field(default=50, validation_alias="CHUNK_OVERLAP")
     top_k_retrieval: int = Field(default=5, validation_alias="TOP_K_RETRIEVAL")
     top_k_rerank: int = Field(default=3, validation_alias="TOP_K_RERANK")
+    vector_candidate_k: int = Field(default=30, validation_alias="VECTOR_CANDIDATE_K")
+    rerank_score_gap_threshold: float = Field(default=0.005, validation_alias="RERANK_SCORE_GAP_THRESHOLD")
+    rerank_query_length: int = Field(default=50, validation_alias="RERANK_QUERY_LENGTH")
     score_threshold: float | None = Field(default=None, validation_alias="SCORE_THRESHOLD")
-    bm25_weight: float = Field(default=0.3, validation_alias="BM25_WEIGHT")
-    vector_weight: float = Field(default=0.7, validation_alias="VECTOR_WEIGHT")
     rrf_k: int = Field(default=60, validation_alias="RRF_K")
 
     enable_quality_check: bool = Field(default=True, validation_alias="ENABLE_QUALITY_CHECK")
@@ -69,7 +70,7 @@ class Settings(BaseSettings):
         path = Path(value)
         return path if path.is_absolute() else ROOT_DIR / path
 
-    @field_validator("chunk_size", "top_k_retrieval", "top_k_rerank", "max_upload_mb")
+    @field_validator("chunk_size", "top_k_retrieval", "top_k_rerank", "vector_candidate_k", "max_upload_mb")
     @classmethod
     def _positive_int(cls, value: int) -> int:
         if value <= 0:
@@ -122,9 +123,10 @@ CHUNK_SIZE = settings.chunk_size
 CHUNK_OVERLAP = settings.chunk_overlap
 TOP_K_RETRIEVAL = settings.top_k_retrieval
 TOP_K_RERANK = settings.top_k_rerank
+VECTOR_CANDIDATE_K = settings.vector_candidate_k
+RERANK_SCORE_GAP_THRESHOLD = settings.rerank_score_gap_threshold
+RERANK_QUERY_LENGTH = settings.rerank_query_length
 SCORE_THRESHOLD = settings.score_threshold
-BM25_WEIGHT = settings.bm25_weight
-VECTOR_WEIGHT = settings.vector_weight
 RRF_K = settings.rrf_k
 ENABLE_QUALITY_CHECK = settings.enable_quality_check
 MAX_RETRIES = settings.max_retries

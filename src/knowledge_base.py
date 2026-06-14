@@ -26,6 +26,7 @@ from config.settings import (
     SCORE_THRESHOLD,
     SILICONFLOW_BASE_URL,
     TOP_K_RETRIEVAL,
+    VECTOR_CANDIDATE_K,
     require_siliconflow_api_key,
 )
 from src.loaders import load_document
@@ -58,6 +59,13 @@ def _content_hash(content: str) -> str:
 
 def _chunk_id(source: str, chunk_index: int, content_hash: str) -> str:
     return f"{Path(source).name}:{chunk_index}:{content_hash[:16]}"
+
+
+def _infer_source_type(source: str) -> str:
+    """Infer source_type from a source identifier."""
+    if source.startswith("http://") or source.startswith("https://"):
+        return "web_page"
+    return "local_file"
 
 
 def _document_chunk_id(doc: Document) -> str:
@@ -194,9 +202,12 @@ class KnowledgeBase:
             chunk_index = per_source_counts[source]
             per_source_counts[source] += 1
             content_hash = _content_hash(split.page_content)
+            # Determine source_type from existing metadata or infer
+            source_type = split.metadata.get("source_type") or _infer_source_type(split.metadata.get("source", ""))
             split.metadata.update(
                 {
                     "source": source,
+                    "source_type": source_type,
                     "chunk_index": chunk_index,
                     "content_hash": content_hash,
                     "chunk_id": _chunk_id(source, chunk_index, content_hash),
@@ -251,25 +262,41 @@ class KnowledgeBase:
         k: int = TOP_K_RETRIEVAL,
         *,
         score_threshold: float | None = SCORE_THRESHOLD,
+        vector_candidate_k: int | None = None,
+        filter: dict | None = None,
     ) -> List[RetrievalResult]:
-        """Hybrid retrieval with vector search, BM25, and RRF fusion."""
-        vector_results = self.vector_store.similarity_search_with_score(query, k=k * 2)
-        vector_ranked = [(_document_chunk_id(doc), score) for doc, score in vector_results]
+        """Hybrid retrieval with vector search, candidate-set BM25, and RRF fusion.
+
+        1. Vector recall N candidates (default VECTOR_CANDIDATE_K)
+        2. BM25 scores computed only on those N candidates (not full corpus)
+        3. RRF fusion over both ranked lists
+        4. Return top-k results
+        """
+        candidate_k = vector_candidate_k or VECTOR_CANDIDATE_K
+        vector_results = self.vector_store.similarity_search_with_score(query, k=candidate_k, filter=filter)
+        vector_ranked = [(_document_chunk_id(doc), float(score)) for doc, score in vector_results]
         vector_doc_map = {_document_chunk_id(doc): doc for doc, _score in vector_results}
 
         bm25_ranked: list[tuple[str, float]] = []
-        if self.bm25_index:
+        if self.bm25_index and vector_doc_map:
             query_tokens = self._tokenize(query)
-            bm25_scores = self.bm25_index.get_scores(query_tokens)
-            bm25_ranked = [
-                (doc.metadata["chunk_id"], float(score))
-                for doc, score in sorted(
-                    zip(self.bm25_docs, bm25_scores),
-                    key=lambda item: item[1],
-                    reverse=True,
-                )[: k * 2]
-                if score > 0
+            # Build candidate BM25 index from vector candidates
+            candidate_docs = [
+                self.doc_by_id[cid]
+                for cid in vector_doc_map
+                if cid in self.doc_by_id
             ]
+            if candidate_docs:
+                tokenized = [self._tokenize(doc.page_content) for doc in candidate_docs]
+                candidate_bm25 = BM25Okapi(tokenized)
+                bm25_scores = candidate_bm25.get_scores(query_tokens)
+                bm25_ranked = [
+                    (candidate_docs[i].metadata["chunk_id"], float(bm25_scores[i]))
+                    for i in range(len(candidate_docs))
+                    if bm25_scores[i] > 0
+                ]
+                bm25_ranked.sort(key=lambda x: x[1], reverse=True)
+                bm25_ranked = bm25_ranked[: k * 2]
 
         fused = rrf_fuse(vector_ranked, bm25_ranked, limit=k)
         results = []
