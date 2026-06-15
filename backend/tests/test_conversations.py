@@ -42,6 +42,22 @@ class ConversationStorageTests(unittest.TestCase):
         row = conversations.get_conversation_by_thread("thread-456")
         self.assertEqual(row["id"], conv["id"])
 
+    def test_list_assistant_debug_pairs_preserves_preceding_user_question(self):
+        conv = conversations.create_conversation("联网搜索测试", thread_id="thread-789")
+        conversations.add_message(conv["id"], "user", "本地问题")
+        conversations.add_message(conv["id"], "assistant", "本地回答", debug_info=json.dumps({"used_web_search": False}))
+        conversations.add_message(conv["id"], "user", "需要联网吗")
+        conversations.add_message(conv["id"], "assistant", "联网回答", debug_info=json.dumps({"used_web_search": True}))
+
+        pairs = conversations.list_assistant_debug_pairs()
+
+        self.assertEqual(len(pairs), 2)
+        self.assertEqual(pairs[0]["thread_id"], "thread-789")
+        self.assertEqual(pairs[0]["question"], "本地问题")
+        self.assertFalse(pairs[0]["debug_info"]["used_web_search"])
+        self.assertEqual(pairs[1]["question"], "需要联网吗")
+        self.assertTrue(pairs[1]["debug_info"]["used_web_search"])
+
 
 if __name__ == "__main__":
     unittest.main()

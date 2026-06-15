@@ -79,6 +79,7 @@ class KBChunk(BaseModel):
 
 class QueryLogEntry(BaseModel):
     timestamp: str
+    thread_id: str = ""
     question: str
     elapsed_ms: int
     retrieval_count: int

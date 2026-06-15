@@ -165,6 +165,48 @@ def get_messages(conv_id: str) -> list[dict]:
     return result
 
 
+def list_assistant_debug_pairs() -> list[dict]:
+    """Return assistant debug info paired with the preceding user question."""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT c.thread_id, m.role, m.content, m.debug_info, m.created_at "
+        "FROM messages m "
+        "JOIN conversations c ON c.id = m.conversation_id "
+        "ORDER BY c.thread_id, m.id"
+    ).fetchall()
+    conn.close()
+
+    pairs: list[dict] = []
+    pending_user_by_thread: dict[str, str | None] = {}
+    for row in rows:
+        thread_id = row["thread_id"]
+        role = row["role"]
+        if role == "user":
+            pending_user_by_thread[thread_id] = row["content"]
+            continue
+        if role != "assistant":
+            continue
+
+        question = pending_user_by_thread.get(thread_id)
+        if question is None:
+            continue
+
+        try:
+            debug_info = json.loads(row["debug_info"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            debug_info = {}
+
+        pairs.append({
+            "thread_id": thread_id,
+            "question": question[:100],
+            "debug_info": debug_info,
+            "created_at": row["created_at"],
+        })
+        pending_user_by_thread[thread_id] = None
+
+    return pairs
+
+
 def update_feedback(msg_row_id: int, feedback: str):
     """Update feedback for a message."""
     conn = _get_conn()

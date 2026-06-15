@@ -21,6 +21,35 @@ from langchain_core.prompts import ChatPromptTemplate
 router = APIRouter()
 
 
+def _record_query_metrics(
+    *,
+    question: str,
+    thread_id: str,
+    final_sources: list,
+    final_quality_ok: bool,
+    final_quality: str,
+    elapsed: int,
+    answer: str,
+    debug_info: DebugInfo,
+) -> None:
+    """Persist the final query metrics using actual debug flags."""
+    log_query(
+        question=question,
+        thread_id=thread_id,
+        question_type="knowledge_base",
+        retrieval_count=len(final_sources),
+        retry_count=debug_info.retry_count,
+        quality_ok=final_quality_ok,
+        quality_reason=final_quality,
+        source_count=len(final_sources),
+        elapsed_ms=elapsed,
+        answer=answer,
+        used_web_search=debug_info.used_web_search,
+        used_rerank=debug_info.used_rerank,
+        used_rewrite=debug_info.used_rewrite,
+    )
+
+
 def _generate_title(question: str) -> str:
     """Use LLM to generate a short conversation title from the first question."""
     try:
@@ -239,11 +268,15 @@ async def chat_stream(
                     conv_id = conv["id"]
                 add_message(conv_id, "user", body.question)
                 add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality, debug_info=debug_info.model_dump_json())
-                log_query(
-                    question=body.question, thread_id=thread_id, question_type="knowledge_base",
-                    retrieval_count=len(final_sources), retry_count=0, quality_ok=final_quality_ok,
-                    quality_reason=final_quality, source_count=len(final_sources), elapsed_ms=elapsed,
-                    answer=answer, used_web_search=bool(final_sources), used_rerank=None,
+                _record_query_metrics(
+                    question=body.question,
+                    thread_id=thread_id,
+                    final_sources=final_sources,
+                    final_quality_ok=final_quality_ok,
+                    final_quality=final_quality,
+                    elapsed=elapsed,
+                    answer=answer,
+                    debug_info=debug_info,
                 )
             except Exception:
                 pass
