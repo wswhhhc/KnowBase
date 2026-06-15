@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { chatStream, type ChatStreamCallbacks, type Source } from '@/lib/api'
+import { chatStream, type ChatStreamCallbacks, type Source, type DebugInfo } from '@/lib/api'
 
 export interface ChatMessage {
   id: string
@@ -11,9 +11,10 @@ export interface ChatMessage {
   evidence_summary?: string
   outcome_category?: string
   streaming?: boolean
+  debugData?: DebugInfo
 }
 
-export function useChat(onNewConversation?: () => void) {
+export function useChat(onNewConversation?: (threadId: string) => void) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingNodes, setStreamingNodes] = useState<string[]>([])
@@ -42,6 +43,7 @@ export function useChat(onNewConversation?: () => void) {
       setMessages((prev) => [...prev, userMsg, assistantMsg])
 
       let accumulatedContent = ''
+      let debugData: DebugInfo | undefined
       const msgId = assistantMsg.id
 
       const callbacks: ChatStreamCallbacks = {
@@ -53,6 +55,9 @@ export function useChat(onNewConversation?: () => void) {
           setMessages((prev) =>
             prev.map((m) => (m.id === msgId ? { ...m, content: accumulatedContent } : m)),
           )
+        },
+        onDebug(data) {
+          debugData = data
         },
         onSources(data) {
           setMessages((prev) =>
@@ -85,13 +90,14 @@ export function useChat(onNewConversation?: () => void) {
                     evidence_summary: data.evidence_summary,
                     outcome_category: data.outcome_category,
                     streaming: false,
+                    debugData: debugData,
                   }
                 : m,
             ),
           )
           setIsStreaming(false)
           setStreamingNodes([])
-          if (isNew) onNewConversation?.()
+          if (isNew) onNewConversation?.(data.thread_id)
         },
         onError(message) {
           setMessages((prev) =>

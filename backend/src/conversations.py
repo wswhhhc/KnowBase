@@ -36,28 +36,35 @@ def init_db():
             content TEXT NOT NULL,
             sources TEXT DEFAULT '[]',
             quality_reason TEXT DEFAULT '',
+            debug_info TEXT DEFAULT '{}',
             feedback TEXT DEFAULT NULL,
             created_at TEXT NOT NULL,
             FOREIGN KEY (conversation_id) REFERENCES conversations(id)
         );
         CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id);
     """)
+    # 兼容旧库：为已有 messages 表添加 debug_info 列
+    try:
+        conn.execute("ALTER TABLE messages ADD COLUMN debug_info TEXT DEFAULT '{}'")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
     conn.commit()
     conn.close()
 
 
-def create_conversation(title: str = "新对话") -> dict:
+def create_conversation(title: str = "新对话", thread_id: str | None = None) -> dict:
     """Create a new conversation, return its dict."""
     conn = _get_conn()
     conv_id = str(uuid4())
+    actual_thread_id = thread_id or conv_id
     now = datetime.now(UTC).isoformat()
     conn.execute(
         "INSERT INTO conversations (id, thread_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (conv_id, conv_id, title, now, now),
+        (conv_id, actual_thread_id, title, now, now),
     )
     conn.commit()
     conn.close()
-    return {"id": conv_id, "thread_id": conv_id, "title": title, "created_at": now, "updated_at": now}
+    return {"id": conv_id, "thread_id": actual_thread_id, "title": title, "created_at": now, "updated_at": now}
 
 
 def get_conversation_by_thread(thread_id: str) -> dict | None:
@@ -111,13 +118,13 @@ def delete_conversation(conv_id: str):
     conn.close()
 
 
-def add_message(conv_id: str, role: str, content: str, sources: list | None = None, quality_reason: str = ""):
+def add_message(conv_id: str, role: str, content: str, sources: list | None = None, quality_reason: str = "", debug_info: str = "{}"):
     """Add a message to a conversation."""
     conn = _get_conn()
     now = datetime.now(UTC).isoformat()
     conn.execute(
-        "INSERT INTO messages (conversation_id, role, content, sources, quality_reason, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (conv_id, role, content, json.dumps(sources or [], ensure_ascii=False), quality_reason, now),
+        "INSERT INTO messages (conversation_id, role, content, sources, quality_reason, debug_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (conv_id, role, content, json.dumps(sources or [], ensure_ascii=False), quality_reason, debug_info, now),
     )
     conn.execute(
         "UPDATE conversations SET updated_at = ? WHERE id = ?",
@@ -131,7 +138,7 @@ def get_messages(conv_id: str) -> list[dict]:
     """Return all messages for a conversation, ordered by id."""
     conn = _get_conn()
     rows = conn.execute(
-        "SELECT id, role, content, sources, quality_reason, feedback, created_at "
+        "SELECT id, role, content, sources, quality_reason, debug_info, feedback, created_at "
         "FROM messages WHERE conversation_id = ? ORDER BY id",
         (conv_id,),
     ).fetchall()
@@ -149,6 +156,11 @@ def get_messages(conv_id: str) -> list[dict]:
             msg["sources"] = raw
         except (json.JSONDecodeError, TypeError):
             msg["sources"] = []
+        # 确保 debug_info 是 dict
+        try:
+            msg["debug_info"] = json.loads(msg.get("debug_info", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            msg["debug_info"] = {}
         result.append(msg)
     return result
 

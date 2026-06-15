@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import hashlib
+import json
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -139,6 +140,11 @@ class KnowledgeBase:
         self._bm25_corpus: List[List[str]] = []
         self.bm25_index: Optional[BM25Okapi] = None
 
+        # Retrieval hotspot tracking (chunk_id → hit count)
+        self.hit_counter: dict[str, int] = {}
+        self._hotspot_path = Path(DATA_DIR) / "hotspots.json"
+        self._load_hotspots()
+
     def _ensure_loaded(self):
         """Lazy-load all documents from Chroma on first need."""
         if self._loaded:
@@ -147,6 +153,24 @@ class KnowledgeBase:
         self.all_docs = self._documents_from_chroma_result(result)
         self._rebuild_all()
         self._loaded = True
+
+    def _load_hotspots(self):
+        """Load hotspot counter from JSON file."""
+        try:
+            if self._hotspot_path.exists():
+                with open(self._hotspot_path) as f:
+                    self.hit_counter = json.load(f)
+        except Exception:
+            self.hit_counter = {}
+
+    def _save_hotspots(self):
+        """Persist hotspot counter to JSON file."""
+        try:
+            self._hotspot_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._hotspot_path, "w") as f:
+                json.dump(self.hit_counter, f, ensure_ascii=False)
+        except Exception:
+            pass
 
     def _rebuild_all(self):
         """Build doc_by_id, existing_chunk_ids, and BM25 from all_docs (full rebuild).
@@ -370,6 +394,9 @@ class KnowledgeBase:
             doc = vector_doc_map.get(item.chunk_id) or self.doc_by_id.get(item.chunk_id)
             if doc is None:
                 continue
+            # Count each retrieval hit for hotspot analysis
+            self.hit_counter[item.chunk_id] = self.hit_counter.get(item.chunk_id, 0) + 1
+            self._save_hotspots()
             results.append(
                 RetrievalResult(
                     chunk_id=item.chunk_id,
@@ -430,6 +457,25 @@ class KnowledgeBase:
         )
         return sorted(counts.items())
 
+    def get_hotspots(self, top_n: int = 50) -> list[dict]:
+        """Return chunks sorted by retrieval hit count, for hotspot visualization."""
+        self._ensure_loaded()
+        sorted_chunks = sorted(
+            self.hit_counter.items(),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        result = []
+        for chunk_id, hits in sorted_chunks[:top_n]:
+            doc = self.doc_by_id.get(chunk_id)
+            result.append({
+                "chunk_id": chunk_id,
+                "source": doc.metadata.get("source", "") if doc else "",
+                "hits": hits,
+                "content_preview": doc.page_content[:80] if doc else "",
+            })
+        return result
+
     def delete_source(self, source_name: str) -> int:
         """Delete all chunks belonging to a source file.
 
@@ -465,6 +511,8 @@ class KnowledgeBase:
         self.existing_chunk_ids = set()
         self._bm25_corpus = []
         self.bm25_index = None
+        self.hit_counter = {}
+        self._save_hotspots()
 
     def search_content(self, query: str) -> List[Document]:
         """Full-text search across all in-memory documents.

@@ -245,8 +245,11 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
                     <tbody>
                       {logs.slice(0, 15).map((log, i) => (
                         <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                          <td className="py-2 pr-4 text-muted-foreground font-mono">
-                            {new Date(log.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                          <td className="py-2 pr-4 text-muted-foreground font-mono whitespace-nowrap">
+                            {new Date(log.timestamp).toLocaleString('zh-CN', {
+                              month: '2-digit', day: '2-digit',
+                              hour: '2-digit', minute: '2-digit',
+                            })}
                           </td>
                           <td className="py-2 pr-4 text-foreground/80 truncate max-w-[200px]">
                             {log.question}

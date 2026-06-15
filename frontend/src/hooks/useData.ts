@@ -11,8 +11,12 @@ export function useConversations() {
     try {
       const list = await api.getConversations()
       setConversations(list)
+      return list
     } catch { /* ignore */ }
-    setLoading(false)
+    finally {
+      setLoading(false)
+    }
+    return []
   }
 
   useEffect(() => { refresh() }, [])

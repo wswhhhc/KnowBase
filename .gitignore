@@ -8,6 +8,8 @@ backend/**/__pycache__/
 frontend/node_modules/
 frontend/dist/
 frontend/.env
+frontend/tsconfig.tsbuildinfo
+.playwright-cli/
 
 chroma_demo.py
 data/chroma_db/

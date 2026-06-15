@@ -5,6 +5,8 @@ import re
 import tempfile
 from pathlib import Path
 
+import jieba
+
 from config.settings import MAX_UPLOAD_MB
 
 
@@ -102,3 +104,35 @@ def format_chat_history(messages: list) -> list:
         else:
             i += 1
     return history
+
+
+_STOP_WORDS = frozenset({
+    "的", "了", "是", "在", "有", "和", "就", "不", "都", "而", "也", "其",
+    "这个", "那个", "什么", "怎么", "一个", "可以", "没有", "还是", "因为",
+    "所以", "但是", "如果", "虽然", "而且", "或者", "然后", "之后", "可能",
+    "应该", "需要", "已经", "通过", "进行", "以及", "一些", "很多", "被",
+    "把", "从", "到", "与", "对", "为", "上", "下", "中", "大", "小", "多",
+    "少", "很", "更", "最", "太", "非常", "比较", "吗", "呢", "吧", "啊",
+    "哦", "嗯", "呀", "嘛", "哈",
+})
+
+
+def extract_context_terms(text: str, top_n: int = 5) -> list[str]:
+    """从一段文本中提取 top_n 个关键名词/实体，用于多轮对话的检索上下文扩展。
+
+    使用 jieba 分词 + 停用词过滤 + 词频排序。返回按频次降序的关键词列表。
+    """
+    words = [w.strip().lower() for w in jieba.lcut(text) if w.strip()]
+    # 过滤停用词、单字词、纯数字和标点
+    filtered = [
+        w for w in words
+        if len(w) >= 2
+        and w not in _STOP_WORDS
+        and not w.isdigit()
+    ]
+    # 按词频排序取 top_n
+    freq: dict[str, int] = {}
+    for w in filtered:
+        freq[w] = freq.get(w, 0) + 1
+    sorted_terms = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+    return [term for term, _count in sorted_terms[:top_n]]
