@@ -11,7 +11,8 @@ export type ViewType = 'chat' | 'browser' | 'dashboard'
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activeView, setActiveView] = useState<ViewType>('chat')
-  const chat = useChat()
+  const [convRefreshKey, setConvRefreshKey] = useState(0)
+  const chat = useChat(() => setConvRefreshKey((k) => k + 1))
   const theme = useTheme()
 
   return (
@@ -26,6 +27,7 @@ function App() {
           activeView={activeView}
           onNavigate={setActiveView}
           onClose={() => setSidebarOpen(false)}
+          convRefreshKey={convRefreshKey}
         />
       </div>
 

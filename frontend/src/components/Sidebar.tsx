@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Input, Separator, ScrollArea } from '@/components/ui'
 import {
   MessageSquare, Plus, Trash2, FileText, Globe, Upload,
@@ -19,6 +19,7 @@ interface SidebarProps {
   activeView: ViewType
   onNavigate: (v: ViewType) => void
   onClose: () => void
+  convRefreshKey: number
 }
 
 const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[] = [
@@ -27,13 +28,22 @@ const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[]
   { view: 'dashboard', icon: BarChart3, label: '指标' },
 ]
 
-export default function Sidebar({ chat, activeView, onNavigate, onClose }: SidebarProps) {
+export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey }: SidebarProps) {
   const convs = useConversations()
   const srcs = useSources()
   const [tab, setTab] = useState<'conversations' | 'documents'>('conversations')
   const [urlInput, setUrlInput] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const prevKey = useRef(convRefreshKey)
+
+  // 新对话创建后刷新侧栏列表
+  useEffect(() => {
+    if (convRefreshKey !== prevKey.current) {
+      prevKey.current = convRefreshKey
+      convs.refresh()
+    }
+  }, [convRefreshKey])
 
   const switchConversation = async (id: string) => {
     onNavigate('chat')
@@ -53,10 +63,10 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose }: Sideb
     } catch { /* ignore */ }
   }
 
-  const handleNewConversation = async () => {
-    await convs.create()
+  const handleNewConversation = () => {
     onNavigate('chat')
     chat.clearMessages()
+    convs.setActiveId(null)
   }
 
   const handleRename = async (id: string) => {
