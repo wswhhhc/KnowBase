@@ -60,6 +60,17 @@ def create_conversation(title: str = "新对话") -> dict:
     return {"id": conv_id, "thread_id": conv_id, "title": title, "created_at": now, "updated_at": now}
 
 
+def get_conversation_by_thread(thread_id: str) -> dict | None:
+    """Return the conversation that owns this thread_id, or None."""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT id, thread_id, title, created_at, updated_at FROM conversations WHERE thread_id = ?",
+        (thread_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def list_conversations() -> list[dict]:
     """Return all conversations ordered by update time desc."""
     conn = _get_conn()
@@ -129,7 +140,13 @@ def get_messages(conv_id: str) -> list[dict]:
     for r in rows:
         msg = dict(r)
         try:
-            msg["sources"] = json.loads(msg["sources"]) if msg["sources"] else []
+            raw = json.loads(msg["sources"]) if msg["sources"] else []
+            # Pydantic 要求 int 字段不能是空字符串，清洗一下
+            for s in raw:
+                for key in ("chunk_index", "page", "score"):
+                    if key in s and s[key] == "":
+                        s[key] = None
+            msg["sources"] = raw
         except (json.JSONDecodeError, TypeError):
             msg["sources"] = []
         result.append(msg)

@@ -737,8 +737,10 @@ def check_quality(state: GraphState) -> dict:
         return update
 
     # LLM quality check — sample to reduce LLM calls
+    # 联网搜索可用时不做采样，确保质量不合格能触发搜索兜底
     strategy = state.get("search_strategy", "balanced")
-    if strategy != "high_quality" and hash(question + answer) % 3 != 0:
+    web_search_available = state.get("web_search_enabled", False) and _tavily_configured()
+    if strategy != "high_quality" and not web_search_available and hash(question + answer) % 3 != 0:
         # 采样通过：只有 1/3 的概率走 LLM 质量检查
         decision = QualityDecision(quality_passed=True, quality_reason="质量检查采样跳过。")
     else:
@@ -893,7 +895,7 @@ def build_graph(knowledge_base: KnowledgeBase):
     workflow.add_edge("handle_clarification", "finalize")
     workflow.add_conditional_edges(
         "handle_missing_context",
-        lambda s: "web_search" if not s.get("used_web_search") and s.get("web_search_enabled", False) else "finalize",
+        lambda s: "web_search" if not s.get("used_web_search") and s.get("web_search_enabled", False) and _tavily_configured() else "finalize",
         {"web_search": "web_search", "finalize": "finalize"},
     )
     workflow.add_edge("web_search", "generate_answer")

@@ -15,7 +15,7 @@ from src.api.models import ChatRequest
 from src.graph import run_query
 from src.knowledge_base import KnowledgeBase
 from src.metrics import log_query
-from src.conversations import create_conversation, add_message
+from src.conversations import create_conversation, add_message, get_conversation_by_thread
 
 router = APIRouter()
 
@@ -120,8 +120,12 @@ async def chat_stream(
 
             # Fire-and-forget persist
             try:
-                conv = create_conversation()
-                conv_id = conv["id"]
+                existing = get_conversation_by_thread(thread_id)
+                if existing:
+                    conv_id = existing["id"]
+                else:
+                    conv = create_conversation()
+                    conv_id = conv["id"]
                 add_message(conv_id, "user", body.question)
                 add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality)
                 log_query(
