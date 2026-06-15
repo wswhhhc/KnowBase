@@ -13,7 +13,7 @@ export interface ChatMessage {
   streaming?: boolean
 }
 
-export function useChat(onNewConversation?: () => void) {
+export function useChat(onNewConversation?: (threadId: string) => void) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingNodes, setStreamingNodes] = useState<string[]>([])
@@ -91,7 +91,7 @@ export function useChat(onNewConversation?: () => void) {
           )
           setIsStreaming(false)
           setStreamingNodes([])
-          if (isNew) onNewConversation?.()
+          if (isNew) onNewConversation?.(data.thread_id)
         },
         onError(message) {
           setMessages((prev) =>

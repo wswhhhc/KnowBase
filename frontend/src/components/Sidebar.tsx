@@ -8,6 +8,7 @@ import { formatTime, truncate } from '@/lib/utils'
 import * as api from '@/lib/api'
 import { useConversations, useSources } from '@/hooks/useData'
 import type { ChatMessage } from '@/hooks/useChat'
+import type { Conversation } from '@/lib/api'
 import type { ViewType } from '@/App'
 
 interface SidebarProps {
@@ -20,6 +21,7 @@ interface SidebarProps {
   onNavigate: (v: ViewType) => void
   onClose: () => void
   convRefreshKey: number
+  activeThreadId: string | null
 }
 
 const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[] = [
@@ -28,7 +30,7 @@ const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[]
   { view: 'dashboard', icon: BarChart3, label: '指标' },
 ]
 
-export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey }: SidebarProps) {
+export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId }: SidebarProps) {
   const convs = useConversations()
   const srcs = useSources()
   const [tab, setTab] = useState<'conversations' | 'documents'>('conversations')
@@ -41,15 +43,20 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   useEffect(() => {
     if (convRefreshKey !== prevKey.current) {
       prevKey.current = convRefreshKey
-      convs.refresh()
+      convs.refresh().then((list) => {
+        const matched = list.find((conv) => conv.thread_id === activeThreadId)
+        if (matched) {
+          convs.setActiveId(matched.id)
+        }
+      })
     }
-  }, [convRefreshKey])
+  }, [activeThreadId, convRefreshKey])
 
-  const switchConversation = async (id: string) => {
+  const switchConversation = async (conversation: Conversation) => {
     onNavigate('chat')
-    convs.setActiveId(id)
+    convs.setActiveId(conversation.id)
     try {
-      const msgs = await api.getMessages(id)
+      const msgs = await api.getMessages(conversation.id)
       chat.loadMessages(
         msgs.map((m) => ({
           id: `${m.role}-${m.id}`,
@@ -58,7 +65,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
           sources: m.sources,
           quality_reason: m.quality_reason,
         })),
-        id,
+        conversation.thread_id,
       )
     } catch { /* ignore */ }
   }
@@ -159,7 +166,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
                     </div>
                   ) : (
                     <>
-                      <span className="truncate flex-1" onClick={() => switchConversation(c.id)}>{truncate(c.title, 24)}</span>
+                      <span className="truncate flex-1" onClick={() => switchConversation(c)}>{truncate(c.title, 24)}</span>
                       <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-60 transition-opacity flex-shrink-0 mr-1">{formatTime(c.updated_at)}</span>
                       <button
                         onClick={(e) => { e.stopPropagation(); setRenamingId(c.id); setRenameValue(c.title) }}

@@ -12,7 +12,11 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activeView, setActiveView] = useState<ViewType>('chat')
   const [convRefreshKey, setConvRefreshKey] = useState(0)
-  const chat = useChat(() => setConvRefreshKey((k) => k + 1))
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
+  const chat = useChat((threadId) => {
+    setActiveThreadId(threadId)
+    setConvRefreshKey((k) => k + 1)
+  })
   const theme = useTheme()
 
   return (
@@ -28,6 +32,7 @@ function App() {
           onNavigate={setActiveView}
           onClose={() => setSidebarOpen(false)}
           convRefreshKey={convRefreshKey}
+          activeThreadId={activeThreadId}
         />
       </div>
 

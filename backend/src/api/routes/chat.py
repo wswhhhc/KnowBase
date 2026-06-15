@@ -125,6 +125,26 @@ async def chat_stream(
             answer = accumulated_answer.strip() or "抱歉，我无法回答这个问题。"
             elapsed = int((time.monotonic() - t0) * 1000)
 
+            # Persist before notifying the client so sidebar refresh sees the final title.
+            try:
+                existing = get_conversation_by_thread(thread_id)
+                if existing:
+                    conv_id = existing["id"]
+                else:
+                    title = _generate_title(body.question)
+                    conv = create_conversation(title, thread_id=thread_id)
+                    conv_id = conv["id"]
+                add_message(conv_id, "user", body.question)
+                add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality)
+                log_query(
+                    question=body.question, thread_id=thread_id, question_type="knowledge_base",
+                    retrieval_count=len(final_sources), retry_count=0, quality_ok=final_quality_ok,
+                    quality_reason=final_quality, source_count=len(final_sources), elapsed_ms=elapsed,
+                    answer=answer, used_web_search=bool(final_sources), used_rerank=None,
+                )
+            except Exception:
+                pass
+
             yield {"event": "sources", "data": json.dumps({
                 "sources": final_sources,
                 "quality_reason": final_quality,
@@ -143,26 +163,6 @@ async def chat_stream(
                 "outcome_category": final_outcome_category,
                 "elapsed_ms": elapsed,
             })}
-
-            # Fire-and-forget persist
-            try:
-                existing = get_conversation_by_thread(thread_id)
-                if existing:
-                    conv_id = existing["id"]
-                else:
-                    title = _generate_title(body.question)
-                    conv = create_conversation(title)
-                    conv_id = conv["id"]
-                add_message(conv_id, "user", body.question)
-                add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality)
-                log_query(
-                    question=body.question, thread_id=thread_id, question_type="knowledge_base",
-                    retrieval_count=len(final_sources), retry_count=0, quality_ok=final_quality_ok,
-                    quality_reason=final_quality, source_count=len(final_sources), elapsed_ms=elapsed,
-                    answer=answer, used_web_search=bool(final_sources), used_rerank=None,
-                )
-            except Exception:
-                pass
 
         except Exception as e:
             yield {"event": "error", "data": json.dumps({"message": str(e)})}

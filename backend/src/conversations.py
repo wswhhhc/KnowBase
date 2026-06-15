@@ -46,18 +46,19 @@ def init_db():
     conn.close()
 
 
-def create_conversation(title: str = "新对话") -> dict:
+def create_conversation(title: str = "新对话", thread_id: str | None = None) -> dict:
     """Create a new conversation, return its dict."""
     conn = _get_conn()
     conv_id = str(uuid4())
+    actual_thread_id = thread_id or conv_id
     now = datetime.now(UTC).isoformat()
     conn.execute(
         "INSERT INTO conversations (id, thread_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (conv_id, conv_id, title, now, now),
+        (conv_id, actual_thread_id, title, now, now),
     )
     conn.commit()
     conn.close()
-    return {"id": conv_id, "thread_id": conv_id, "title": title, "created_at": now, "updated_at": now}
+    return {"id": conv_id, "thread_id": actual_thread_id, "title": title, "created_at": now, "updated_at": now}
 
 
 def get_conversation_by_thread(thread_id: str) -> dict | None:
