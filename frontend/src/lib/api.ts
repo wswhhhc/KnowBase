@@ -46,6 +46,18 @@ export interface KBChunk {
   section: string | null
 }
 
+export interface HotspotEntry {
+  chunk_id: string
+  source: string
+  hits: number
+  content_preview: string
+}
+
+export interface KBConfig {
+  chunk_size: number
+  chunk_overlap: number
+}
+
 export interface QueryLogEntry {
   timestamp: string
   question: string
@@ -60,6 +72,29 @@ export interface QueryLogEntry {
   source_count: number
   answer_preview: string
   error: string
+}
+
+export interface DebugNodeInfo {
+  name: string
+  label: string
+  elapsed_ms: number
+  summary: string
+}
+
+export interface DebugInfo {
+  nodes: DebugNodeInfo[]
+  rewritten_question: string
+  retrieval_k: number
+  candidates_before: number
+  candidates_after: number
+  after_rerank: number
+  used_rerank: boolean
+  used_rewrite: boolean
+  quality_passed: boolean
+  quality_reason: string
+  retry_count: number
+  used_web_search: boolean
+  web_results_count: number
 }
 
 const BASE = '/api'
@@ -144,6 +179,10 @@ export const getKBChunks = (source?: string, search?: string) => {
 
 export const getKBSourceNames = () => req<string[]>('/knowledge-base/sources')
 
+export const getKBConfig = () => req<KBConfig>('/knowledge-base/config')
+
+export const getKBHotspots = () => req<HotspotEntry[]>('/knowledge-base/hotspots')
+
 // ── Metrics ──
 
 export const queryLogs = (days: number = 7, limit: number = 500) =>
@@ -154,6 +193,7 @@ export const queryLogs = (days: number = 7, limit: number = 500) =>
 export interface ChatStreamCallbacks {
   onNode?: (label: string, nodes: string[]) => void
   onToken?: (text: string) => void
+  onDebug?: (data: DebugInfo) => void
   onSources?: (data: { sources: Source[]; quality_reason: string; evidence_level: string; evidence_summary: string; outcome_category: string }) => void
   onDone?: (data: { thread_id: string; answer: string; sources: Source[]; quality_reason: string; evidence_level: string; evidence_summary: string; outcome_category: string; elapsed_ms: number }) => void
   onError?: (message: string) => void
@@ -214,6 +254,9 @@ export function chatStream(
                   break
                 case 'token':
                   callbacks.onToken?.(parsed.text)
+                  break
+                case 'debug':
+                  callbacks.onDebug?.(parsed)
                   break
                 case 'sources':
                   callbacks.onSources?.(parsed)

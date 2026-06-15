@@ -91,3 +91,30 @@ class QueryLogEntry(BaseModel):
     source_count: int = 0
     answer_preview: str = ""
     error: str = ""
+
+
+class NodeDebug(BaseModel):
+    """一个图节点的执行调试信息。"""
+
+    name: str
+    label: str
+    elapsed_ms: int = 0
+    summary: str = ""
+
+
+class DebugInfo(BaseModel):
+    """整条消息的调试信息，通过 SSE debug 事件下发。"""
+
+    nodes: list[NodeDebug] = []
+    rewritten_question: str = ""
+    retrieval_k: int = 0
+    candidates_before: int = 0
+    candidates_after: int = 0
+    after_rerank: int = 0
+    used_rerank: bool = False
+    used_rewrite: bool = False
+    quality_passed: bool = True
+    quality_reason: str = ""
+    retry_count: int = 0
+    used_web_search: bool = False
+    web_results_count: int = 0

@@ -1,6 +1,6 @@
 import unittest
 
-from src.utils import sanitize_upload_filename, validate_upload
+from src.utils import extract_context_terms, sanitize_upload_filename, validate_upload
 
 
 class FakeUpload:
@@ -36,6 +36,35 @@ class UploadUtilityTests(unittest.TestCase):
                 validate_upload(upload, max_upload_mb=3)
             except ValueError:
                 self.fail(f"validate_upload rejected valid extension: {ext}")
+
+
+class ExtractContextTermsTests(unittest.TestCase):
+    def test_extract_from_simple_sentence(self):
+        terms = extract_context_terms("ChatGPT 各版本定价方案对比", top_n=3)
+        for term in ("chatgpt", "定价"):
+            self.assertIn(term, terms)
+
+    def test_empty_input_returns_empty_list(self):
+        self.assertEqual(extract_context_terms(""), [])
+        self.assertEqual(extract_context_terms("   "), [])
+
+    def test_stop_words_only_returns_empty(self):
+        self.assertEqual(extract_context_terms("的 了 是 在 有"), [])
+
+    def test_top_n_respected(self):
+        terms = extract_context_terms("苹果 香蕉 苹果 香蕉 橘子", top_n=2)
+        self.assertEqual(len(terms), 2)
+
+    def test_stop_words_filtered_from_results(self):
+        terms = extract_context_terms("这是一个测试文档", top_n=5)
+        self.assertNotIn("的", terms)
+        self.assertNotIn("一个", terms)
+        self.assertIn("测试", terms)
+
+    def test_repeated_terms_ranked_higher(self):
+        terms = extract_context_terms("文档 文档 测试 测试 测试 代码", top_n=2)
+        self.assertEqual(terms[0], "测试")
+        self.assertEqual(terms[1], "文档")
 
 
 if __name__ == "__main__":

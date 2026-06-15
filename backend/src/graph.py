@@ -6,6 +6,7 @@ from functools import partial
 import json
 import re
 import sqlite3
+import time
 from typing import Annotated, Generator, Iterable, List, Literal, TypedDict
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage
@@ -32,7 +33,7 @@ from config.settings import (
     require_siliconflow_api_key,
 )
 from src.knowledge_base import KnowledgeBase, RetrievalResult
-from src.utils import json_from_text
+from src.utils import extract_context_terms, json_from_text
 
 
 class GraphState(TypedDict):
@@ -322,6 +323,16 @@ def rewrite_query(state: GraphState) -> dict:
     rewritten = str(result.content).strip()
     used_rewrite = rewritten != question
     _rewrite_cache[cache_key] = rewritten
+
+    # 上下文实体扩展：短追问时自动从上一轮用户问题中提取关键实体追加到改写后 query
+    if rewritten and len(rewritten) < 15:
+        last_user_q = history[-1][0] if history else ""
+        if last_user_q:
+            terms = extract_context_terms(last_user_q, top_n=3)
+            if terms:
+                rewritten = f"{rewritten} ({', '.join(terms)})"
+                used_rewrite = True
+
     return {"rewritten_question": rewritten, "used_rewrite": used_rewrite}
 
 
@@ -397,7 +408,11 @@ def _format_context(results: list[RetrievalResult]) -> tuple[str, list[dict]]:
 
 def retrieve_docs(state: GraphState, kb: KnowledgeBase) -> dict:
     query = state.get("rewritten_question") or state["question"]
+    strategy = state.get("search_strategy", "balanced")
     retrieval_k = state.get("retrieval_k") or TOP_K_RETRIEVAL
+    # deep 模式下扩检索范围
+    if strategy == "deep":
+        retrieval_k = max(retrieval_k, TOP_K_RETRIEVAL * 3)
     score_threshold = state.get("score_threshold", SCORE_THRESHOLD)
     search_filter = state.get("search_filter") or None
     docs = kb.hybrid_search(
@@ -532,6 +547,9 @@ def _should_rerank(state: GraphState) -> bool:
     # high_quality: always rerank
     if strategy == "high_quality":
         return True
+    # deep: always rerank, wider selection
+    if strategy == "deep":
+        return True
 
     docs = state.get("documents", [])
     if len(docs) <= TOP_K_RERANK:
@@ -560,9 +578,12 @@ def rerank_docs(state: GraphState) -> dict:
     if not docs:
         return {}
 
+    strategy = state.get("search_strategy", "balanced")
+    top_k = TOP_K_RERANK * 3 if strategy == "deep" else TOP_K_RERANK
+
     # Skip LLM rerank when not needed — use top candidates directly
     if not _should_rerank(state):
-        top = docs[:TOP_K_RERANK]
+        top = docs[:top_k]
         context, sources = _format_context(top)
         return {"documents": top, "context": context, "sources": sources, "used_rerank": False}
 
@@ -579,15 +600,15 @@ def rerank_docs(state: GraphState) -> dict:
     ])
 
     try:
-        result = llm.invoke(prompt.format(query=query, k=TOP_K_RERANK, docs_text=docs_text))
+        result = llm.invoke(prompt.format(query=query, k=top_k, docs_text=docs_text))
         decision = parse_rerank_decision(str(result.content), doc_ids)
     except Exception:
         decision = RerankDecision(selected_doc_ids=[])
 
     by_id = {result.chunk_id: result for result in docs}
-    reranked = [by_id[doc_id] for doc_id in decision.selected_doc_ids[:TOP_K_RERANK]]
+    reranked = [by_id[doc_id] for doc_id in decision.selected_doc_ids[:top_k]]
     if not reranked:
-        reranked = docs[:TOP_K_RERANK]
+        reranked = docs[:top_k]
 
     context, sources = _format_context(reranked)
     return {"documents": reranked, "context": context, "sources": sources, "used_rerank": True}
@@ -600,6 +621,7 @@ def generate_answer(state: GraphState) -> dict:
     question = state.get("rewritten_question") or state["question"]
     used_web_search = state.get("used_web_search", False)
     history = _messages_to_turns(state.get("messages", []))
+    strategy = state.get("search_strategy", "balanced")
 
     # Merge web search results into context
     if web_context:
@@ -616,12 +638,13 @@ def generate_answer(state: GraphState) -> dict:
             "quality_reason": web_search_error,
         }
 
-    system_msg = (
-        "你是知识库问答助手。"
-        + ("可以基于知识库和网络搜索结果回答。回答末尾标注引用来源。用中文回答。保持与对话历史中已给出信息的一致性，如果同一实体已有过描述，不要自相矛盾。"
-           if used_web_search and web_context
-           else "只能基于参考文档回答；证据不足就说不知道。回答末尾用【来源：文件名·分段号】标注引用位置。用中文回答。保持与对话历史中已给出信息的一致性，如果同一实体已有过描述，不要自相矛盾。")
-    )
+    system_msg = "你是知识库问答助手。"
+    if strategy == "deep" and not (used_web_search and web_context):
+        system_msg += "参考文档涵盖了全文多个部分，请综合回答。"
+    if used_web_search and web_context:
+        system_msg += "可以基于知识库和网络搜索结果回答。回答末尾标注引用来源。用中文回答。保持与对话历史中已给出信息的一致性，如果同一实体已有过描述，不要自相矛盾。"
+    else:
+        system_msg += "只能基于参考文档回答；证据不足就说不知道。回答末尾用【来源：文件名·分段号】标注引用位置。用中文回答。保持与对话历史中已给出信息的一致性，如果同一实体已有过描述，不要自相矛盾。"
 
     llm = _get_llm()
     if history:

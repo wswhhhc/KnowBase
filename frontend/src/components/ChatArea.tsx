@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { Button, ScrollArea, Switch, Dialog, DialogContent, DialogHeader, DialogTitle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import { useChat, type ChatMessage } from '@/hooks/useChat'
 import { evidenceColor, evidenceLabel } from '@/lib/utils'
+import DebugPanel from './DebugPanel'
 import * as api from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -114,7 +115,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
           </TooltipProvider>
 
           <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-            {(['fast', 'balanced', 'high_quality'] as const).map((s) => (
+            {(['fast', 'balanced', 'high_quality', 'deep'] as const).map((s) => (
               <TooltipProvider key={s}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -122,10 +123,10 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                       className={`px-2 py-1 text-[10px] font-medium rounded-sm transition-colors ${
                         searchStrategy === s ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
                       }`}>
-                      {s === 'fast' ? '快' : s === 'balanced' ? '均' : '深'}
+                      {s === 'fast' ? '快' : s === 'balanced' ? '均' : s === 'high_quality' ? '深' : '全'}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>{s === 'fast' ? '快速' : s === 'balanced' ? '均衡' : '深度'}检索</TooltipContent>
+                  <TooltipContent>{s === 'fast' ? '快速' : s === 'balanced' ? '均衡' : s === 'high_quality' ? '深度' : '全文'}检索</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ))}
@@ -397,6 +398,11 @@ function MessageBubble({ message, prevMessage, threadId }: {
                     <FileDown className="h-3 w-3" />
                     {exporting ? '导出中…' : '导出对话'}
                   </button>
+                )}
+
+                {/* Debug panel */}
+                {message.debugData && (
+                  <DebugPanel debugData={message.debugData} />
                 )}
               </>
             )}

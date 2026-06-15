@@ -34,6 +34,7 @@ async def query_logs(days: int = Query(7, ge=1, le=90), limit: int = Query(500, 
                             records.append(entry)
                     except Exception:
                         pass
+    records.sort(key=lambda r: r.timestamp, reverse=True)
     return records[:limit]
 
 

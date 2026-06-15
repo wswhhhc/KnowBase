@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from src.api.deps import get_knowledge_base
 from src.api.models import KBChunk, KBStats
 from src.knowledge_base import KnowledgeBase
+from config.settings import CHUNK_SIZE, CHUNK_OVERLAP
 
 router = APIRouter()
 
@@ -52,3 +53,14 @@ async def chunks(
 @router.get("/sources")
 async def list_source_names(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[str]:
     return sorted(s for s, _c in kb.source_counts())
+
+
+@router.get("/config")
+async def kb_config() -> dict:
+    return {"chunk_size": CHUNK_SIZE, "chunk_overlap": CHUNK_OVERLAP}
+
+
+@router.get("/hotspots")
+async def hotspots(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[dict]:
+    kb._ensure_loaded()
+    return kb.get_hotspots()
