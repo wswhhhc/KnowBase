@@ -124,7 +124,8 @@ async def chat_stream(
                 if existing:
                     conv_id = existing["id"]
                 else:
-                    conv = create_conversation()
+                    title = body.question[:30]
+                    conv = create_conversation(title)
                     conv_id = conv["id"]
                 add_message(conv_id, "user", body.question)
                 add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality)
