@@ -16,8 +16,34 @@ from src.graph import run_query
 from src.knowledge_base import KnowledgeBase
 from src.metrics import log_query
 from src.conversations import create_conversation, add_message, get_conversation_by_thread
+from langchain_core.prompts import ChatPromptTemplate
 
 router = APIRouter()
+
+
+def _generate_title(question: str) -> str:
+    """Use LLM to generate a short conversation title from the first question."""
+    try:
+        # Lazy import to avoid circular dependency on _get_llm
+        from langchain_openai import ChatOpenAI
+        from config.settings import require_siliconflow_api_key, SILICONFLOW_BASE_URL, LLM_MODEL
+
+        llm = ChatOpenAI(
+            model=LLM_MODEL,
+            temperature=0.3,
+            openai_api_key=require_siliconflow_api_key(),
+            openai_api_base=SILICONFLOW_BASE_URL,
+        )
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "根据用户的问题，生成一个简短（不超过15字）的对话标题。只返回标题本身，不要加引号和标点。"),
+            ("human", question),
+        ])
+        result = llm.invoke(prompt.format())
+        title = str(result.content).strip().strip('"').strip("'")[:30]
+        return title if title else question[:30]
+    except Exception:
+        return question[:30]
+
 
 NODE_LABELS = {
     "route_question": "问题路由",
@@ -124,7 +150,7 @@ async def chat_stream(
                 if existing:
                     conv_id = existing["id"]
                 else:
-                    title = body.question[:30]
+                    title = _generate_title(body.question)
                     conv = create_conversation(title)
                     conv_id = conv["id"]
                 add_message(conv_id, "user", body.question)
