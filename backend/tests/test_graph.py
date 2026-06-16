@@ -144,14 +144,12 @@ class GraphRoutingTests(unittest.TestCase):
 
     def test_run_query_retries_with_expanded_retrieval_when_quality_fails(self):
         kb = OneDocKnowledgeBase()
-        # route_question uses LLM classifier now, so we need 6 responses:
-        # 1: route_question (LLM classifier)
-        # 2: first generate_answer
-        # 3: first check_quality (fail → expand)
-        # 4: second generate_answer
-        # 5: second check_quality (pass)
+        # route_question uses detect_question_type (rule-based, no LLM), so:
+        # 1: first generate_answer
+        # 2: first check_quality (fail → expand)
+        # 3: second generate_answer
+        # 4: second check_quality (pass)
         fake_llm = FakeLLM([
-            '{"question_type":"knowledge_base","reason":"tech"}',
             "LangGraph 可以持久化会话状态。【来源：langgraph.txt】",
             '{"quality_passed":false,"quality_reason":"need more","retry_strategy":"expand_retrieval"}',
             "LangGraph 可以通过 checkpoint 持久化会话状态。【来源：langgraph.txt】",
