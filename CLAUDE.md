@@ -11,12 +11,19 @@ cd backend && uv run uvicorn src.api.main:app --reload --port 8000
 # 运行 React 前端
 cd frontend && npm run dev
 
-# 运行所有测试（从 backend 目录）
-cd backend && uv run python -m unittest discover -s tests
+# 运行所有后端测试
+cd backend && uv run python -m unittest discover -v
 
-# 运行单个测试文件
-cd backend && uv run python -m unittest tests.test_graph
-cd backend && uv run python -m unittest tests.test_knowledge_base
+# 运行单个后端测试文件
+cd backend && uv run python -m unittest tests.test_graph -v
+cd backend && uv run python -m unittest tests.test_knowledge_base -v
+cd backend && uv run python -m unittest tests.test_api_endpoints -v
+cd backend && uv run python -m unittest tests.test_integration_graph_kb -v
+cd backend && uv run python -m unittest tests.test_edge_cases -v
+cd backend && uv run python -m unittest tests.test_smoke -v
+
+# 运行所有前端测试
+cd frontend && npm test
 
 # 包同步（安装依赖）
 cd backend && uv sync
@@ -72,6 +79,8 @@ KnowBase/
 │           └── utils.ts        # 工具函数
 ├── config/                     # 共享配置（pydantic-settings）
 ├── data/                       # 共享数据（chroma/checkpoints/logs）
+├── docs/
+│   └── tests/                  # 测试文档（单元/集成/冒烟/边界/接口/验收/缺陷/报告）
 └── scripts/                    # dev.bat / dev.sh 启动脚本
 ```
 
@@ -92,8 +101,8 @@ KnowBase/
 ### 前端架构
 
 - **App.tsx** — 视图控制器，管理 `activeView`（chat / browser / dashboard），传递 `sidebarOpen` 和 `theme`
-- **ChatArea.tsx** — SSE 流式对话，含证据标签、引用来源折叠面板、👍/👎 反馈、导出 Markdown、搜索策略切换、联网搜索开关
-- **Sidebar.tsx** — 三视图导航 + 对话列表（支持重命名/删除）+ 文档管理（上传/URL导入/来源管理）
+- **ChatArea.tsx** — SSE 流式对话，含 Citations 引用编号渲染、证据标签、反馈、复制回答、导出 Markdown、搜索策略切换、联网搜索开关
+- **Sidebar.tsx** — 三视图导航 + 知识库统计概览 + 对话列表（重命名/删除）+ 文档管理（上传/URL导入/来源管理）
 - **BrowserPage.tsx** — 杂志风格知识库浏览，响应式网格布局、来源过滤按钮组、关键词搜索、全文 Dialog
 - **DashboardPage.tsx** — 数据看板，小时分布柱状图、质量分布进度条、最近查询列表、查询日志表格、1/7/30 天切换
 - **useTheme.ts** — localStorage 持久化 + `prefers-color-scheme` 初始检测
@@ -137,6 +146,13 @@ KnowBase/
 
 （基于最近的 git 提交记录）
 
+- **引用编号系统** — LLM 回答使用 `[1]`、`[2]` 编号标注来源，前端渲染为可交互的引用标签，hover 显示来源详情
+- **Toast 通知系统** — 上传/导入/删除/清空等操作使用 sonner toast 替代 alert，体验更流畅
+- **复制回答** — 每条助手消息新增复制按钮，一键复制到剪贴板
+- **搜索策略标签优化** — 按钮显示完整中文名（快速/均衡/深度），tooltip 显示详细说明
+- **侧栏知识库统计** — 知识库浏览时侧栏显示片段数和来源数概览
+- **日志表格展开** — Dashboard 查询日志支持"全部加载/收起"切换
+- **完整测试体系** — 后端 174 个测试 + 前端 45 个测试 + 8 份测试文档
 - **对话标题 LLM 自动生成** — 新对话不再预创建，用户发送首条消息后 LLM 自动生成语义化标题
 - **RAG Debug 面板** — 每条消息可展开查看检索链路详情
 - **深度阅读模式** — 知识库浏览页切换为内容优先的深度阅读视图
@@ -167,6 +183,57 @@ KnowBase/
 
 ### 测试策略
 
-- 单元测试用 `unittest`，mock LLM 调用（`FakeLLM` / `FakeResponse`）。
-- `test_graph.py` — mock LLM 测试路由分支、web_search 兜底、重试逻辑和线程记忆。
-- 其他测试文件各自覆盖对应模块的纯函数逻辑。
+#### 后端（Python unittest，174 个测试用例）
+
+| 测试文件 | 类型 | 用例数 |
+|---------|------|-------|
+| `test_api_endpoints.py` | 接口测试（21 端点覆盖） | 29 |
+| `test_edge_cases.py` | 边界/异常输入测试 | 30 |
+| `test_integration_graph_kb.py` | graph + KB 集成测试 | 15 |
+| `test_smoke.py` | 核心功能冒烟测试 | 10 |
+| `test_graph.py` | LangGraph 工作流测试 | 14 |
+| `test_knowledge_base.py` | KB 模块纯函数测试 | 21 |
+| `test_conversations.py` | 对话管理测试 | 20 |
+| `test_utils.py` | 工具函数测试 | 16 |
+| `test_loaders.py` | 文档加载器测试 | 13 |
+| `test_routing.py` | 路由/重试逻辑测试 | 6 |
+| `test_metrics.py` | 指标日志测试 | 7 |
+| `test_debug_models.py` | Pydantic 模型测试 | 6 |
+| `test_settings.py` | 配置测试 | 3 |
+
+- 框架：`unittest`（标准库）
+- LLM mock：`FakeLLM` / `FakeResponse` / `unittest.mock.patch`
+- Chroma mock：`unittest.mock.patch` 替换 Chroma 类
+- SQLite：`tempfile.TemporaryDirectory` 隔离测试数据库
+
+#### 前端（vitest + @testing-library/react，45 个测试用例）
+
+| 测试文件 | 类型 | 用例数 |
+|---------|------|-------|
+| `utils.test.ts` | 纯函数测试 | 22 |
+| `useChat.test.ts` | Hook 测试（SSE 流式） | 7 |
+| `useData.test.ts` | Hook 测试（数据管理） | 5 |
+| `useTheme.test.ts` | Hook 测试（主题切换） | 4 |
+| `ChatArea.test.tsx` | 组件渲染测试 | 3 |
+| `DebugPanel.test.tsx` | 组件渲染测试 | 4 |
+
+- 框架：vitest 3.x + jsdom
+- 组件测试：@testing-library/react
+- Mock 数据：`src/test/mocks/data.ts`
+- SSE Mock：`ReadableStream` 模拟 SSE 事件流
+
+#### 运行
+
+```bash
+# 全部后端测试
+cd backend && uv run python -m unittest discover -v
+
+# 全部前端测试
+cd frontend && npm test
+
+# 前端测试（监听模式）
+cd frontend && npm run test:watch
+
+# 前端测试 + 覆盖率
+cd frontend && npm run test:coverage
+```

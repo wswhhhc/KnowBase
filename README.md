@@ -7,7 +7,8 @@
 - **双前端**：React 杂志编辑风 UI（默认） + Streamlit 经典界面（兼容）
 - 预设知识库问答和 `.txt` / `.md` / `.pdf` / `.docx` / `.html` 动态上传
 - URL 一键导入网页内容
-- SSE 流式输出回答，边生成边展示
+- SSE 流式输出回答，边生成边展示，支持引用编号 `[1]` 标记来源
+- **引用编号系统** — LLM 回答用 `[1]`、`[2]` 编号标注来源，前端渲染为交互式引用标签（hover 显示来源详情）
 - **RAG Debug 面板：** 每条消息可展开查看检索链路详情（召回文档、分数、精排、质量检查）
 - 查询改写 → 候选集混合检索 → 条件式 LLM 精排 → 生成回答 → 分层质量检查
 - 联网搜索兜底（可选 Tavily）
@@ -98,6 +99,8 @@ KnowBase/
 │       └── lib/
 │           ├── api.ts          # API 客户端
 │           └── utils.ts        # 工具函数
+├── docs/
+│   └── tests/                  # 测试文档：单元/集成/冒烟/P2边缘/接口/验收/缺陷/报告
 ├── config/                     # 共享配置
 ├── data/                       # 共享数据（chroma/checkpoints/logs）
 └── scripts/                    # 启动脚本
@@ -118,10 +121,51 @@ KnowBase/
 
 ## 测试
 
-```bash
-cd backend && uv run python -m unittest discover -s tests
+### 后端测试（Python unittest，174 个用例）
 
-# 离线评估
+```bash
+cd backend
+
+# 运行全部
+uv run python -m unittest discover -v
+
+# 测试分类
+uv run python -m unittest tests.test_api_endpoints -v     # 接口测试（29用例）
+uv run python -m unittest tests.test_edge_cases -v        # 边界测试（30用例）
+uv run python -m unittest tests.test_integration_graph_kb -v  # 集成测试（15用例）
+uv run python -m unittest tests.test_smoke -v             # 冒烟测试（10用例）
+uv run python -m unittest tests.test_graph -v             # 工作流测试
+uv run python -m unittest tests.test_knowledge_base -v    # 知识库测试
+uv run python -m unittest tests.test_conversations -v     # 对话管理测试
+```
+
+### 前端测试（vitest，45 个用例）
+
+```bash
+cd frontend
+npm test               # 运行一次
+npm run test:watch     # 监听模式
+npm run test:coverage  # 覆盖率
+```
+
+### 测试文档
+
+详见 [docs/tests/](docs/tests/)：
+
+| 文档 | 内容 |
+|------|------|
+| [01-unit-test.md](docs/tests/01-unit-test.md) | 单元测试用例清单（111 后端 + 32 前端） |
+| [02-integration-test.md](docs/tests/02-integration-test.md) | 跨模块集成测试 |
+| [03-smoke-test.md](docs/tests/03-smoke-test.md) | 核心功能冒烟测试 |
+| [04-edge-test.md](docs/tests/04-edge-test.md) | P2 边界/异常测试 |
+| [05-api-test.md](docs/tests/05-api-test.md) | 21 个 API 端点全覆盖 |
+| [06-acceptance-test.md](docs/tests/06-acceptance-test.md) | 14 个 E2E 用户场景 |
+| [07-defect-report.md](docs/tests/07-defect-report.md) | 缺陷报告模板 |
+| [08-test-report.md](docs/tests/08-test-report.md) | 测试报告模板 |
+
+### 离线评估
+
+```bash
 cd backend && uv run python -m src.evaluate
 ```
 
