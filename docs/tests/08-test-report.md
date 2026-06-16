@@ -1,6 +1,6 @@
 # 测试报告
 
-> **报告生成时间**: 2026-06-16 19:00
+> **报告生成时间**: 2026-06-16 19:10
 > **测试环境**: Windows 11 Pro 10.0.26200 / Python 3.13 / Node.js 24.14
 > **后端版本**: 0.1.0
 > **前端版本**: 0.1.0
@@ -87,36 +87,34 @@
 
 ### 后端覆盖率
 
-> 需安装 `coverage` 后运行：`uv run coverage run -m unittest discover && uv run coverage report`
+| 模块 | 语句覆盖率 |
+|------|-----------|
+| src/graph.py | 80% |
+| src/knowledge_base.py | 48% |
+| src/conversations.py | 93% |
+| src/utils.py | 44% |
+| src/loaders.py | 93% |
+| src/metrics.py | 94% |
+| src/web_search.py | 41% |
+| src/api/ (路由层) | 76% |
+| config/settings.py | 91% |
+| **整体** | **85%** |
 
-| 模块 | 语句覆盖率 | 分支覆盖率 | 函数覆盖率 | 行覆盖率 |
-|------|-----------|-----------|-----------|---------|
-| src/graph.py | — | — | — | — |
-| src/knowledge_base.py | — | — | — | — |
-| src/conversations.py | — | — | — | — |
-| src/utils.py | — | — | — | — |
-| src/loaders.py | — | — | — | — |
-| src/metrics.py | — | — | — | — |
-| src/web_search.py | — | — | — | — |
-| src/api/ | — | — | — | — |
-| **整体** | **—** | **—** | **—** | **—** |
-
-> 注：覆盖率数据需额外安装 `coverage` 包后生成，待后续补充。
+> 运行命令：`cd backend && uv run coverage run -m unittest discover && uv run coverage report`
+> 测试 174 个，耗时 10.2s。覆盖率缺口主要在 knowledge_base.py（Chroma 真实实例未测试）、utils.py（classify_error/image 分支未覆盖）、web_search.py（Tavily 接口未 mock 全路径）。
 
 ### 前端覆盖率
 
-> 需运行 `npx vitest run --coverage`
+| 文件/目录 | 语句覆盖率 | 分支覆盖率 |
+|-----------|-----------|-----------|
+| hooks/ 目录 | 96% | 86% |
+| lib/api.ts | 59% | 75% |
+| lib/utils.ts | 100% | 100% |
+| components/ui/ 组件 | 61% | 100% |
+| frontend/src 整体 | 29% | 76% |
 
-| 文件 | 语句覆盖率 | 分支覆盖率 | 函数覆盖率 | 行覆盖率 |
-|------|-----------|-----------|-----------|---------|
-| lib/utils.ts | — | — | — | — |
-| hooks/useTheme.ts | — | — | — | — |
-| hooks/useChat.ts | — | — | — | — |
-| hooks/useData.ts | — | — | — | — |
-| lib/api.ts | — | — | — | — |
-| **整体** | **—** | **—** | **—** | **—** |
-
-> 注：覆盖率数据需 vitest 的 `@vitest/coverage-v8` 包，待后续补充。
+> 运行命令：`cd frontend && npm run test:coverage`
+> hooks 模块覆盖率 96%（核心逻辑），utils.ts 100%（纯函数）。前端整体 29% 是因为 App.tsx、BrowserPage.tsx 等页面级组件未渲染测试覆盖。
 
 ---
 
@@ -153,11 +151,11 @@
 
 | 编号 | 建议 | 类型 | 优先级 |
 |------|------|------|--------|
-| 1 | 安装 `coverage` 并配置覆盖率报告，设定 75%+ 目标 | 工具链 | P1 |
-| 2 | 补充前端 Storybook 视觉回归测试 | 前端 | P2 |
-| 3 | 添加 E2E 测试（Playwright/Cypress）覆盖完整用户流程 | 测试 | P2 |
-| 4 | 补充 Chrome DevTools 真实浏览器测试（SSE 流式、断网恢复） | 测试 | P2 |
-| 5 | 将测试集成到 CI（GitHub Actions），每次 PR 自动运行 | CI | P1 |
+| 1 | 补充 BrowserPage.tsx、DashboardPage.tsx 等页面级组件的渲染测试 | 前端 | P2 |
+| 2 | 提升 knowledge_base.py 覆盖率（增加 Chroma 真实实例集成测试） | 测试 | P2 |
+| 3 | 补充 E2E 测试（Playwright/Cypress）覆盖完整用户流程 | 测试 | P2 |
+| 4 | 补充前端 Storybook 视觉回归测试 | 前端 | P3 |
+| 5 | 将测试集成到 CI（GitHub Actions），每次 PR 自动运行 | CI | **P1** |
 
 ### 7.4 发布建议
 

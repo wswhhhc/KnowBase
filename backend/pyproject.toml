@@ -27,6 +27,7 @@ dependencies = [
     "sse-starlette>=2.1.0",
     "python-multipart>=0.0.12",
     "pandas>=3.0.3",
+    "coverage>=7.14.1",
 ]
 
 [tool.uv]
