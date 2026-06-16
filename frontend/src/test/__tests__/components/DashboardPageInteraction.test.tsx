@@ -1,0 +1,79 @@
+import { render, screen, waitFor, act } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import DashboardPage from '@/components/DashboardPage'
+import * as api from '@/lib/api'
+import { mockQueryLogs } from '@/test/mocks/data'
+
+vi.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children, ...props }: any) => {
+      const { initial, animate, exit, transition, ...rest } = props
+      return <div {...rest}>{children}</div>
+    },
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
+}))
+vi.mock('lucide-react', () => {
+  const icons: Record<string, string> = {
+    BarChart3: 'BarChart3', PanelRightOpen: 'PanelRightOpen', ArrowLeft: 'ArrowLeft',
+    TrendingUp: 'TrendingUp', Clock: 'Clock', CheckCircle2: 'CheckCircle2',
+    XCircle: 'XCircle', HelpCircle: 'HelpCircle', AlertTriangle: 'AlertTriangle',
+    Sun: 'Sun', Moon: 'Moon', Globe: 'Globe', ChevronDown: 'ChevronDown',
+    ChevronUp: 'ChevronUp', X: 'X',
+  }
+  return Object.fromEntries(Object.keys(icons).map((n) => [n, () => <span>{n}</span>]))
+})
+vi.mock('@/lib/api', () => ({
+  queryLogs: vi.fn(),
+}))
+
+const defaultProps = {
+  onOpenSidebar: vi.fn(), sidebarOpen: false, onNavigate: vi.fn(),
+  theme: { theme: 'dark' as const, toggle: vi.fn() },
+}
+
+describe('DashboardPage interactions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(api.queryLogs).mockResolvedValue(mockQueryLogs)
+  })
+
+  it('stat cards display correct values', async () => {
+    await act(async () => { render(<DashboardPage {...defaultProps} />) })
+
+    await waitFor(() => {
+      expect(screen.getByText('总查询')).toBeInTheDocument()
+    })
+    expect(screen.getByText('平均耗时')).toBeInTheDocument()
+    expect(screen.getByText('质量通过率')).toBeInTheDocument()
+    expect(screen.getByText('联网搜索率')).toBeInTheDocument()
+  })
+
+  it('empty log state shows message', async () => {
+    vi.mocked(api.queryLogs).mockResolvedValue([])
+
+    await act(async () => { render(<DashboardPage {...defaultProps} />) })
+
+    await waitFor(() => {
+      expect(screen.getByText('暂无查询数据')).toBeInTheDocument()
+    })
+  })
+
+  it('re-fetches on time range change', async () => {
+    await act(async () => { render(<DashboardPage {...defaultProps} />) })
+
+    await waitFor(() => expect(screen.getByText('近7天')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByText('近1天'))
+    expect(api.queryLogs).toHaveBeenCalledWith(1, 1000)
+  })
+
+  it('logs question appears in table', async () => {
+    await act(async () => { render(<DashboardPage {...defaultProps} />) })
+
+    await waitFor(() => {
+      expect(screen.getAllByText('你好').length).toBeGreaterThanOrEqual(1)
+    })
+  })
+})

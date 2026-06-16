@@ -106,4 +106,64 @@ describe('useSources', () => {
 
     expect(result.current.sources).toEqual(mockSources)
   })
+
+  it('refresh catches error and does not throw', async () => {
+    vi.mocked(api.getSources).mockRejectedValue(new Error('network error'))
+
+    const { result } = renderHook(() => useSources())
+
+    await act(async () => {
+      // Should not throw
+      await result.current.refresh()
+    })
+
+    expect(result.current.sources).toEqual([])
+  })
+})
+
+describe('useConversations error paths', () => {
+  it('create failure does not break state', async () => {
+    vi.mocked(api.getConversations).mockResolvedValue([])
+    vi.mocked(api.createConversation).mockRejectedValue(new Error('create failed'))
+
+    const { result } = renderHook(() => useConversations())
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    await act(async () => {
+      try {
+        await result.current.create()
+      } catch {
+        // expected
+      }
+    })
+    // Should keep existing conversations
+    expect(result.current.conversations).toEqual([])
+  })
+
+  it('remove when activeId differs does not clear', async () => {
+    const initialConvs = [{ id: 'conv-1', thread_id: 't1', title: 'A', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }]
+    vi.mocked(api.getConversations).mockResolvedValue(initialConvs)
+    vi.mocked(api.deleteConversation).mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useConversations())
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    act(() => {
+      result.current.setActiveId('conv-1')
+    })
+
+    vi.mocked(api.getConversations).mockResolvedValue([])
+
+    await act(async () => {
+      await result.current.remove('conv-2')  // different id
+    })
+
+    expect(result.current.activeId).toBe('conv-1')  // not cleared
+  })
 })

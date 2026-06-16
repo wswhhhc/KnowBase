@@ -49,6 +49,48 @@ export const mockDebugInfo: DebugInfo = {
   web_results_count: null,
 }
 
+export const mockMessagesFull: Message[] = [
+  { id: 1, role: 'user', content: '年假政策', sources: null as any, quality_reason: null as any, feedback: null as any, created_at: '2026-06-16T08:00:00Z' },
+  { id: 2, role: 'assistant', content: '根据文档 [1]，年假为 5 天。\n\n引用编号 [1] 和 [2] 来自不同来源[1,2]。', sources: [{ source: 'policy.txt', index: 1, content: '年假5天' }, { source: 'hr.txt', index: 2, content: '试用期员工适用' }], quality_reason: 'PASS', feedback: null, created_at: '2026-06-16T08:00:05Z' },
+]
+
+export const mockSSEDebugEvent: DebugInfo = {
+  nodes: [
+    { name: 'route_question', label: '问题路由', elapsed_ms: 100, summary: '→ knowledge_base' },
+    { name: 'rewrite_query', label: '查询改写', elapsed_ms: 50, summary: '无需改写' },
+    { name: 'retrieve_docs', label: '混合检索', elapsed_ms: 200, summary: '3 候选' },
+    { name: 'generate_answer', label: '生成回答', elapsed_ms: 1500, summary: '120 字' },
+    { name: 'check_quality', label: '质量检查', elapsed_ms: 300, summary: '✓ 通过' },
+  ],
+  rewritten_question: null,
+  retrieval_k: 30,
+  candidates_before: 3,
+  candidates_after: 3,
+  after_rerank: 3,
+  used_rerank: false,
+  used_rewrite: false,
+  quality_passed: true,
+  quality_reason: 'PASS',
+  retry_count: 0,
+  used_web_search: false,
+  web_results_count: null,
+}
+
+export const mockExportData = { markdown: '# 测试对话\n\n### 👤 用户\n年假政策\n\n### 🤖 助手\n5天\n\n---\n' }
+
+export const mockLongConversationList: Conversation[] = Array.from({ length: 25 }, (_, i) => ({
+  id: `conv-${i}`,
+  thread_id: `thread-${i}`,
+  title: `对话 ${i + 1}`,
+  created_at: '2026-06-16T00:00:00Z',
+  updated_at: `2026-06-16T${String(i).padStart(2, '0')}:00:00Z`,
+}))
+
+export const mockHotspotData = [
+  { chunk_id: 'doc1.txt:0:abc', source: 'doc1.txt', hits: 10, content_preview: '第一段' },
+  { chunk_id: 'doc1.txt:1:def', source: 'doc1.txt', hits: 5, content_preview: '第二段' },
+]
+
 export function createMockFetch(response: any, ok = true, status = 200): ReturnType<typeof vi.fn> {
   return vi.fn().mockResolvedValue({
     ok,
