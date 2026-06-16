@@ -22,6 +22,7 @@ interface SidebarProps {
   onClose: () => void
   convRefreshKey: number
   activeThreadId: string | null
+  onLoadingMessages?: (loading: boolean) => void
 }
 
 const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[] = [
@@ -30,7 +31,7 @@ const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[]
   { view: 'dashboard', icon: BarChart3, label: '指标' },
 ]
 
-export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId }: SidebarProps) {
+export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages }: SidebarProps) {
   const convs = useConversations()
   const srcs = useSources()
   const [tab, setTab] = useState<'conversations' | 'documents'>('conversations')
@@ -55,6 +56,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   const switchConversation = async (conversation: Conversation) => {
     onNavigate('chat')
     convs.setActiveId(conversation.id)
+    onLoadingMessages?.(true)
     try {
       const msgs = await api.getMessages(conversation.id)
       chat.loadMessages(
@@ -68,6 +70,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         conversation.thread_id,
       )
     } catch { /* ignore */ }
+    onLoadingMessages?.(false)
   }
 
   const handleNewConversation = () => {

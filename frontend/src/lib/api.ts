@@ -46,6 +46,11 @@ export interface KBChunk {
   section: string | null
 }
 
+export interface KBChunkResponse {
+  items: KBChunk[]
+  total: number
+}
+
 export interface HotspotEntry {
   chunk_id: string
   source: string
@@ -60,6 +65,7 @@ export interface KBConfig {
 
 export interface QueryLogEntry {
   timestamp: string
+  thread_id: string
   question: string
   elapsed_ms: number
   retrieval_count: number
@@ -170,11 +176,13 @@ export const clearKnowledgeBase = () =>
 
 export const getKBStats = () => req<KBStats>('/knowledge-base/stats')
 
-export const getKBChunks = (source?: string, search?: string) => {
+export const getKBChunks = (source?: string, search?: string, skip = 0, limit = 50) => {
   const params = new URLSearchParams()
   if (source) params.set('source', source)
   if (search) params.set('search', search)
-  return req<KBChunk[]>(`/knowledge-base/chunks?${params}`)
+  params.set('skip', String(skip))
+  params.set('limit', String(limit))
+  return req<KBChunkResponse>(`/knowledge-base/chunks?${params}`)
 }
 
 export const getKBSourceNames = () => req<string[]>('/knowledge-base/sources')

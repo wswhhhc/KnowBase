@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { Button, ScrollArea, Switch, Dialog, DialogContent, DialogHeader, DialogTitle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
+import { Button, ScrollArea, Switch, Dialog, DialogContent, DialogHeader, DialogTitle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Skeleton } from '@/components/ui'
 import { useChat, type ChatMessage } from '@/hooks/useChat'
 import { evidenceColor, evidenceLabel } from '@/lib/utils'
 import DebugPanel from './DebugPanel'
@@ -18,9 +18,10 @@ interface ChatAreaProps {
   sidebarOpen: boolean
   onNavigate: (v: ViewType) => void
   theme: { theme: 'dark' | 'light'; toggle: () => void }
+  isLoadingMessages?: boolean
 }
 
-export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate, theme }: ChatAreaProps) {
+export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate, theme, isLoadingMessages }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [input, setInput] = useState('')
@@ -137,7 +138,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
       {/* Messages */}
       <ScrollArea ref={scrollRef} className="flex-1">
         <div className="mx-auto max-w-3xl px-5 py-8">
-          {isEmpty ? <EmptyState /> : (
+          {isLoadingMessages ? <MessageSkeleton /> : isEmpty ? <EmptyState /> : (
             <div className="space-y-6">
               {chat.messages.map((msg, idx) => (
                 <motion.div
@@ -254,6 +255,24 @@ function EmptyState() {
           </motion.div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function MessageSkeleton() {
+  const widths = [75, 85, 60, 90]
+  return (
+    <div className="space-y-6">
+      {widths.map((w, i) => (
+        <div key={i} className={`flex gap-3 ${i % 2 === 0 ? '' : 'flex-row-reverse'}`}>
+          {i % 2 === 0 && (
+            <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
+          )}
+          <div className={`flex-1 ${i % 2 === 0 ? '' : 'max-w-[75%]'}`}>
+            <Skeleton className="h-16 rounded-2xl" style={i % 2 === 0 ? { width: `${w}%` } : { width: `${w}%`, marginLeft: 'auto' }} />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

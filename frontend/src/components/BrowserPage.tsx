@@ -29,23 +29,42 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, th
   const [urlInput, setUrlInput] = useState('')
   const [ingesting, setIngesting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const pageSize = 50
+
+  const loadChunks = async (src: string, q: string, p: number, ps: number) => {
+    const res = await api.getKBChunks(src, q, p * ps, ps)
+    setChunks(res.items)
+    setTotal(res.total)
+    return res
+  }
 
   useEffect(() => {
-    Promise.all([api.getKBStats(), api.getKBChunks(), api.getKBSourceNames(), api.getKBConfig()])
-      .then(([s, c, srcs, cfg]) => { setStats(s); setChunks(c); setSources(srcs); setKbConfig(cfg) })
+    loadChunks('', '', 0, pageSize)
+    Promise.all([api.getKBStats(), api.getKBSourceNames(), api.getKBConfig()])
+      .then(([s, srcs, cfg]) => { setStats(s); setSources(srcs); setKbConfig(cfg) })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
   const handleSearch = async () => {
     setLoading(true)
+    setPage(0)
     try {
-      const results = await api.getKBChunks(selectedSource, searchQuery)
-      setChunks(results)
-      const srcs = await api.getKBSourceNames()
+      await loadChunks(selectedSource, searchQuery, 0, pageSize)
+      const [srcs, s] = await Promise.all([api.getKBSourceNames(), api.getKBStats()])
       setSources(srcs)
-      const s = await api.getKBStats()
       setStats(s)
+    } catch { /* ignore */ }
+    setLoading(false)
+  }
+
+  const handlePageChange = async (newPage: number) => {
+    setLoading(true)
+    setPage(newPage)
+    try {
+      await loadChunks(selectedSource, searchQuery, newPage, pageSize)
     } catch { /* ignore */ }
     setLoading(false)
   }
@@ -115,8 +134,9 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, th
 
   const refreshData = async () => {
     try {
-      const [s, c, srcs, cfg] = await Promise.all([api.getKBStats(), api.getKBChunks(selectedSource, searchQuery), api.getKBSourceNames(), api.getKBConfig()])
-      setStats(s); setChunks(c); setSources(srcs); setKbConfig(cfg)
+      const [s, srcs, cfg] = await Promise.all([api.getKBStats(), api.getKBSourceNames(), api.getKBConfig()])
+      setStats(s); setSources(srcs); setKbConfig(cfg)
+      await loadChunks(selectedSource, searchQuery, page, pageSize)
     } catch { /* ignore */ }
   }
 
@@ -391,12 +411,33 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, th
             </div>
           )}
 
-          {/* Bottom stats bar */}
-          {!loading && chunks.length > 0 && (
-            <div className="mt-8 text-center">
-              <p className="text-[10px] text-muted-foreground/30 font-mono">
-                显示 {chunks.length} 个片段 · {stats?.source_count ?? 0} 个来源 · 总计 {(stats?.total_chars ?? 0) / 1000}k 字符
-              </p>
+          {/* Bottom stats & pagination */}
+          {!loading && total > 0 && (
+            <div className="mt-8 flex items-center justify-center gap-4">
+              {total > pageSize && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePageChange(page - 1)}
+                    disabled={page === 0}
+                    className="px-3 py-1 text-[11px] font-medium rounded-md bg-muted/50 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    上一页
+                  </button>
+                  <span className="text-[10px] text-muted-foreground/50 font-mono">
+                    {page + 1} / {Math.ceil(total / pageSize)}
+                  </span>
+                  <button
+                    onClick={() => handlePageChange(page + 1)}
+                    disabled={(page + 1) * pageSize >= total}
+                    className="px-3 py-1 text-[11px] font-medium rounded-md bg-muted/50 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    下一页
+                  </button>
+                </div>
+              )}
+              <span className="text-[10px] text-muted-foreground/30 font-mono">
+                共 {total} 个片段 · {stats?.source_count ?? 0} 个来源 · 总计 {(stats?.total_chars ?? 0) / 1000}k 字符
+              </span>
             </div>
           )}
         </div>

@@ -8,3 +8,4 @@ export { Select, SelectGroup, SelectValue, SelectTrigger, SelectContent, SelectI
 export { Dialog, DialogTrigger, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './dialog'
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './tooltip'
 export { Progress } from './progress'
+export { Skeleton } from './skeleton'
