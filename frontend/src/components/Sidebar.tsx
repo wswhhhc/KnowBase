@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Input, Separator, ScrollArea } from '@/components/ui'
 import {
@@ -23,6 +24,32 @@ interface SidebarProps {
   convRefreshKey: number
   activeThreadId: string | null
   onLoadingMessages?: (loading: boolean) => void
+}
+
+function KBSummary() {
+  const [stats, setStats] = useState<{ chunk_count: number; source_count: number } | null>(null)
+  useEffect(() => { api.getKBStats().then(setStats).catch(() => {}) }, [])
+  return (
+    <div className="px-3 py-4">
+      <p className="text-xs text-muted-foreground/50 tracking-wide uppercase px-1 mb-2">知识库</p>
+      <div className="rounded-lg border border-border bg-surface/30 p-3 space-y-1.5">
+        {stats ? (
+          <>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">片段</span>
+              <span className="font-mono text-foreground/70">{stats.chunk_count}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">来源</span>
+              <span className="font-mono text-foreground/70">{stats.source_count}</span>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground/50">加载中…</p>
+        )}
+      </div>
+    </div>
+  )
 }
 
 const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[] = [
@@ -92,7 +119,8 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     try {
       await api.uploadDocument(file)
       await srcs.refresh()
-    } catch (err) { alert(String(err)) }
+      toast.success('文档已上传', { description: file.name })
+    } catch (err) { toast.error('上传失败', { description: String(err) }) }
     e.target.value = ''
   }
 
@@ -102,7 +130,8 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
       await api.ingestUrl(urlInput.trim())
       setUrlInput('')
       await srcs.refresh()
-    } catch (err) { alert(String(err)) }
+      toast.success('网页已导入')
+    } catch (err) { toast.error('导入失败', { description: String(err) }) }
   }
 
   return (
@@ -213,7 +242,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">文档来源</span>
                   {srcs.sources.length > 0 && (
-                    <button onClick={async () => { await api.clearKnowledgeBase(); await srcs.refresh() }}
+                    <button onClick={async () => { await api.clearKnowledgeBase(); await srcs.refresh(); toast.success('知识库已清空') }}
                       className="text-[10px] text-destructive/50 hover:text-destructive transition-colors">清空</button>
                   )}
                 </div>
@@ -222,7 +251,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
                     <div key={s.source} className="group flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-foreground/70 hover:bg-muted transition-colors">
                       <span className="truncate flex-1">{s.source}</span>
                       <span className="text-[10px] text-muted-foreground mr-2 font-mono">{s.count}</span>
-                      <button onClick={() => { api.deleteSource(s.source); srcs.refresh() }}
+                      <button onClick={() => { api.deleteSource(s.source); srcs.refresh(); toast.success('已删除来源') }}
                         className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all">
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -236,16 +265,13 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
             </div>
           )
         ) : activeView === 'browser' ? (
-          <div className="space-y-3 text-center py-8">
-            <BookOpen className="h-8 w-8 text-primary/30 mx-auto" />
-            <p className="text-xs text-muted-foreground">浏览视图</p>
-            <p className="text-[10px] text-muted-foreground/50">查看和管理文档片段</p>
-          </div>
+          <KBSummary />
         ) : (
-          <div className="space-y-3 text-center py-8">
-            <BarChart3 className="h-8 w-8 text-primary/30 mx-auto" />
-            <p className="text-xs text-muted-foreground">指标面板</p>
-            <p className="text-[10px] text-muted-foreground/50">查询统计与分析</p>
+          <div className="px-3 py-4">
+            <p className="text-xs text-muted-foreground/50 tracking-wide uppercase px-1 mb-2">快速统计</p>
+            <div className="rounded-lg border border-border bg-surface/30 p-3">
+              <p className="text-[10px] text-muted-foreground/50">打开指标面板查看详情</p>
+            </div>
           </div>
         )}
       </ScrollArea>

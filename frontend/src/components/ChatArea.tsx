@@ -4,11 +4,12 @@ import { useChat, type ChatMessage } from '@/hooks/useChat'
 import { evidenceColor, evidenceLabel } from '@/lib/utils'
 import DebugPanel from './DebugPanel'
 import * as api from '@/lib/api'
+import type { Source } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   PanelRightOpen, Square, Sparkles, Search, Globe, Zap,
   RotateCcw, Download, ThumbsUp, ThumbsDown, BookOpen, BarChart3,
-  FileDown, Sun, Moon,
+  FileDown, Sun, Moon, Copy, CheckCircle,
 } from 'lucide-react'
 import type { ViewType } from '@/App'
 
@@ -32,7 +33,20 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [chat.messages, chat.streamingNodes])
+  }, [chat.messages, chat.streamingNodes, isLoadingMessages])
+
+  // Auto-scroll to bottom when message loading completes
+  const prevLoadingRef = useRef(isLoadingMessages)
+  useEffect(() => {
+    if (prevLoadingRef.current && !isLoadingMessages) {
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+      })
+    }
+    prevLoadingRef.current = isLoadingMessages
+  }, [isLoadingMessages])
 
   const handleSend = () => {
     const q = input.trim()
@@ -124,10 +138,10 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                       className={`px-2 py-1 text-[10px] font-medium rounded-sm transition-colors ${
                         searchStrategy === s ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
                       }`}>
-                      {s === 'fast' ? '快' : s === 'balanced' ? '均' : s === 'high_quality' ? '深' : '全'}
+                      {s === 'fast' ? '快速' : s === 'balanced' ? '均衡' : s === 'high_quality' ? '深度' : '全文'}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>{s === 'fast' ? '快速' : s === 'balanced' ? '均衡' : s === 'high_quality' ? '深度' : '全文'}检索</TooltipContent>
+                  <TooltipContent>{s === 'fast' ? '快速：不重排' : s === 'balanced' ? '均衡：条件重排' : s === 'high_quality' ? '深度：必重排' : '全文：扩检索+重排'}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ))}
@@ -277,6 +291,52 @@ function MessageSkeleton() {
   )
 }
 
+function CitationText({ text, sources }: { text: string; sources?: Source[] }) {
+  const parts = text.split(/(\[\d+(?:,\d+)*\])/g)
+  const sourceMap = new Map(sources?.map((s) => [s.index, s]) ?? [])
+  return (
+    <span>
+      {parts.map((part, i) => {
+        const match = part.match(/\[(\d+(?:,\d+)*)\]/)
+        if (match) {
+          const indices = match[1].split(',').map(Number)
+          return (
+            <sup
+              key={i}
+              className="inline-flex items-center justify-center min-w-[1.1em] h-3.5 px-0.5 rounded text-[10px] font-medium bg-primary/15 text-primary cursor-help transition-colors hover:bg-primary/25"
+              title={indices.map((idx) => {
+                const s = sourceMap.get(idx)
+                return s ? `${s.source}${s.chunk_index != null ? ` #${s.chunk_index}` : ''}` : `来源 ${idx}`
+              }).join('、')}
+            >
+              {match[1]}
+            </sup>
+          )
+        }
+        return <span key={i}>{part}</span>
+      })}
+    </span>
+  )
+}
+
+function CopyButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* clipboard not available */ }
+  }
+  return (
+    <button onClick={handleCopy}
+      className={`p-1 rounded transition-colors ${copied ? 'text-emerald-400' : 'text-muted-foreground/40 hover:text-foreground'}`}
+      title={copied ? '已复制' : '复制回答'}>
+      {copied ? <CheckCircle className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+    </button>
+  )
+}
+
 /* ─────────────────────────────────────────────
  * MessageBubble
  * ───────────────────────────────────────────── */
@@ -328,7 +388,7 @@ function MessageBubble({ message, prevMessage, threadId }: {
             {/* Answer */}
             <div className="prose-chat text-sm text-foreground">
               {message.content ? (
-                <span>{message.content}</span>
+                <CitationText text={message.content} sources={message.sources} />
               ) : (
                 <span className="text-muted-foreground animate-pulse-soft italic">思考中…</span>
               )}
@@ -359,6 +419,9 @@ function MessageBubble({ message, prevMessage, threadId }: {
                   {message.outcome_category === 'weak_evidence' && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400">● 证据不足</span>
                   )}
+
+                  {/* Copy answer */}
+                  <CopyButton content={message.content} />
 
                   {/* Feedback */}
                   {(message.sources && message.sources.length > 0) && (

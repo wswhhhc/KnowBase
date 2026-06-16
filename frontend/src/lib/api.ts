@@ -1,4 +1,5 @@
 export interface Source {
+  index: number
   source: string
   chunk_index?: number
   page?: number

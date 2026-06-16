@@ -1,3 +1,4 @@
+import { Toaster } from 'sonner'
 import { useState } from 'react'
 import { useChat } from '@/hooks/useChat'
 import { useTheme } from '@/hooks/useTheme'
@@ -66,6 +67,13 @@ function App() {
           />
         )}
       </main>
+
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: { background: 'hsl(var(--surface))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))' },
+        }}
+      />
     </div>
   )
 }

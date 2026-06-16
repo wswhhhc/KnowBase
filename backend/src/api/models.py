@@ -19,6 +19,7 @@ class ChatSource(BaseModel):
     score: float | None = None
     content: str
     url: str | None = None
+    index: int | None = None
 
 
 class ConversationCreate(BaseModel):

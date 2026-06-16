@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, ScrollArea } from '@/components/ui'
-import { BarChart3, PanelRightOpen, ArrowLeft, TrendingUp, Clock, CheckCircle2, XCircle, HelpCircle, AlertTriangle, Sun, Moon } from 'lucide-react'
+import { BarChart3, PanelRightOpen, ArrowLeft, TrendingUp, Clock, CheckCircle2, XCircle, HelpCircle, AlertTriangle, Sun, Moon, Globe, ChevronDown, ChevronUp } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { QueryLogEntry } from '@/lib/api'
 import { motion } from 'framer-motion'
@@ -32,6 +32,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
   const [logs, setLogs] = useState<QueryLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [days, setDays] = useState(7)
+  const [showAllLogs, setShowAllLogs] = useState(false)
 
   const hasError = (log: QueryLogEntry) => Boolean(log.error?.trim())
   const answeredLogs = logs.filter((log) => !hasError(log))
@@ -210,7 +211,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
                     {[
                       { label: '通过', key: 'quality_ok' as const, color: 'emerald' as const },
                       { label: '未通过', key: 'failed' as const, color: 'red' as const },
-                      { label: '错误', key: 'error' as const, color: 'red' as const },
+                      { label: '错误', key: 'error' as const, color: 'violet' as const },
                     ].map((item) => {
                       let count = 0
                       if (item.key === 'quality_ok') count = stats.qualityPassed
@@ -268,7 +269,18 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
                 transition={{ delay: 0.35, duration: 0.4 }}
                 className="rounded-lg border border-border bg-surface/30 p-5"
               >
-                <h3 className="font-heading text-sm text-foreground tracking-tight mb-4">查询日志</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-heading text-sm text-foreground tracking-tight">
+                    查询日志
+                    <span className="text-[10px] text-muted-foreground/50 font-mono ml-2 font-normal">共 {logs.length} 条</span>
+                  </h3>
+                  {logs.length > 15 && (
+                    <button onClick={() => setShowAllLogs(!showAllLogs)}
+                      className="flex items-center gap-1 text-[10px] text-primary/60 hover:text-primary transition-colors">
+                      {showAllLogs ? <><ChevronUp className="h-3 w-3" />收起</> : <><ChevronDown className="h-3 w-3" />全部加载</>}
+                    </button>
+                  )}
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
@@ -281,7 +293,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
                       </tr>
                     </thead>
                     <tbody>
-                      {logs.slice(0, 15).map((log, i) => (
+                      {(showAllLogs ? logs : logs.slice(0, 15)).map((log, i) => (
                         <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                           <td className="py-2 pr-4 text-muted-foreground font-mono whitespace-nowrap">
                             {new Date(log.timestamp).toLocaleString('zh-CN', {
@@ -354,6 +366,3 @@ function StatCard({ icon: Icon, label, value, sub, delay = 0, color = 'primary' 
     </motion.div>
   )
 }
-
-// Need to import Globe for the table
-import { Globe } from 'lucide-react'

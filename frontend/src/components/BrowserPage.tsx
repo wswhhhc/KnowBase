@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useEffect, useState, useRef } from 'react'
 import { Button, Input, ScrollArea, Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui'
 import { BookOpen, PanelRightOpen, ArrowLeft, Search, FileText, Hash, ExternalLink, Layers, Sun, Moon, Flame, List, LayoutGrid, Upload, Globe, RefreshCw } from 'lucide-react'
@@ -117,7 +118,8 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, th
     try {
       await api.uploadDocument(file)
       await refreshData()
-    } catch (err) { alert(String(err)) }
+      toast.success('文档已上传', { description: file.name })
+    } catch (err) { toast.error('上传失败', { description: String(err) }) }
     e.target.value = ''
   }
 
@@ -128,7 +130,8 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, th
       await api.ingestUrl(urlInput.trim())
       setUrlInput('')
       await refreshData()
-    } catch (err) { alert(String(err)) }
+      toast.success('网页已导入')
+    } catch (err) { toast.error('导入失败', { description: String(err) }) }
     setIngesting(false)
   }
 
