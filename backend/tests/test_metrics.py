@@ -7,6 +7,8 @@ from unittest.mock import patch
 import pandas as pd
 
 from src import metrics
+from src.api.models import QueryLogEntry
+from src.api.routes.metrics import _apply_debug_web_search_flags
 
 
 class MetricsTests(unittest.TestCase):
@@ -47,6 +49,50 @@ class MetricsDashboardTests(unittest.TestCase):
         self.assertEqual(metrics.quality_fail_rate(df), 50.0)
         self.assertEqual(metrics.quality_fail_rate(df, recent_n=2), 0.0)
         self.assertEqual(metrics.quality_fail_rate(df, recent_n=3), 33.333333333333336)
+
+    @patch("src.api.routes.metrics.list_assistant_debug_pairs")
+    def test_apply_debug_web_search_flags_overrides_stale_log_values(self, mock_pairs):
+        records = [
+            QueryLogEntry(
+                timestamp="2026-06-15T08:00:00+00:00",
+                thread_id="thread-1",
+                question="重复问题",
+                elapsed_ms=1000,
+                retrieval_count=1,
+                quality_ok=True,
+                quality_reason="ok",
+                used_web_search=True,
+            ),
+            QueryLogEntry(
+                timestamp="2026-06-15T09:00:00+00:00",
+                thread_id="thread-1",
+                question="重复问题",
+                elapsed_ms=1200,
+                retrieval_count=1,
+                quality_ok=True,
+                quality_reason="ok",
+                used_web_search=True,
+            ),
+        ]
+        mock_pairs.return_value = [
+            {
+                "thread_id": "thread-1",
+                "question": "重复问题",
+                "debug_info": {"used_web_search": False},
+                "created_at": "2026-06-15T08:00:01+00:00",
+            },
+            {
+                "thread_id": "thread-1",
+                "question": "重复问题",
+                "debug_info": {"used_web_search": True},
+                "created_at": "2026-06-15T09:00:01+00:00",
+            },
+        ]
+
+        _apply_debug_web_search_flags(records)
+
+        self.assertFalse(records[0].used_web_search)
+        self.assertTrue(records[1].used_web_search)
 
 
 if __name__ == "__main__":

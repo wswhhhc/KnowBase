@@ -27,8 +27,9 @@ async def stats(kb: KnowledgeBase = Depends(get_knowledge_base)) -> KBStats:
 @router.get("/chunks")
 async def chunks(
     source: str = Query(""), search: str = Query(""),
+    skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
     kb: KnowledgeBase = Depends(get_knowledge_base),
-) -> list[KBChunk]:
+) -> dict:
     kb._ensure_loaded()
     docs = kb.all_docs
     if source:
@@ -36,18 +37,23 @@ async def chunks(
     if search:
         keywords = [kw.strip().lower() for kw in search.split() if kw.strip()]
         docs = [d for d in docs if any(kw in d.page_content.lower() for kw in keywords)]
-    return [
-        KBChunk(
-            source=d.metadata.get("source", ""),
-            chunk_index=d.metadata.get("chunk_index", 0),
-            chunk_id=d.metadata.get("chunk_id", ""),
-            page=d.metadata.get("page"),
-            content=d.page_content,
-            original_content=d.metadata.get("original_content"),
-            section=d.metadata.get("section"),
-        )
-        for d in docs[:200]
-    ]
+    total = len(docs)
+    page = docs[skip : skip + limit]
+    return {
+        "total": total,
+        "items": [
+            KBChunk(
+                source=d.metadata.get("source", ""),
+                chunk_index=d.metadata.get("chunk_index", 0),
+                chunk_id=d.metadata.get("chunk_id", ""),
+                page=d.metadata.get("page"),
+                content=d.page_content,
+                original_content=d.metadata.get("original_content"),
+                section=d.metadata.get("section"),
+            )
+            for d in page
+        ],
+    }
 
 
 @router.get("/sources")

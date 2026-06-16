@@ -19,6 +19,7 @@ class ChatSource(BaseModel):
     score: float | None = None
     content: str
     url: str | None = None
+    index: int | None = None
 
 
 class ConversationCreate(BaseModel):
@@ -79,6 +80,7 @@ class KBChunk(BaseModel):
 
 class QueryLogEntry(BaseModel):
     timestamp: str
+    thread_id: str = ""
     question: str
     elapsed_ms: int
     retrieval_count: int

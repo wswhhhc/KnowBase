@@ -360,7 +360,13 @@ class KnowledgeBase:
         4. Return top-k results
         """
         self._ensure_loaded()  # BM25 needs the full corpus loaded
-        candidate_k = vector_candidate_k or VECTOR_CANDIDATE_K
+        if vector_candidate_k is None:
+            doc_count = len(self.existing_chunk_ids)
+            min_candidates = 30
+            max_candidates = 100
+            candidate_k = min(max(min_candidates, int(doc_count * 0.3)), max_candidates)
+        else:
+            candidate_k = vector_candidate_k
         vector_results = self.vector_store.similarity_search_with_score(query, k=candidate_k, filter=filter)
         vector_ranked = [(_document_chunk_id(doc), float(score)) for doc, score in vector_results]
         vector_doc_map = {_document_chunk_id(doc): doc for doc, _score in vector_results}

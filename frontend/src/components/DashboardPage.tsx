@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, ScrollArea } from '@/components/ui'
-import { BarChart3, PanelRightOpen, ArrowLeft, TrendingUp, Clock, CheckCircle2, XCircle, HelpCircle, AlertTriangle, Sun, Moon } from 'lucide-react'
+import { BarChart3, PanelRightOpen, ArrowLeft, TrendingUp, Clock, CheckCircle2, XCircle, HelpCircle, AlertTriangle, Sun, Moon, Globe, ChevronDown, ChevronUp } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { QueryLogEntry } from '@/lib/api'
 import { motion } from 'framer-motion'
@@ -16,6 +16,10 @@ interface DashboardPageProps {
 
 interface AggregatedStats {
   total: number
+  answeredTotal: number
+  qualityPassed: number
+  qualityFailed: number
+  webSearchCount: number
   avgElapsed: number
   qualityRate: number
   webSearchRate: number
@@ -28,6 +32,13 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
   const [logs, setLogs] = useState<QueryLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [days, setDays] = useState(7)
+  const [showAllLogs, setShowAllLogs] = useState(false)
+
+  const hasError = (log: QueryLogEntry) => Boolean(log.error?.trim())
+  const answeredLogs = logs.filter((log) => !hasError(log))
+  const qualityPassed = answeredLogs.filter((log) => log.quality_ok).length
+  const qualityFailed = answeredLogs.filter((log) => !log.quality_ok).length
+  const webSearchCount = answeredLogs.filter((log) => log.used_web_search).length
 
   useEffect(() => {
     setLoading(true)
@@ -39,13 +50,29 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
 
   const stats: AggregatedStats = logs.length > 0 ? {
     total: logs.length,
+    answeredTotal: answeredLogs.length,
+    qualityPassed,
+    qualityFailed,
+    webSearchCount,
     avgElapsed: Math.round(logs.reduce((a, b) => a + b.elapsed_ms, 0) / logs.length),
-    qualityRate: logs.filter((l) => l.quality_ok).length / logs.length,
-    webSearchRate: logs.filter((l) => l.used_web_search).length / logs.length,
-    errorCount: logs.filter((l) => l.error).length,
+    qualityRate: answeredLogs.length > 0 ? qualityPassed / answeredLogs.length : 0,
+    webSearchRate: answeredLogs.length > 0 ? webSearchCount / answeredLogs.length : 0,
+    errorCount: logs.filter((l) => hasError(l)).length,
     avgRetrieval: Math.round(logs.reduce((a, b) => a + (b.retrieval_count || 0), 0) / logs.length),
     last24h: logs.filter((l) => Date.now() - new Date(l.timestamp).getTime() < 86400000).length,
-  } : { total: 0, avgElapsed: 0, qualityRate: 0, webSearchRate: 0, errorCount: 0, avgRetrieval: 0, last24h: 0 }
+  } : {
+    total: 0,
+    answeredTotal: 0,
+    qualityPassed: 0,
+    qualityFailed: 0,
+    webSearchCount: 0,
+    avgElapsed: 0,
+    qualityRate: 0,
+    webSearchRate: 0,
+    errorCount: 0,
+    avgRetrieval: 0,
+    last24h: 0,
+  }
 
   // Time distribution (hourly buckets)
   const hourlyData = Array.from({ length: 24 }, (_, h) => ({
@@ -128,9 +155,9 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
                 <StatCard icon={TrendingUp} label="总查询" value={stats.total.toString()} sub={`近24h ${stats.last24h} 次`} delay={0} />
                 <StatCard icon={Clock} label="平均耗时" value={`${stats.avgElapsed}ms`} sub={`检索 ${stats.avgRetrieval} 条`} delay={0.05} />
                 <StatCard icon={CheckCircle2} label="质量通过率" value={`${(stats.qualityRate * 100).toFixed(0)}%`}
-                  sub={`${logs.filter((l) => l.quality_ok).length}/${stats.total}`} delay={0.1} color="emerald" />
+                  sub={`${stats.qualityPassed}/${stats.answeredTotal || 0}`} delay={0.1} color="emerald" />
                 <StatCard icon={stats.webSearchRate > 0.3 ? AlertTriangle : HelpCircle} label="联网搜索率" value={`${(stats.webSearchRate * 100).toFixed(0)}%`}
-                  sub={stats.errorCount > 0 ? `${stats.errorCount} 次错误` : '正常'} delay={0.15} color={stats.webSearchRate > 0.3 ? 'amber' : 'violet'} />
+                  sub={stats.errorCount > 0 ? `${stats.errorCount} 次错误` : `${stats.webSearchCount}/${stats.answeredTotal || 0}`} delay={0.15} color={stats.webSearchRate > 0.3 ? 'amber' : 'violet'} />
               </div>
 
               {/* Hourly distribution — editorial bar chart */}
@@ -144,15 +171,18 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
                   <h3 className="font-heading text-sm text-foreground tracking-tight">小时分布</h3>
                   <span className="text-[10px] text-muted-foreground/50 font-mono">avg {stats.avgElapsed}ms</span>
                 </div>
-                <div className="flex items-end gap-1 h-32">
+                <div className="flex items-end gap-1 h-40 pt-5">
                   {hourlyData.map((h) => (
                     <TooltipProvider key={h.hour}>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <div className="flex-1 flex flex-col items-center gap-1">
+                            <span className="text-[8px] text-muted-foreground/50 font-mono h-3">
+                              {h.count > 0 ? h.count : ''}
+                            </span>
                             <div
                               className="w-full rounded-t-sm bg-primary/60 hover:bg-primary/80 transition-colors cursor-pointer"
-                              style={{ height: `${(h.count / maxHourlyCount) * 100}%`, minHeight: h.count > 0 ? '4px' : '0' }}
+                              style={{ height: h.count > 0 ? `${Math.max((h.count / maxHourlyCount) * 104, 10)}px` : '0px' }}
                             />
                           </div>
                         </TooltipTrigger>
@@ -180,13 +210,13 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
                   <div className="space-y-3">
                     {[
                       { label: '通过', key: 'quality_ok' as const, color: 'emerald' as const },
-                      { label: '联网补充', key: 'web_search' as const, color: 'amber' as const },
-                      { label: '错误', key: 'error' as const, color: 'red' as const },
+                      { label: '未通过', key: 'failed' as const, color: 'red' as const },
+                      { label: '错误', key: 'error' as const, color: 'violet' as const },
                     ].map((item) => {
                       let count = 0
-                      if (item.key === 'quality_ok') count = logs.filter((l) => l.quality_ok).length
-                      else if (item.key === 'web_search') count = logs.filter((l) => l.used_web_search).length
-                      else count = logs.filter((l) => l.error).length
+                      if (item.key === 'quality_ok') count = stats.qualityPassed
+                      else if (item.key === 'failed') count = stats.qualityFailed
+                      else count = stats.errorCount
                       const pct = (count / stats.total) * 100
                       return (
                         <div key={item.label}>
@@ -198,6 +228,15 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
                         </div>
                       )
                     })}
+                    <Separator className="my-4" />
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-muted-foreground">联网补充</span>
+                        <span className="font-mono text-foreground/70">{stats.webSearchCount} / {(stats.webSearchRate * 100).toFixed(0)}%</span>
+                      </div>
+                      <Progress value={stats.webSearchRate * 100} color="amber" />
+                      <p className="text-[10px] text-muted-foreground/50 mt-1">单独统计联网补充，不再和质量等级混算。</p>
+                    </div>
                   </div>
                 </motion.div>
 
@@ -230,7 +269,18 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
                 transition={{ delay: 0.35, duration: 0.4 }}
                 className="rounded-lg border border-border bg-surface/30 p-5"
               >
-                <h3 className="font-heading text-sm text-foreground tracking-tight mb-4">查询日志</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-heading text-sm text-foreground tracking-tight">
+                    查询日志
+                    <span className="text-[10px] text-muted-foreground/50 font-mono ml-2 font-normal">共 {logs.length} 条</span>
+                  </h3>
+                  {logs.length > 15 && (
+                    <button onClick={() => setShowAllLogs(!showAllLogs)}
+                      className="flex items-center gap-1 text-[10px] text-primary/60 hover:text-primary transition-colors">
+                      {showAllLogs ? <><ChevronUp className="h-3 w-3" />收起</> : <><ChevronDown className="h-3 w-3" />全部加载</>}
+                    </button>
+                  )}
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
@@ -243,7 +293,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, 
                       </tr>
                     </thead>
                     <tbody>
-                      {logs.slice(0, 15).map((log, i) => (
+                      {(showAllLogs ? logs : logs.slice(0, 15)).map((log, i) => (
                         <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                           <td className="py-2 pr-4 text-muted-foreground font-mono whitespace-nowrap">
                             {new Date(log.timestamp).toLocaleString('zh-CN', {
@@ -316,6 +366,3 @@ function StatCard({ icon: Icon, label, value, sub, delay = 0, color = 'primary' 
     </motion.div>
   )
 }
-
-// Need to import Globe for the table
-import { Globe } from 'lucide-react'

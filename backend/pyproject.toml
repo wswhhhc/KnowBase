@@ -26,6 +26,7 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "sse-starlette>=2.1.0",
     "python-multipart>=0.0.12",
+    "pandas>=3.0.3",
 ]
 
 [tool.uv]

@@ -1,3 +1,4 @@
+import { Toaster } from 'sonner'
 import { useState } from 'react'
 import { useChat } from '@/hooks/useChat'
 import { useTheme } from '@/hooks/useTheme'
@@ -13,6 +14,7 @@ function App() {
   const [activeView, setActiveView] = useState<ViewType>('chat')
   const [convRefreshKey, setConvRefreshKey] = useState(0)
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const chat = useChat((threadId) => {
     setActiveThreadId(threadId)
     setConvRefreshKey((k) => k + 1)
@@ -33,6 +35,7 @@ function App() {
           onClose={() => setSidebarOpen(false)}
           convRefreshKey={convRefreshKey}
           activeThreadId={activeThreadId}
+          onLoadingMessages={setIsLoadingMessages}
         />
       </div>
 
@@ -44,6 +47,7 @@ function App() {
             sidebarOpen={sidebarOpen}
             onNavigate={setActiveView}
             theme={theme}
+            isLoadingMessages={isLoadingMessages}
           />
         )}
         {activeView === 'browser' && (
@@ -63,6 +67,13 @@ function App() {
           />
         )}
       </main>
+
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: { background: 'hsl(var(--surface))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))' },
+        }}
+      />
     </div>
   )
 }
