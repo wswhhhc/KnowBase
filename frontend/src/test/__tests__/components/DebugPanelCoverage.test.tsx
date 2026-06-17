@@ -39,7 +39,7 @@ describe('DebugPanel coverage', () => {
     }
     render(<DebugPanel debugData={data} />)
     await userEvent.click(screen.getByText('链路详情'))
-    expect(screen.getByText(/3/)).toBeInTheDocument()
+    expect(screen.getByText(/联网 3 条/)).toBeInTheDocument()
   })
 
   it('renders rerank info when used_rerank is true', async () => {
@@ -51,8 +51,8 @@ describe('DebugPanel coverage', () => {
     }
     render(<DebugPanel debugData={data} />)
     await userEvent.click(screen.getByText('链路详情'))
-    // Should show rerank info (the "结构化重排" node)
-    expect(screen.getByText(/结构化重排/)).toBeInTheDocument()
+    // Should show rerank info (the "rerank 30→5" text)
+    expect(screen.getByText(/rerank 30.+5/)).toBeInTheDocument()
   })
 
   it('renders retry count badge', async () => {
@@ -62,7 +62,7 @@ describe('DebugPanel coverage', () => {
     }
     render(<DebugPanel debugData={data} />)
     await userEvent.click(screen.getByText('链路详情'))
-    expect(screen.getByText(/2/)).toBeInTheDocument()
+    expect(screen.getByText(/重试 2 次/)).toBeInTheDocument()
   })
 
   it('toggles collapse/expand', async () => {
@@ -73,7 +73,7 @@ describe('DebugPanel coverage', () => {
     await userEvent.click(screen.getByText('链路详情'))
     expect(screen.getByText('问题路由')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByText('链路详情'))
+    await userEvent.click(screen.getByText('收起链路详情'))
     expect(screen.queryByText('问题路由')).not.toBeInTheDocument()
   })
 

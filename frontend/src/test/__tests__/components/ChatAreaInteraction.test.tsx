@@ -162,24 +162,25 @@ describe('ChatArea interactions', () => {
 
   it('theme toggle button calls toggle', async () => {
     renderChatArea()
-    // Theme toggle is usually a Sun/Moon button
-    const themeBtn = screen.getByText('Moon') // dark mode shows Moon
+    // dark mode theme renders Sun icon (click to switch to light)
+    const themeBtn = screen.getByText('Sun')
     await userEvent.click(themeBtn)
     expect(mockToggleTheme).toHaveBeenCalled()
   })
 
   it('nav pills call onNavigate', async () => {
     renderChatArea()
-    // Chat view pill (knowledge base)
-    const kbPill = screen.getByText('知识库')
-    await userEvent.click(kbPill)
+    // Browse nav pill
+    const browseBtn = screen.getByText('浏览')
+    await userEvent.click(browseBtn)
     expect(mockOnNavigate).toHaveBeenCalledWith('browser')
   })
 
   it('renders debug panel toggle', () => {
     renderChatArea({
-      messages: [{ id: 1, role: 'assistant', content: 'test', sources: [], debug_info: { nodes: [] } }],
+      messages: [{ id: 1, role: 'assistant', content: 'test', sources: [], debugData: { nodes: [] } }],
     })
-    expect(screen.getByText('Bug')).toBeInTheDocument()
+    // Debug panel renders as a button with Bug icon + "链路详情" text
+    expect(screen.getByText('链路详情')).toBeInTheDocument()
   })
 })
