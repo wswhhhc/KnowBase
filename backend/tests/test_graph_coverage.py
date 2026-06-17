@@ -114,7 +114,7 @@ class ShouldRerankTests(unittest.TestCase):
 
     def test_balanced_triggers_rerank(self):
         """All conditions met: balanced, many docs, small gap, long query."""
-        docs = [_doc(0.9), _doc(0.89), _doc(0.88), _doc(0.87), _doc(0.86)]
+        docs = [_doc(0.9), _doc(0.899), _doc(0.898), _doc(0.897), _doc(0.896)]
         self.assertTrue(_should_rerank(_state(
             search_strategy="balanced",
             documents=docs,
@@ -453,14 +453,16 @@ class GenerateAnswerTests(unittest.TestCase):
     """generate_answer: deep+web, web_error_no_context, history, web sources."""
 
     def test_deep_strategy_sets_comprehensive_prompt(self):
-        result = generate_answer(_state(
-            search_strategy="deep",
-            context="some docs",
-            used_web_search=False,
-            web_context="",
-            question="test?",
-            messages=[],
-        ))
+        fake_llm = FakeLLM(["这是一个综合答案。"])
+        with patch("src.graph._get_llm", return_value=fake_llm):
+            result = generate_answer(_state(
+                search_strategy="deep",
+                context="some docs",
+                used_web_search=False,
+                web_context="",
+                question="test?",
+                messages=[],
+            ))
         self.assertIn("答案", result.get("answer", result.get("sources", str(result))))
 
     def test_web_search_error_no_context_returns_error(self):

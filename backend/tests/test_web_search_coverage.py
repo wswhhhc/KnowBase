@@ -16,7 +16,7 @@ class WebSearchCoverageTests(unittest.TestCase):
         self.assertIn("未配置", error)
 
     @patch("src.web_search._is_configured_api_key", return_value=True)
-    @patch("src.web_search.TavilyClient")
+    @patch("tavily.TavilyClient")
     def test_successful_search_returns_results(self, mock_client_class, _mock_key):
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client
@@ -41,7 +41,7 @@ class WebSearchCoverageTests(unittest.TestCase):
         )
 
     @patch("src.web_search._is_configured_api_key", return_value=True)
-    @patch("src.web_search.TavilyClient")
+    @patch("tavily.TavilyClient")
     def test_missing_fields_use_defaults(self, mock_client_class, _mock_key):
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client
@@ -60,7 +60,7 @@ class WebSearchCoverageTests(unittest.TestCase):
         self.assertEqual(results[0]["score"], 0.0)
 
     @patch("src.web_search._is_configured_api_key", return_value=True)
-    @patch("src.web_search.TavilyClient")
+    @patch("tavily.TavilyClient")
     def test_api_exception_returns_error(self, mock_client_class, _mock_key):
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client

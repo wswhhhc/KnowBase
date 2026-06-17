@@ -100,6 +100,10 @@ def _init_checkpointer():
     Creates the checkpoint DB on first access. The connection lives for
     the process lifetime; LangGraph handles concurrent writes internally.
     """
+    import os
+    db_dir = os.path.dirname(CHECKPOINT_DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(CHECKPOINT_DB_PATH, check_same_thread=False)
     return SqliteSaver(conn)
 
@@ -284,8 +288,8 @@ def route_after_classifier(state: GraphState) -> Literal["rewrite_query", "answe
 
 # 指代词正则 — 命中这些问题才需要 LLM 改写，否则直接用原文
 _REFERENTIAL_PATTERNS = (
-    r"\b这[些个]\b", r"\b那[些个]\b", r"\b它[们]?\b", r"\b他[们]?\b", r"\b她[们]?\b",
-    r"\b其\b", r"\b该\b", r"\b此\b",
+    r"这[些个]", r"那[些个]", r"它[们]?", r"他[们]?", r"她[们]?",
+    r"其", r"该", r"此",
     r"刚才", r"刚刚", r"之前", r"前面", r"上一[轮次句]", r"刚[才那]", r"上[一]?[次面轮]",
     r"你知道.*(上次|之前)", r"我.*(刚才|上次|之前)",
 )
@@ -699,7 +703,7 @@ def _rule_check_quality(state: GraphState) -> dict | None:
 
     # No sources referenced in answer but we have docs → likely missing citation
     if sources and not any(
-        s.get("source") in answer or s.get("chunk_id") in answer
+        s.get("source") in answer or (s.get("chunk_id") or "") in answer
         for s in sources[:3]
     ):
         # Not a hard fail — let LLM decide

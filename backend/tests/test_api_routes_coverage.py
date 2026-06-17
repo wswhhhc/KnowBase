@@ -116,9 +116,7 @@ class APIRoutesCoverageTests(unittest.TestCase):
 
     def test_chunks_limit_zero(self):
         response = self.client.get("/api/knowledge-base/chunks?limit=0")
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data["items"], [])
+        self.assertEqual(response.status_code, 422)
 
     def test_chunks_skip_out_of_range(self):
         response = self.client.get("/api/knowledge-base/chunks?skip=9999")

@@ -123,12 +123,14 @@ class SaveUploadedFileTests(unittest.TestCase):
     @patch("src.utils.tempfile.gettempdir")
     def test_normal_save_streamlit_uploaded_file(self, mock_gettempdir, mock_open, mock_mkdir):
         """Normal save with Streamlit UploadedFile (has getbuffer)."""
-        mock_gettempdir.return_value = r"C:\tmp"
+        from pathlib import Path
+
+        mock_gettempdir.return_value = "/tmp"
 
         mock_file = self._make_streamlit_file()
         result = save_uploaded_file(mock_file)
 
-        expected_path = r"C:\tmp\knowbase_uploads\test.txt"
+        expected_path = str(Path("/tmp") / "knowbase_uploads" / "test.txt")
         self.assertEqual(result, expected_path)
 
         handle = mock_open.return_value.__enter__.return_value
@@ -139,12 +141,14 @@ class SaveUploadedFileTests(unittest.TestCase):
     @patch("src.utils.tempfile.gettempdir")
     def test_normal_save_fastapi_upload_file(self, mock_gettempdir, mock_open, mock_mkdir):
         """Normal save with FastAPI UploadFile (has .file.read())."""
-        mock_gettempdir.return_value = r"C:\tmp"
+        from pathlib import Path
+
+        mock_gettempdir.return_value = "/tmp"
 
         mock_file = self._make_fastapi_file()
         result = save_uploaded_file(mock_file)
 
-        expected_path = r"C:\tmp\knowbase_uploads\doc.md"
+        expected_path = str(Path("/tmp") / "knowbase_uploads" / "doc.md")
         self.assertEqual(result, expected_path)
 
         handle = mock_open.return_value.__enter__.return_value

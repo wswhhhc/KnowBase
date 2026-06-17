@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChatRequest(BaseModel):
@@ -59,7 +59,14 @@ class IngestResponse(BaseModel):
 
 
 class URLIngestRequest(BaseModel):
-    url: str = Field(..., description="Public URL to fetch and ingest")
+    url: str = Field(..., min_length=1, description="Public URL to fetch and ingest")
+
+    @field_validator("url")
+    @classmethod
+    def _validate_url(cls, value: str) -> str:
+        if not (value.startswith("http://") or value.startswith("https://")):
+            raise ValueError("url must be a valid HTTP/HTTPS URL")
+        return value
 
 
 class KBStats(BaseModel):

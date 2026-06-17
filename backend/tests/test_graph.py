@@ -143,6 +143,8 @@ class GraphRoutingTests(unittest.TestCase):
         self.assertIn("第一轮问什么", result["answer"])
 
     def test_run_query_retries_with_expanded_retrieval_when_quality_fails(self):
+        from src.graph import _GRAPH_CACHE
+        _GRAPH_CACHE.clear()
         kb = OneDocKnowledgeBase()
         # route_question uses detect_question_type (rule-based, no LLM), so:
         # 1: first generate_answer
@@ -161,6 +163,7 @@ class GraphRoutingTests(unittest.TestCase):
                 question="LangGraph 如何记忆对话？",
                 thread_id=str(uuid4()),
                 knowledge_base=kb,
+                search_strategy="high_quality",
             )
 
         self.assertEqual(kb.calls, 2)
