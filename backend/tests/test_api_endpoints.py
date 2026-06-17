@@ -14,6 +14,7 @@ from langchain_core.documents import Document
 from src.api.deps import get_knowledge_base
 from src.api.main import app
 from src.api.models import ConversationCreate, IngestResponse, URLIngestRequest
+from src.conversations import init_db as init_conversations_db
 
 
 class FakeKnowledgeBase:
@@ -97,6 +98,7 @@ class APIEndpointTests(unittest.TestCase):
         cls.fake_kb = FakeKnowledgeBase()
         app.dependency_overrides[get_knowledge_base] = lambda: cls.fake_kb
 
+        init_conversations_db()
         cls.client = TestClient(app)
 
     @classmethod

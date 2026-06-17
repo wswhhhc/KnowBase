@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
+from src.conversations import init_db as init_conversations_db
 
 
 class FakeKnowledgeBase:
@@ -67,6 +68,7 @@ class APIRoutesCoverageTests(unittest.TestCase):
     def setUpClass(cls):
         cls.fake_kb = FakeKnowledgeBase()
         app.dependency_overrides[get_knowledge_base] = lambda: cls.fake_kb
+        init_conversations_db()
         cls.client = TestClient(app)
 
     @classmethod

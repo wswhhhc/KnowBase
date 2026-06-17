@@ -15,6 +15,7 @@ from langchain_core.documents import Document
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
+from src.conversations import init_db as init_conversations_db
 from src import conversations
 
 
@@ -117,6 +118,8 @@ class APIEdgeCaseTests(unittest.TestCase):
         cls.patcher_chroma.start()
         cls.patcher_embeddings.start()
         cls.patcher_api_key.start()
+
+        init_conversations_db()
 
     @classmethod
     def tearDownClass(cls):
