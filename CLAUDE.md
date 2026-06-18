@@ -46,7 +46,7 @@ KnowBase/
 │   ├── src/
 │   │   ├── api/                # FastAPI 路由层
 │   │   │   ├── main.py         # 应用入口 + CORS
-│   │   │   ├── deps.py         # KnowledgeBase 依赖注入
+│   │   │   ├── deps.py         # 依赖注入（含 API Key 鉴权）
 │   │   │   ├── models.py       # Pydantic 请求/响应模型
 │   │   │   └── routes/
 │   │   │       ├── chat.py           # SSE 流式聊天
@@ -55,11 +55,14 @@ KnowBase/
 │   │   │       ├── knowledge_base.py # 知识库浏览
 │   │   │       └── metrics.py        # 查询日志
 │   │   ├── graph.py            # LangGraph 工作流
+│   │   ├── graph_state.py      # 工作流状态/Pydantic 模型
 │   │   ├── knowledge_base.py   # Chroma + BM25 核心
+│   │   ├── kb_models.py        # 检索结果/FusionScore/helper
 │   │   ├── conversations.py    # 对话管理模块
 │   │   ├── loaders.py          # 文档加载器
 │   │   ├── web_search.py       # Tavily 搜索
 │   │   ├── metrics.py          # JSONL 日志
+│   │   ├── chat_utils.py       # 聊天路由辅助函数
 │   │   └── utils.py            # 工具函数
 │   └── tests/
 ├── frontend/                   # React + Vite + Tailwind 前端
@@ -88,21 +91,23 @@ KnowBase/
 
 | 模块 | 职责 |
 |------|------|
-| **`backend/src/api/`** | FastAPI REST API，SSE 流式聊天，CORS 代理到前端 |
-| **`backend/src/graph.py`** | LangGraph 工作流定义。节点：问题路由 → 查询改写 → 混合检索 → 重排序 → 生成回答 → 质量检查 →（联网搜索兜底/扩检重试）。`SqliteSaver` 保存线程状态。 |
+| **`backend/src/api/`** | FastAPI REST API，SSE 流式聊天，CORS 代理到前端。`deps.py` 提供 `verify_api_key` 鉴权依赖。 |
+| **`backend/src/graph.py`** | LangGraph 工作流。节点：问题路由 → 查询改写 → 混合检索 → 重排序 → 生成回答 → 质量检查 →（联网搜索兜底/扩检重试）。`SqliteSaver` 保存线程状态。 |
+| **`backend/src/graph_state.py`** | `GraphState` TypedDict + `RouteDecision`/`QualityDecision` 等 Pydantic 模型。 |
 | **`backend/src/knowledge_base.py`** | 知识库核心。Chroma 向量库存储/检索，jieba BM25 索引，RRF 融合排序。`chunk_id` 基于 `source:chunk_index:content_hash[:16]` 稳定生成，基于 hash 去重。 |
-| **`backend/src/loaders.py`** | 多格式文档加载器。支持 `.txt` / `.md` / `.pdf` / `.docx` / `.html(.htm)`。新增 `load_url()` 支持从 URL 抓取网页内容。 |
+| **`backend/src/kb_models.py`** | `RetrievalResult`/`FusionScore` 数据类 + `content_hash`/`chunk_id`/`document_chunk_id` helper。 |
 | **`backend/src/conversations.py`** | 对话管理。SQLite 存储对话元数据和消息记录，支持 CRUD 和 Markdown 导出。 |
 | **`backend/src/web_search.py`** | 联网搜索模块。基于 Tavily API（可选）。 |
-| **`backend/src/utils.py`** | 文件上传校验（扩展名白名单和大小限制）和临时保存。 |
+| **`backend/src/utils.py`** | 文件上传校验（扩展名白名单+流式大小限制+唯一文件名）和临时保存。 |
 | **`backend/src/metrics.py`** | RAG 查询本地 JSONL 日志，记录每次查询的耗时、检索数量、质量决策。 |
-| **`config/settings.py`** | pydantic-settings 驱动，从 `.env` 读取配置。`CHROMA_API_KEY` 会回退作为 `SILICONFLOW_API_KEY`。 |
+| **`backend/src/chat_utils.py`** | 聊天路由辅助：`NODE_LABELS` 中英映射、`record_query_metrics` 指标记录、`generate_title` LLM 标题生成。 |
+| **`backend/config/settings.py`** | pydantic-settings 驱动，从 `.env` 读取配置。`CHROMA_API_KEY` 会回退作为 `SILICONFLOW_API_KEY`。 |
 
 ### 前端架构
 
 - **App.tsx** — 视图控制器，管理 `activeView`（chat / browser / dashboard），传递 `sidebarOpen` 和 `theme`
-- **ChatArea.tsx** — SSE 流式对话，含 Citations 引用编号渲染、证据标签、反馈、复制回答、导出 Markdown、搜索策略切换、联网搜索开关
-- **Sidebar.tsx** — 三视图导航 + 知识库统计概览 + 对话列表（重命名/删除）+ 文档管理（上传/URL导入/来源管理）
+- **ChatArea.tsx** — SSE 流式对话，含 Citations 引用编号渲染、证据标签、反馈（调用 API 落库）、复制回答、导出 Markdown、搜索策略切换、联网搜索开关
+- **Sidebar.tsx** — 三视图导航 + 知识库统计概览 + 对话列表（重命名/删除）+ 文档管理（上传/URL导入/来源管理）。`switchConversation` 映射后端消息 `convId` 和 `assistantMsgId`，保证导出和反馈正确指向对话 ID。| **`backend/src/loaders.py`** | 多格式文档加载器。支持 `.txt` / `.md` / `.pdf` / `.docx` / `.html(.htm)`。新增 `load_url()` 支持从 URL 抓取网页内容。 |
 - **BrowserPage.tsx** — 杂志风格知识库浏览，响应式网格布局、来源过滤按钮组、关键词搜索、全文 Dialog
 - **DashboardPage.tsx** — 数据看板，小时分布柱状图、质量分布进度条、最近查询列表、查询日志表格、1/7/30 天切换
 - **useTheme.ts** — localStorage 持久化 + `prefers-color-scheme` 初始检测
@@ -111,13 +116,13 @@ KnowBase/
 
 | 端点 | 功能 |
 |------|------|
-| `POST /api/chat/stream` | SSE 流式聊天（事件：node / token / sources / done） |
-| `GET/POST/DELETE /api/conversations` | 对话 CRUD |
+| `POST /api/chat/stream` | SSE 流式聊天（事件：node / token / sources / debug / done）。`done` 事件含 `conv_id` 和 `assistant_msg_id`。 |
+| `GET/POST/DELETE /api/conversations` | 对话 CRUD（所有写操作 + 读操作均需鉴权） |
 | `PATCH /api/conversations/:id` | 重命名对话 |
 | `GET /api/conversations/:id/messages` | 消息列表 |
-| `POST /api/conversations/:id/messages/:msg_id/feedback` | 消息反馈 |
+| `POST /api/conversations/:id/messages/:msg_id/feedback` | 消息反馈（持久化） |
 | `GET /api/conversations/:id/export` | 导出 Markdown |
-| `POST /api/documents/upload` | 文件上传 |
+| `POST /api/documents/upload` | 文件上传（流式读取，唯一文件名，返回原始 source_name） |
 | `POST /api/documents/ingest-url` | URL 导入 |
 | `DELETE /api/documents/source/:name` | 删除来源 |
 | `POST /api/documents/clear` | 清空知识库 |
@@ -125,6 +130,7 @@ KnowBase/
 | `GET /api/knowledge-base/chunks` | 知识库浏览 |
 | `GET /api/knowledge-base/sources` | 来源列表 |
 | `GET /api/metrics/logs` | 查询日志 |
+| `DELETE /api/metrics/logs/today` | 删除今日日志 |
 
 ### LangGraph 工作流数据流
 
@@ -144,8 +150,14 @@ KnowBase/
 
 ### 最近功能更新
 
-（基于最近的 git 提交记录）
-
+- **API Key 鉴权** — 写操作端点 + 读操作端点均受 Bearer Token 保护，前端 `api.ts` 自动带 Authorization 头。`API_KEY` 空值时跳过鉴权（本地开发）。
+- **配置去重** — 统一使用 `backend/config/settings.py`，删除根目录冗余配置。
+- **流式上传** — 8KB chunk 流式读取 + UUID 唯一临时文件名 + 真实大小校验，`source_name` 保持原始文件名保证去重。
+- **模块拆分** — `graph_state.py`（状态+Pydantic 模型）、`kb_models.py`（检索结果+helper）、`chat_utils.py`（节点标签+指标+标题生成）。
+- **消息反馈落库** — ThumbsUp/ThumbsDown 调用后端 feedback 接口持久化，`conv_id` 归属校验。
+- **导出对话修复** — SSE `done` 透传 `conv_id` 和 `assistant_msg_id`，前端用 `conv_id` 而非 `thread_id` 调导出。
+- **历史对话回放** — `Sidebar.switchConversation` 填充 `convId` 和 `assistantMsgId`，保证旧对话导出/反馈正确。
+- **SQLite lastrowid 修复** — `add_message` 用 `cursor.lastrowid` 替代 `conn.lastrowid`（Python 3.13+ 兼容性）。
 - **引用编号系统** — LLM 回答使用 `[1]`、`[2]` 编号标注来源，前端渲染为可交互的引用标签，hover 显示来源详情
 - **Toast 通知系统** — 上传/导入/删除/清空等操作使用 sonner toast 替代 alert，体验更流畅
 - **复制回答** — 每条助手消息新增复制按钮，一键复制到剪贴板
@@ -183,7 +195,7 @@ KnowBase/
 
 ### 测试策略
 
-#### 后端（Python unittest，174 个测试用例）
+#### 后端（Python unittest，348 个测试用例）
 
 | 测试文件 | 类型 | 用例数 |
 |---------|------|-------|
@@ -192,30 +204,46 @@ KnowBase/
 | `test_integration_graph_kb.py` | graph + KB 集成测试 | 15 |
 | `test_smoke.py` | 核心功能冒烟测试 | 10 |
 | `test_graph.py` | LangGraph 工作流测试 | 14 |
-| `test_knowledge_base.py` | KB 模块纯函数测试 | 21 |
+| `test_graph_coverage.py` | 图节点/条件分支覆盖 | 60+ |
+| `test_graph_edge_cases.py` | 图边界情况 | 6 |
+| `test_knowledge_base.py` | KB 模块+model 函数测试 | 30+ |
 | `test_conversations.py` | 对话管理测试 | 20 |
-| `test_utils.py` | 工具函数测试 | 16 |
+| `test_conversations_extended.py` | 对话扩展测试 | 10 |
+| `test_utils.py` | 工具函数测试（含流式上传） | 16 |
 | `test_loaders.py` | 文档加载器测试 | 13 |
 | `test_routing.py` | 路由/重试逻辑测试 | 6 |
 | `test_metrics.py` | 指标日志测试 | 7 |
 | `test_debug_models.py` | Pydantic 模型测试 | 6 |
 | `test_settings.py` | 配置测试 | 3 |
+| `test_api_routes_coverage.py` | 路由覆盖 | 5 |
+| `test_chat_route.py` | 聊天路由（指标委托+持久化失败 SSE 行为） | 2 |
+| `test_knowledge_base_search.py` | 知识库搜索测试 | 8 |
 
 - 框架：`unittest`（标准库）
 - LLM mock：`FakeLLM` / `FakeResponse` / `unittest.mock.patch`
 - Chroma mock：`unittest.mock.patch` 替换 Chroma 类
 - SQLite：`tempfile.TemporaryDirectory` 隔离测试数据库
 
-#### 前端（vitest + @testing-library/react，45 个测试用例）
+#### 前端（vitest + @testing-library/react，141 个测试用例）
 
 | 测试文件 | 类型 | 用例数 |
 |---------|------|-------|
 | `utils.test.ts` | 纯函数测试 | 22 |
 | `useChat.test.ts` | Hook 测试（SSE 流式） | 7 |
+| `useChatCoverage.test.ts` | Hook 覆盖测试 | 6 |
 | `useData.test.ts` | Hook 测试（数据管理） | 5 |
 | `useTheme.test.ts` | Hook 测试（主题切换） | 4 |
 | `ChatArea.test.tsx` | 组件渲染测试 | 3 |
+| `ChatAreaInteraction.test.tsx` | 组件交互测试 | 12 |
 | `DebugPanel.test.tsx` | 组件渲染测试 | 4 |
+| `DebugPanelCoverage.test.tsx` | 组件覆盖测试 | 6 |
+| `Sidebar.test.tsx` | 侧栏渲染测试 | 8 |
+| `SidebarInteraction.test.tsx` | 侧栏交互（含 convId 映射验证） | 12 |
+| `DashboardPage.test.tsx` | 指标面板测试 | 10 |
+| `DashboardPageInteraction.test.tsx` | 指标面板交互 | 8 |
+| `BrowserPage.test.tsx` | 浏览页测试 | 10 |
+| `BrowserPageInteraction.test.tsx` | 浏览页交互 | 8 |
+| `api.test.ts` | API 客户端测试 | 16 |
 
 - 框架：vitest 3.x + jsdom
 - 组件测试：@testing-library/react

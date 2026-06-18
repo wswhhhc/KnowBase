@@ -7,6 +7,7 @@
 - **双前端**：React 杂志编辑风 UI（默认） + Streamlit 经典界面（兼容）
 - 预设知识库问答和 `.txt` / `.md` / `.pdf` / `.docx` / `.html` 动态上传
 - URL 一键导入网页内容
+- **API Key 鉴权** — 写操作端点（上传/删除/清空/对话 CRUD/聊天）受 Bearer Token 保护，前端 `api.ts` 自动带 Authorization 头。空 `API_KEY` 时跳过鉴权，本地开发无感
 - SSE 流式输出回答，边生成边展示，支持引用编号 `[1]` 标记来源
 - **引用编号系统** — LLM 回答用 `[1]`、`[2]` 编号标注来源，前端渲染为交互式引用标签（hover 显示来源详情）
 - **RAG Debug 面板：** 每条消息可展开查看检索链路详情（召回文档、分数、精排、质量检查）
@@ -17,6 +18,7 @@
 - 邻居 chunk 上下文补全 + 标题追踪
 - **热点追踪：** 知识库浏览页按被检索次数高亮显示热门片段
 - **深度阅读模式：** 切换知识库浏览为内容优先的深度阅读视图
+- **消息反馈** — ThumbsUp/ThumbsDown 调用后端 feedback 接口持久化存储
 - 知识库内容浏览（杂志藏书阁风格网格，支持分页）
 - **对话标题 LLM 自动生成：** 根据问题语义自动生成标题
 - 指标面板（编辑式数据看板，耗时分布/质量通过率/查询日志）
@@ -37,6 +39,7 @@ EMBEDDING_MODEL=BAAI/bge-m3
 
 # 可选
 TAVILY_API_KEY=tvly-xxx            # 联网搜索兜底
+API_KEY=your-secret-key             # API 鉴权（空值=跳过，本地开发无感）
 ```
 
 ### 2. 启动开发环境（推荐）
@@ -68,7 +71,7 @@ KnowBase/
 │   ├── src/
 │   │   ├── api/                # REST API 路由层
 │   │   │   ├── main.py         # 应用入口 + CORS
-│   │   │   ├── deps.py         # 依赖注入
+│   │   │   ├── deps.py         # 依赖注入（含 API Key 鉴权）
 │   │   │   ├── models.py       # Pydantic 模型
 │   │   │   └── routes/
 │   │   │       ├── chat.py           # SSE 流式聊天
@@ -77,12 +80,15 @@ KnowBase/
 │   │   │       ├── knowledge_base.py # 知识库浏览
 │   │   │       └── metrics.py        # 查询日志
 │   │   ├── graph.py            # LangGraph 工作流
+│   │   ├── graph_state.py      # 工作流状态/Pydantic 模型
 │   │   ├── knowledge_base.py   # Chroma + BM25 核心
+│   │   ├── kb_models.py        # 检索结果/FusionScore/helper
 │   │   ├── conversations.py    # 对话管理模块
 │   │   ├── loaders.py          # 文档加载器
 │   │   ├── web_search.py       # Tavily 搜索
 │   │   ├── metrics.py          # JSONL 日志
-│   │   └── utils.py            # 工具函数
+│   │   ├── chat_utils.py       # 聊天路由辅助（标题生成/指标/NODE_LABELS）
+│   │   └── utils.py            # 工具函数（含流式上传）
 │   └── tests/
 ├── frontend/                   # React + Vite + Tailwind 前端
 │   └── src/
@@ -121,7 +127,7 @@ KnowBase/
 
 ## 测试
 
-### 后端测试（Python unittest，174 个用例）
+### 后端测试（Python unittest，348 个用例）
 
 ```bash
 cd backend
@@ -139,7 +145,7 @@ uv run python -m unittest tests.test_knowledge_base -v    # 知识库测试
 uv run python -m unittest tests.test_conversations -v     # 对话管理测试
 ```
 
-### 前端测试（vitest，45 个用例）
+### 前端测试（vitest，141 个用例）
 
 ```bash
 cd frontend
