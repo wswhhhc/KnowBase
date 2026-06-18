@@ -36,19 +36,25 @@ class ChatRouteMetricsTests(unittest.TestCase):
 class ChatRoutePersistenceFailureTests(unittest.TestCase):
     """If persistence throws, SSE done should still fire with assistant_msg_id=0."""
 
-    @patch("src.api.routes.chat.get_conversation_by_thread")
-    def test_persistence_failure_returns_done_with_zero_msg_id(self, mock_get):
-        """Simulate add_message throwing — done event has assistant_msg_id=0."""
-        mock_get.return_value = None
+    def test_assistant_msg_id_initialized_before_persistence(self):
+        """Verify assistant_msg_id is set to 0 before the try block in event_generator."""
+        import inspect
+        from src.api.routes.chat import chat_stream
+        source = inspect.getsource(chat_stream)
 
-        with patch("src.api.routes.chat.create_conversation") as mock_create:
-            mock_create.side_effect = RuntimeError("DB timeout")
+        # Verify assistant_msg_id = 0 appears before try: in the source
+        lines = source.splitlines()
+        assignment_line = None
+        try_block_line = None
+        for i, line in enumerate(lines):
+            if "assistant_msg_id = 0" in line:
+                assignment_line = i
+            if "try:" in line and i > assignment_line if assignment_line is not None else False:
+                try_block_line = i
+                break
 
-            from src.api.routes.chat import _record_query_metrics, NODE_LABELS
-            from src.graph import _initial_state
-            # This tests the expected behavior: the event_generator in chat_stream
-            # initializes assistant_msg_id = 0 before the try block, so
-            # after a persistence failure the done event won't crash with UnboundLocalError.
-            state = _initial_state("test")
-            self.assertEqual(state["retrieval_k"], 5)  # default from settings
+        self.assertIsNotNone(assignment_line, "assistant_msg_id = 0 must exist")
+        self.assertIsNotNone(try_block_line, "try block after assignment must exist")
+        self.assertLess(assignment_line, try_block_line,
+                        "assistant_msg_id = 0 must be initialized BEFORE the try block")
 
