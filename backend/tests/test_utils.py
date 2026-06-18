@@ -105,7 +105,7 @@ class SaveUploadedFileTests(unittest.TestCase):
         """Create a mock FastAPI UploadFile (has .file.read(), no getbuffer)."""
         m = MagicMock(spec=["file", "filename", "size"])
         m.file = MagicMock()
-        m.file.read.return_value = b"fastapi content"
+        m.file.read.side_effect = [b"fastapi content", b""]  # streaming read
         m.filename = "doc.md"
         m.size = 200
         return m
@@ -123,15 +123,14 @@ class SaveUploadedFileTests(unittest.TestCase):
     @patch("src.utils.tempfile.gettempdir")
     def test_normal_save_streamlit_uploaded_file(self, mock_gettempdir, mock_open, mock_mkdir):
         """Normal save with Streamlit UploadedFile (has getbuffer)."""
-        from pathlib import Path
-
         mock_gettempdir.return_value = "/tmp"
 
         mock_file = self._make_streamlit_file()
-        result = save_uploaded_file(mock_file)
+        file_path, source_name = save_uploaded_file(mock_file)
 
-        expected_path = str(Path("/tmp") / "knowbase_uploads" / "test.txt")
-        self.assertEqual(result, expected_path)
+        self.assertIn("knowbase_uploads", file_path)
+        self.assertTrue(file_path.endswith("test.txt"))
+        self.assertEqual(source_name, "test.txt")
 
         handle = mock_open.return_value.__enter__.return_value
         handle.write.assert_called_once_with(b"file content bytes")
@@ -141,18 +140,17 @@ class SaveUploadedFileTests(unittest.TestCase):
     @patch("src.utils.tempfile.gettempdir")
     def test_normal_save_fastapi_upload_file(self, mock_gettempdir, mock_open, mock_mkdir):
         """Normal save with FastAPI UploadFile (has .file.read())."""
-        from pathlib import Path
-
         mock_gettempdir.return_value = "/tmp"
 
         mock_file = self._make_fastapi_file()
-        result = save_uploaded_file(mock_file)
+        file_path, source_name = save_uploaded_file(mock_file)
 
-        expected_path = str(Path("/tmp") / "knowbase_uploads" / "doc.md")
-        self.assertEqual(result, expected_path)
+        self.assertIn("knowbase_uploads", file_path)
+        self.assertTrue(file_path.endswith("doc.md"))
+        self.assertEqual(source_name, "doc.md")
 
         handle = mock_open.return_value.__enter__.return_value
-        handle.write.assert_called_once_with(b"fastapi content")
+        handle.write.assert_called_with(b"fastapi content")
 
     def test_invalid_extension_raises_error(self):
         """Invalid file extension raises ValueError."""
@@ -162,12 +160,19 @@ class SaveUploadedFileTests(unittest.TestCase):
             save_uploaded_file(mock_file)
         self.assertIn("仅支持", str(ctx.exception))
 
-    def test_oversized_file_raises_error(self):
+    @patch("pathlib.Path.mkdir")
+    @patch("builtins.open", new_callable=MagicMock)
+    @patch("src.utils.tempfile.gettempdir")
+    def test_oversized_file_raises_error(self, mock_gettempdir, mock_open, mock_mkdir):
         """Oversized file raises ValueError."""
-        mock_file = MagicMock(spec=["filename", "size", "getbuffer"])
+        mock_gettempdir.return_value = "/tmp"
+
+        mock_file = MagicMock(spec=["file", "filename", "size"])
         mock_file.filename = "large.txt"
-        mock_file.size = 6 * 1024 * 1024  # 6MB > 5MB limit
-        mock_file.getbuffer.return_value = b""
+        mock_file.size = 6 * 1024 * 1024
+        mock_file.file = MagicMock()
+        # First chunk exceeds limit
+        mock_file.file.read.side_effect = [b"x" * (6 * 1024 * 1024), b""]
 
         with self.assertRaises(ValueError) as ctx:
             save_uploaded_file(mock_file)

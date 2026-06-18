@@ -39,9 +39,9 @@ def load_document(file_path: str, source_name: str | None = None) -> List[Docume
 
 
 def _load_text(file_path: str) -> List[Document]:
-    from langchain_community.document_loaders import TextLoader
-    loader = TextLoader(file_path, encoding="utf-8")
-    return loader.load()
+    with open(file_path, encoding="utf-8") as f:
+        text = f.read()
+    return [Document(page_content=text, metadata={"source": Path(file_path).name})]
 
 
 def _load_pdf(file_path: str) -> List[Document]:

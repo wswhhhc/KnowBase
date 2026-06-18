@@ -14,10 +14,13 @@ vi.mock('framer-motion', () => ({
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }))
-vi.mock('lucide-react', () => ({
-  Bug: 'Bug', ChevronDown: 'ChevronDown', ChevronRight: 'ChevronRight',
-  Search: 'Search', Globe: 'Globe', RotateCcw: 'RotateCcw', Zap: 'Zap',
-}))
+vi.mock('lucide-react', () => {
+  const icon = (name: string) => ({ children, ...props }: any) => <span data-testid={`lucide-${name}`} {...props}>{children}</span>
+  return {
+    Bug: icon('Bug'), ChevronDown: icon('ChevronDown'), ChevronRight: icon('ChevronRight'),
+    Search: icon('Search'), Globe: icon('Globe'), RotateCcw: icon('RotateCcw'), Zap: icon('Zap'),
+  }
+})
 
 describe('DebugPanel coverage', () => {
   it('renders rewrite info when used_rewrite is true', async () => {

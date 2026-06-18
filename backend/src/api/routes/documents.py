@@ -6,12 +6,12 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
-from src.api.deps import get_knowledge_base
+from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import IngestResponse, URLIngestRequest
 from src.knowledge_base import KnowledgeBase
 from src.utils import save_uploaded_file
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 @router.get("/sources")
@@ -22,8 +22,8 @@ async def list_sources(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), kb: KnowledgeBase = Depends(get_knowledge_base)) -> IngestResponse:
     try:
-        file_path = save_uploaded_file(file)
-        chunk_count = kb.ingest_file(str(file_path), source_name=Path(file_path).name)
+        file_path, source_name = save_uploaded_file(file)
+        chunk_count = kb.ingest_file(str(file_path), source_name=source_name)
         return IngestResponse(
             chunk_count=chunk_count, total_docs=kb.document_count,
             message=f"已添加 {chunk_count} 个新片段" if chunk_count else "文件已存在，无新增片段",

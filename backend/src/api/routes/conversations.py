@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from src.api.deps import verify_api_key
 from src.api.models import ConversationCreate, ConversationOut, ExportOut, MessageFeedback, MessageOut
 from src.conversations import (
     create_conversation, list_conversations, get_conversation, update_title,
     delete_conversation, delete_conversations, get_messages, update_feedback, export_conversation,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 @router.get("")

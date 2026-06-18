@@ -106,9 +106,14 @@ export interface DebugInfo {
 
 const BASE = '/api'
 
+function authHeaders(): Record<string, string> {
+  const key = localStorage.getItem('knowbase_api_key')
+  return key ? { 'Authorization': `Bearer ${key}` } : {}
+}
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...init?.headers },
     ...init,
   })
   if (!res.ok) {
@@ -162,7 +167,8 @@ export const getSources = () => req<DocSource[]>('/documents/sources')
 export const uploadDocument = async (file: File) => {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`${BASE}/documents/upload`, { method: 'POST', body: form })
+  const headers: Record<string, string> = authHeaders()
+  const res = await fetch(`${BASE}/documents/upload`, { method: 'POST', body: form, headers })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -225,7 +231,7 @@ export function chatStream(
 
   fetch(`${BASE}/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({
       question,
       thread_id: threadId,

@@ -6,12 +6,12 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
 
-from src.api.deps import get_knowledge_base
+from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import KBChunk, KBStats
 from src.knowledge_base import KnowledgeBase
 from config.settings import CHUNK_SIZE, CHUNK_OVERLAP
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 @router.get("/stats")

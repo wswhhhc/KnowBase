@@ -6,13 +6,14 @@ import json
 from collections import defaultdict, deque
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from config.settings import ROOT_DIR
+from src.api.deps import verify_api_key
 from src.api.models import QueryLogEntry
 from src.conversations import list_assistant_debug_pairs
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 _LOG_DIR = ROOT_DIR / "data" / "rag_logs"
 
 

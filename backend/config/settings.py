@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default=ROOT_DIR / "data", validation_alias="DATA_DIR")
 
     enable_contextual_retrieval: bool = Field(default=True, validation_alias="ENABLE_CONTEXTUAL_RETRIEVAL")
-    chunk_size: int = Field(default=800, validation_alias="CHUNK_SIZE")
+    chunk_size: int = Field(default=1500, validation_alias="CHUNK_SIZE")
     chunk_overlap: int = Field(default=50, validation_alias="CHUNK_OVERLAP")
     top_k_retrieval: int = Field(default=5, validation_alias="TOP_K_RETRIEVAL")
     top_k_rerank: int = Field(default=3, validation_alias="TOP_K_RERANK")
@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     langsmith_project: str = Field(default="knowbase", validation_alias="LANGSMITH_PROJECT")
 
     tavily_api_key: str = Field(default="", validation_alias="TAVILY_API_KEY")
+
+    api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("API_KEY", "KNOWBASE_API_KEY"),
+    )
 
     checkpoint_db_path: str = Field(
         default=str(ROOT_DIR / "data" / "checkpoints.db"),

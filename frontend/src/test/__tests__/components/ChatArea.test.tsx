@@ -28,28 +28,31 @@ vi.mock('@/hooks/useChat', () => ({
 }))
 
 // Mock lucide-react icons
-vi.mock('lucide-react', () => ({
-  PanelRightOpen: 'PanelRightOpen',
-  Square: 'Square',
-  Sparkles: 'Sparkles',
-  Search: 'Search',
-  Globe: 'Globe',
-  Zap: 'Zap',
-  RotateCcw: 'RotateCcw',
-  Download: 'Download',
-  ThumbsUp: 'ThumbsUp',
-  ThumbsDown: 'ThumbsDown',
-  BookOpen: 'BookOpen',
-  BarChart3: 'BarChart3',
-  FileDown: 'FileDown',
-  Sun: 'Sun',
-  Moon: 'Moon',
-  Copy: 'Copy',
-  CheckCircle: 'CheckCircle',
-  Bug: 'Bug',
-  ChevronDown: 'ChevronDown',
-  ChevronRight: 'ChevronRight',
-}))
+vi.mock('lucide-react', () => {
+  const icon = (name: string) => ({ children, ...props }: any) => <span data-testid={`icon-${name}`} {...props}>{children}</span>
+  return {
+    PanelRightOpen: icon('PanelRightOpen'),
+    Square: icon('Square'),
+    Sparkles: icon('Sparkles'),
+    Search: icon('Search'),
+    Globe: icon('Globe'),
+    Zap: icon('Zap'),
+    RotateCcw: icon('RotateCcw'),
+    Download: icon('Download'),
+    ThumbsUp: icon('ThumbsUp'),
+    ThumbsDown: icon('ThumbsDown'),
+    BookOpen: icon('BookOpen'),
+    BarChart3: icon('BarChart3'),
+    FileDown: icon('FileDown'),
+    Sun: icon('Sun'),
+    Moon: icon('Moon'),
+    Copy: icon('Copy'),
+    CheckCircle: icon('CheckCircle'),
+    Bug: icon('Bug'),
+    ChevronDown: icon('ChevronDown'),
+    ChevronRight: icon('ChevronRight'),
+  }
+})
 
 describe('ChatArea', () => {
   const defaultProps = {

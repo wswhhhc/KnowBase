@@ -6,8 +6,8 @@ from src.api.routes.chat import _record_query_metrics
 
 
 class ChatRouteMetricsTests(unittest.TestCase):
-    @patch("src.api.routes.chat.log_query")
-    def test_record_query_metrics_uses_debug_flags_instead_of_source_presence(self, mock_log_query):
+    @patch("src.api.routes.chat.record_query_metrics")
+    def test_record_query_metrics_uses_debug_flags_instead_of_source_presence(self, mock_record):
         debug_info = DebugInfo(
             retry_count=2,
             used_web_search=False,
@@ -26,8 +26,8 @@ class ChatRouteMetricsTests(unittest.TestCase):
             debug_info=debug_info,
         )
 
-        kwargs = mock_log_query.call_args.kwargs
-        self.assertEqual(kwargs["retry_count"], 2)
-        self.assertFalse(kwargs["used_web_search"])
-        self.assertTrue(kwargs["used_rerank"])
-        self.assertTrue(kwargs["used_rewrite"])
+        kwargs = mock_record.call_args.kwargs
+        self.assertEqual(kwargs["debug_info"].retry_count, 2)
+        self.assertFalse(kwargs["debug_info"].used_web_search)
+        self.assertTrue(kwargs["debug_info"].used_rerank)
+        self.assertTrue(kwargs["debug_info"].used_rewrite)

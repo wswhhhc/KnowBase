@@ -25,11 +25,11 @@ describe('useChat', () => {
       { event: 'done', data: JSON.stringify(donePayload) },
     ])
 
-    global.fetch = vi.fn().mockResolvedValue({
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       body: stream,
       headers: new Headers(),
-    })
+    }))
 
     const { result } = renderHook(() => useChat())
 
@@ -54,11 +54,11 @@ describe('useChat', () => {
       { event: 'done', data: JSON.stringify(donePayload) },
     ])
 
-    global.fetch = vi.fn().mockResolvedValue({
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       body: stream,
       headers: new Headers(),
-    })
+    }))
 
     const { result } = renderHook(() => useChat())
 
@@ -81,11 +81,11 @@ describe('useChat', () => {
       { event: 'error', data: JSON.stringify({ message: '服务器错误' }) },
     ])
 
-    global.fetch = vi.fn().mockResolvedValue({
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       body: stream,
       headers: new Headers(),
-    })
+    }))
 
     const { result } = renderHook(() => useChat())
 
@@ -109,11 +109,11 @@ describe('useChat', () => {
       },
     })
 
-    global.fetch = vi.fn().mockResolvedValue({
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       body: stream,
       headers: new Headers(),
-    })
+    }))
 
     const { result } = renderHook(() => useChat())
 
@@ -140,11 +140,11 @@ describe('useChat', () => {
       { event: 'done', data: JSON.stringify(donePayload) },
     ])
 
-    global.fetch = vi.fn().mockResolvedValue({
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       body: stream,
       headers: new Headers(),
-    })
+    }))
 
     const { result } = renderHook(() => useChat())
 
@@ -186,11 +186,11 @@ describe('useChat', () => {
       },
     })
 
-    global.fetch = vi.fn().mockResolvedValue({
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       body: stream,
       headers: new Headers(),
-    })
+    }))
 
     const { result } = renderHook(() => useChat())
 
@@ -208,6 +208,6 @@ describe('useChat', () => {
     })
 
     // fetch should only have been called once
-    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
   })
 })

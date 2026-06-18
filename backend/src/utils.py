@@ -1,8 +1,10 @@
 """工具函数"""
 
 import json
+import os
 import re
 import tempfile
+import uuid
 from pathlib import Path
 
 import jieba
@@ -11,6 +13,8 @@ from config.settings import MAX_UPLOAD_MB
 
 
 ALLOWED_UPLOAD_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".html", ".htm"}
+
+_MAX_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
 
 def sanitize_upload_filename(filename: str) -> str:
@@ -23,38 +27,60 @@ def sanitize_upload_filename(filename: str) -> str:
 
 
 def validate_upload(uploaded_file, max_upload_mb: int = MAX_UPLOAD_MB) -> str:
-    """Validate size and extension, returning the sanitized filename.
+    """Validate extension, returning the sanitized filename.
 
     Handles both Streamlit's UploadedFile (.name) and FastAPI's UploadFile (.filename).
+    Size validation is done during streaming read, not here.
     """
     name = getattr(uploaded_file, "filename", None) or getattr(uploaded_file, "name", "")
     safe_name = sanitize_upload_filename(name)
     ext = Path(safe_name).suffix.lower()
     if ext not in ALLOWED_UPLOAD_EXTENSIONS:
         raise ValueError("仅支持 .txt、.md、.pdf、.docx、.html 文件。")
-
-    size = getattr(uploaded_file, "size", None)
-    if size is not None and size > max_upload_mb * 1024 * 1024:
-        raise ValueError(f"文件不能超过 {max_upload_mb} MB。")
-
     return safe_name
 
 
-def save_uploaded_file(uploaded_file) -> str:
-    """保存上传文件到临时目录，返回文件路径
+def save_uploaded_file(uploaded_file) -> tuple[str, str]:
+    """Save uploaded file to temp dir with a unique name, return (file_path, original_safe_name).
 
-    兼容 Streamlit UploadedFile (.getbuffer()) 和 FastAPI UploadFile (.read()).
+    Reads the file in chunks (8 KB) to enforce size limits without loading
+    the entire file into memory. Uses a UUID prefix on the temp path to prevent
+    filename collisions, but returns the original safe name for use as a stable source_name.
     """
+    safe_name = validate_upload(uploaded_file)
+    # Unique filename to prevent overwrites on temp storage
+    unique_name = f"{uuid.uuid4().hex[:12]}_{safe_name}"
     tmp_dir = Path(tempfile.gettempdir()) / "knowbase_uploads"
     tmp_dir.mkdir(exist_ok=True)
+    file_path = tmp_dir / unique_name
 
-    safe_name = validate_upload(uploaded_file)
-    file_path = tmp_dir / safe_name
-    data = uploaded_file.getbuffer() if hasattr(uploaded_file, "getbuffer") else uploaded_file.file.read()
-    with open(file_path, "wb") as f:
-        f.write(data)
+    # Stream read with size enforcement
+    try:
+        source = uploaded_file.file
+        read_size = 0
+        with open(file_path, "wb") as dst:
+            while True:
+                chunk = source.read(8192)
+                if not chunk:
+                    break
+                read_size += len(chunk)
+                if read_size > _MAX_BYTES:
+                    source.close()
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                    raise ValueError(f"文件不能超过 {MAX_UPLOAD_MB} MB。")
+                dst.write(chunk)
+    except AttributeError:
+        # Fallback for Streamlit-style UploadedFile
+        data = uploaded_file.getbuffer()
+        if len(data) > _MAX_BYTES:
+            raise ValueError(f"文件不能超过 {MAX_UPLOAD_MB} MB。")
+        with open(file_path, "wb") as f:
+            f.write(data)
 
-    return str(file_path)
+    return str(file_path), safe_name
 
 
 def json_from_text(text: str) -> dict:

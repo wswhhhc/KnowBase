@@ -11,15 +11,14 @@ from fastapi import APIRouter, Depends
 from langchain_core.messages import AIMessageChunk
 from sse_starlette.sse import EventSourceResponse
 
-from src.api.deps import get_knowledge_base
+from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import ChatRequest, DebugInfo, NodeDebug
 from src.graph import run_query
 from src.knowledge_base import KnowledgeBase
-from src.metrics import log_query
+from src.chat_utils import NODE_LABELS, record_query_metrics, generate_title
 from src.conversations import create_conversation, add_message, get_conversation_by_thread
-from langchain_core.prompts import ChatPromptTemplate
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 logger = logging.getLogger(__name__)
 
 
@@ -35,60 +34,16 @@ def _record_query_metrics(
     debug_info: DebugInfo,
 ) -> None:
     """Persist the final query metrics using actual debug flags."""
-    log_query(
+    record_query_metrics(
         question=question,
         thread_id=thread_id,
-        question_type="knowledge_base",
-        retrieval_count=len(final_sources),
-        retry_count=debug_info.retry_count,
-        quality_ok=final_quality_ok,
-        quality_reason=final_quality,
-        source_count=len(final_sources),
-        elapsed_ms=elapsed,
+        final_sources=final_sources,
+        final_quality_ok=final_quality_ok,
+        final_quality=final_quality,
+        elapsed=elapsed,
         answer=answer,
-        used_web_search=debug_info.used_web_search,
-        used_rerank=debug_info.used_rerank,
-        used_rewrite=debug_info.used_rewrite,
+        debug_info=debug_info,
     )
-
-
-def _generate_title(question: str) -> str:
-    """Use LLM to generate a short conversation title from the first question."""
-    try:
-        # Lazy import to avoid circular dependency on _get_llm
-        from langchain_openai import ChatOpenAI
-        from config.settings import require_siliconflow_api_key, SILICONFLOW_BASE_URL, LLM_MODEL
-
-        llm = ChatOpenAI(
-            model=LLM_MODEL,
-            temperature=0.3,
-            openai_api_key=require_siliconflow_api_key(),
-            openai_api_base=SILICONFLOW_BASE_URL,
-        )
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "根据用户的问题，生成一个简短（不超过15字）的对话标题。只返回标题本身，不要加引号和标点。"),
-            ("human", question),
-        ])
-        result = llm.invoke(prompt.format())
-        title = str(result.content).strip().strip('"').strip("'")[:30]
-        return title if title else question[:30]
-    except Exception:
-        return question[:30]
-
-
-NODE_LABELS = {
-    "route_question": "问题路由",
-    "rewrite_query": "查询改写",
-    "retrieve_docs": "混合检索",
-    "rerank_docs": "结构化重排",
-    "generate_answer": "生成回答",
-    "check_quality": "质量检查",
-    "web_search": "联网搜索",
-    "answer_from_history": "会话记忆",
-    "summarize_history": "会话总结",
-    "handle_missing_context": "证据不足兜底",
-    "handle_clarification": "模糊问题提示",
-}
 
 
 @router.post("/stream")
@@ -265,7 +220,7 @@ async def chat_stream(
                 if existing:
                     conv_id = existing["id"]
                 else:
-                    title = _generate_title(body.question)
+                    title = generate_title(body.question)
                     conv = create_conversation(title, thread_id=thread_id)
                     conv_id = conv["id"]
                 add_message(conv_id, "user", body.question)

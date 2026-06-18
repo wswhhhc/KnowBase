@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { renderHook, act } from '@testing-library/react'
 import { useChat } from '@/hooks/useChat'
 
 const createMockSSEStream = (events: { event: string; data: string }[]) => {
@@ -49,22 +49,22 @@ describe('useChat coverage', () => {
     vi.stubGlobal('fetch', mockFetch)
 
     const onNewConv = vi.fn()
-    const { result } = renderHook(() => useChat({ onNewConversation: onNewConv }))
+    const { result } = renderHook(() => useChat(onNewConv))
 
     // First send creates thread
     await act(async () => {
-      await result.current.sendMessage('first')
+      await result.current.sendMessage('first', false, 'balanced')
     })
 
     const threadAfterFirst = result.current.threadId
 
     // Second send with existing thread
     await act(async () => {
-      await result.current.sendMessage('second')
+      await result.current.sendMessage('second', false, 'balanced')
     })
 
-    // Should still be the same thread (or matches)
-    expect(onNewConv).not.toHaveBeenCalled()
+    // onNewConv fires on first send, but not on second (same thread)
+    expect(onNewConv).toHaveBeenCalledTimes(1)
     vi.unstubAllGlobals()
   })
 
@@ -86,7 +86,7 @@ describe('useChat coverage', () => {
 
     const { result } = renderHook(() => useChat())
     await act(async () => {
-      result.current.sendMessage('test')
+      result.current.sendMessage('test', false, 'balanced')
     })
 
     act(() => {
@@ -113,7 +113,7 @@ describe('useChat coverage', () => {
 
     const { result } = renderHook(() => useChat())
     await act(async () => {
-      await result.current.sendMessage('test')
+      await result.current.sendMessage('test', false, 'balanced')
     })
 
     // streamingNodes should be empty after done ("finalize" is the last node name from node events)
@@ -128,7 +128,7 @@ describe('useChat coverage', () => {
 
     act(() => {
       result.current.loadMessages([
-        { id: 1, thread_id: 'preserved-thread', messages: [{ id: 1, role: 'user', content: 'hi', sources: null as any, quality_reason: null as any, feedback: null as any, created_at: '' }] },
+        { id: 1, thread_id: 'preserved-thread', messages: [{ id: 1, role: 'user', content: 'hi', sources: [], quality_reason: '', feedback: null, created_at: '' }] },
       ] as any)
     })
 
@@ -143,7 +143,7 @@ describe('useChat coverage', () => {
     vi.stubGlobal('fetch', mockFetch)
 
     await act(async () => {
-      await result.current.sendMessage('follow up')
+      await result.current.sendMessage('follow up', false, 'balanced')
     })
 
     // Thread ID should be set

@@ -11,7 +11,7 @@ export const mockSources: DocSource[] = [
 ]
 
 export const mockMessages: Message[] = [
-  { id: 1, role: 'user', content: '你好', sources: null, quality_reason: null, feedback: null, created_at: '2026-06-16T08:05:00Z' },
+  { id: 1, role: 'user', content: '你好', sources: [], quality_reason: '', feedback: null, created_at: '2026-06-16T08:05:00Z' },
   { id: 2, role: 'assistant', content: '你好！有什么可以帮助你的？', sources: [], quality_reason: 'ok', feedback: null, created_at: '2026-06-16T08:05:10Z' },
 ]
 
@@ -27,7 +27,7 @@ export const mockKBChunks: KBChunk[] = [
 ]
 
 export const mockQueryLogs: QueryLogEntry[] = [
-  { timestamp: '2026-06-16T08:00:00Z', thread_id: 'thread-1', question: '你好', elapsed_ms: 1500, retrieval_count: 3, quality_ok: true, quality_reason: 'PASS', used_web_search: false, used_rerank: false, question_type: 'knowledge_base', retry_count: 0, source_count: 2, answer_preview: '你好！', error: null },
+  { timestamp: '2026-06-16T08:00:00Z', thread_id: 'thread-1', question: '你好', elapsed_ms: 1500, retrieval_count: 3, quality_ok: true, quality_reason: 'PASS', used_web_search: false, used_rerank: false, question_type: 'knowledge_base', retry_count: 0, source_count: 2, answer_preview: '你好！', error: '' },
 ]
 
 export const mockDebugInfo: DebugInfo = {
@@ -35,7 +35,7 @@ export const mockDebugInfo: DebugInfo = {
     { name: 'route_question', label: '问题路由', elapsed_ms: 200, summary: 'knowledge_base' },
     { name: 'retrieve_docs', label: '检索文档', elapsed_ms: 300, summary: '3 条结果' },
   ],
-  rewritten_question: null,
+  rewritten_question: '',
   retrieval_k: 30,
   candidates_before: 30,
   candidates_after: 3,
@@ -46,11 +46,11 @@ export const mockDebugInfo: DebugInfo = {
   quality_reason: 'PASS',
   retry_count: 0,
   used_web_search: false,
-  web_results_count: null,
+  web_results_count: 0,
 }
 
 export const mockMessagesFull: Message[] = [
-  { id: 1, role: 'user', content: '年假政策', sources: null as any, quality_reason: null as any, feedback: null as any, created_at: '2026-06-16T08:00:00Z' },
+  { id: 1, role: 'user', content: '年假政策', sources: [], quality_reason: '', feedback: null, created_at: '2026-06-16T08:00:00Z' },
   { id: 2, role: 'assistant', content: '根据文档 [1]，年假为 5 天。\n\n引用编号 [1] 和 [2] 来自不同来源[1,2]。', sources: [{ source: 'policy.txt', index: 1, content: '年假5天' }, { source: 'hr.txt', index: 2, content: '试用期员工适用' }], quality_reason: 'PASS', feedback: null, created_at: '2026-06-16T08:00:05Z' },
 ]
 
@@ -62,7 +62,7 @@ export const mockSSEDebugEvent: DebugInfo = {
     { name: 'generate_answer', label: '生成回答', elapsed_ms: 1500, summary: '120 字' },
     { name: 'check_quality', label: '质量检查', elapsed_ms: 300, summary: '✓ 通过' },
   ],
-  rewritten_question: null,
+  rewritten_question: '',
   retrieval_k: 30,
   candidates_before: 3,
   candidates_after: 3,
@@ -73,7 +73,7 @@ export const mockSSEDebugEvent: DebugInfo = {
   quality_reason: 'PASS',
   retry_count: 0,
   used_web_search: false,
-  web_results_count: null,
+  web_results_count: 0,
 }
 
 export const mockExportData = { markdown: '# 测试对话\n\n### 👤 用户\n年假政策\n\n### 🤖 助手\n5天\n\n---\n' }

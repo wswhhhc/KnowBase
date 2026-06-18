@@ -9,10 +9,12 @@ from langchain_core.documents import Document
 
 from src.knowledge_base import (
     KnowledgeBase,
-    _content_hash,
-    _document_chunk_id,
-    _infer_source_type,
     rrf_fuse,
+)
+from src.kb_models import (
+    compute_content_hash as _content_hash,
+    document_chunk_id as _document_chunk_id,
+    infer_source_type as _infer_source_type,
 )
 
 

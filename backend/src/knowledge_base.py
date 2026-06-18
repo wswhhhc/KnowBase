@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
 from datetime import UTC, datetime
-import hashlib
 import json
 import logging
 from pathlib import Path
@@ -34,58 +32,15 @@ from config.settings import (
     VECTOR_CANDIDATE_K,
     require_siliconflow_api_key,
 )
+from src.kb_models import (
+    RetrievalResult,
+    FusionScore,
+    content_hash as compute_content_hash,
+    chunk_id as _chunk_id,
+    infer_source_type,
+    document_chunk_id as _document_chunk_id,
+)
 from src.loaders import load_document
-
-
-@dataclass(frozen=True)
-class RetrievalResult:
-    """A retrieved chunk plus retrieval diagnostics."""
-
-    chunk_id: str
-    document: Document
-    score: float
-    vector_score: float | None = None
-    bm25_score: float | None = None
-
-
-@dataclass(frozen=True)
-class FusionScore:
-    """RRF output before mapping back to documents."""
-
-    chunk_id: str
-    score: float
-    vector_score: float | None = None
-    bm25_score: float | None = None
-
-
-def _content_hash(content: str) -> str:
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
-def _chunk_id(source: str, chunk_index: int, content_hash: str) -> str:
-    return f"{Path(source).name}:{chunk_index}:{content_hash[:16]}"
-
-
-def _infer_source_type(source: str) -> str:
-    """Infer source_type from a source identifier."""
-    if source.startswith("http://") or source.startswith("https://"):
-        return "web_page"
-    return "local_file"
-
-
-def _document_chunk_id(doc: Document) -> str:
-    chunk_id = doc.metadata.get("chunk_id")
-    if chunk_id:
-        return str(chunk_id)
-    source = Path(doc.metadata.get("source", "unknown")).name
-    chunk_index = int(doc.metadata.get("chunk_index", 0))
-    content_hash = doc.metadata.get("content_hash") or _content_hash(doc.page_content)
-    chunk_id = _chunk_id(source, chunk_index, content_hash)
-    doc.metadata.setdefault("source", source)
-    doc.metadata.setdefault("chunk_index", chunk_index)
-    doc.metadata.setdefault("content_hash", content_hash)
-    doc.metadata.setdefault("chunk_id", chunk_id)
-    return chunk_id
 
 
 def rrf_fuse(
@@ -221,7 +176,7 @@ class KnowledgeBase:
                 continue
             metadata = dict(metadatas[index] or {}) if index < len(metadatas) else {}
             source = Path(metadata.get("source", "unknown")).name
-            content_hash = metadata.get("content_hash") or _content_hash(content)
+            content_hash = metadata.get("content_hash") or compute_content_hash(content)
             chunk_index = int(metadata.get("chunk_index", index))
             metadata.setdefault("source", source)
             metadata.setdefault("content_hash", content_hash)
@@ -282,14 +237,14 @@ class KnowledgeBase:
             source = Path(split.metadata.get("source", "unknown")).name
             chunk_index = per_source_counts[source]
             per_source_counts[source] += 1
-            content_hash = _content_hash(split.page_content)
+            content_hash = compute_content_hash(split.page_content)
 
             # Detect and track heading for section chain
             first_line = split.page_content.split("\n")[0].strip()
             if first_line.startswith("## ") or first_line.startswith("# "):
                 current_heading[source] = first_line.lstrip("#").strip()
 
-            source_type = split.metadata.get("source_type") or _infer_source_type(split.metadata.get("source", ""))
+            source_type = split.metadata.get("source_type") or infer_source_type(split.metadata.get("source", ""))
             split.metadata.update(
                 {
                     "source": source,

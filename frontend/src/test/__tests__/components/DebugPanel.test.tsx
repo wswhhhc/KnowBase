@@ -16,15 +16,18 @@ vi.mock('framer-motion', () => ({
 }))
 
 // Mock lucide-react icons used by DebugPanel
-vi.mock('lucide-react', () => ({
-  Bug: 'Bug',
-  ChevronDown: 'ChevronDown',
-  ChevronRight: 'ChevronRight',
-  Search: 'Search',
-  Globe: 'Globe',
-  RotateCcw: 'RotateCcw',
-  Zap: 'Zap',
-}))
+vi.mock('lucide-react', () => {
+  const icon = (name: string) => ({ children, ...props }: any) => <span data-testid={`lucide-${name}`} {...props}>{children}</span>
+  return {
+    Bug: icon('Bug'),
+    ChevronDown: icon('ChevronDown'),
+    ChevronRight: icon('ChevronRight'),
+    Search: icon('Search'),
+    Globe: icon('Globe'),
+    RotateCcw: icon('RotateCcw'),
+    Zap: icon('Zap'),
+  }
+})
 
 describe('DebugPanel', () => {
   it('renders the toggle button', () => {
