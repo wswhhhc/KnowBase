@@ -1,8 +1,18 @@
+"""Chat route tests — metrics delegation and SSE persistence failure behavior."""
+
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
+from fastapi.testclient import TestClient
+
+from src.api.deps import get_knowledge_base
+from src.api.main import app
 from src.api.models import DebugInfo
 from src.api.routes.chat import _record_query_metrics
+from src import conversations
 
 
 class ChatRouteMetricsTests(unittest.TestCase):
@@ -36,25 +46,62 @@ class ChatRouteMetricsTests(unittest.TestCase):
 class ChatRoutePersistenceFailureTests(unittest.TestCase):
     """If persistence throws, SSE done should still fire with assistant_msg_id=0."""
 
-    def test_assistant_msg_id_initialized_before_persistence(self):
-        """Verify assistant_msg_id is set to 0 before the try block in event_generator."""
-        import inspect
-        from src.api.routes.chat import chat_stream
-        source = inspect.getsource(chat_stream)
+    @classmethod
+    def setUpClass(cls):
+        cls.patcher_api = patch("src.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
+        cls.patcher_chroma = patch("src.knowledge_base.Chroma")
+        cls.patcher_emb = patch("src.knowledge_base.OpenAIEmbeddings")
+        cls.patcher_api.start()
+        cls.patcher_chroma.start()
+        cls.patcher_emb.start()
 
-        # Verify assistant_msg_id = 0 appears before try: in the source
-        lines = source.splitlines()
-        assignment_line = None
-        try_block_line = None
-        for i, line in enumerate(lines):
-            if "assistant_msg_id = 0" in line:
-                assignment_line = i
-            if "try:" in line and i > assignment_line if assignment_line is not None else False:
-                try_block_line = i
-                break
+        class FakeKB:
+            def hybrid_search(self, *a, **kw): return []
+            @staticmethod
+            def get_neighbor_chunks(*a, **kw): return []
+            def load_preset_documents(self): return 0
+            def _ensure_loaded(self): pass
 
-        self.assertIsNotNone(assignment_line, "assistant_msg_id = 0 must exist")
-        self.assertIsNotNone(try_block_line, "try block after assignment must exist")
-        self.assertLess(assignment_line, try_block_line,
-                        "assistant_msg_id = 0 must be initialized BEFORE the try block")
+        cls.fake_kb = FakeKB()
+        app.dependency_overrides[get_knowledge_base] = lambda: cls.fake_kb
 
+        cls._tmp_dir = tempfile.TemporaryDirectory()
+        cls._orig_db = conversations._DB_PATH
+        conversations._DB_PATH = Path(cls._tmp_dir.name) / "conv.db"
+        conversations.init_db()
+
+        cls.client = TestClient(app)
+
+    @classmethod
+    def tearDownClass(cls):
+        conversations._DB_PATH = cls._orig_db
+        cls._tmp_dir.cleanup()
+        app.dependency_overrides.clear()
+        cls.patcher_emb.stop()
+        cls.patcher_chroma.stop()
+        cls.patcher_api.stop()
+
+    def test_persistence_failure_done_has_zero_msg_id(self):
+        """When add_message raises, SSE done event must contain assistant_msg_id=0."""
+        with patch("src.api.routes.chat.add_message") as mock_add:
+            mock_add.side_effect = RuntimeError("DB timeout")
+
+            resp = self.client.post(
+                "/api/chat/stream",
+                json={"question": "测试", "web_search_enabled": False, "search_strategy": "balanced"},
+            )
+            self.assertEqual(resp.status_code, 200)
+
+            # Parse SSE text, find the done event
+            done_found = False
+            for line in resp.text.splitlines():
+                if line.startswith("data: ") and '"assistant_msg_id"' in line:
+                    data = json.loads(line[6:])
+                    self.assertEqual(data["assistant_msg_id"], 0,
+                                     "assistant_msg_id must be 0 when persistence fails")
+                    self.assertIn("thread_id", data)
+                    self.assertIn("answer", data)
+                    done_found = True
+                    break
+
+            self.assertTrue(done_found, "SSE done event with assistant_msg_id must be present")
