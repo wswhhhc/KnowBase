@@ -1,3 +1,6 @@
+# 环境变量（根目录）
+.env
+
 # Backend
 backend/.env
 backend/data/

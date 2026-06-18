@@ -131,6 +131,12 @@ export const createConversation = (title = '新对话') =>
 export const deleteConversation = (id: string) =>
   req(`/conversations/${id}`, { method: 'DELETE' })
 
+export const deleteConversations = (ids: string[]) =>
+  req('/conversations/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify(ids),
+  })
+
 export const renameConversation = (id: string, title: string) =>
   req<Conversation>(`/conversations/${id}`, {
     method: 'PATCH',

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from functools import partial
 import json
+import logging
 import re
 import sqlite3
 import time
+
+logger = logging.getLogger(__name__)
 from typing import Annotated, Generator, Iterable, List, Literal, TypedDict
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage
@@ -182,8 +185,8 @@ def route_question(state: GraphState) -> dict:
         decision = RouteDecision.model_validate(json_from_text(str(result.content)))
         search_filter = _route_search_scope(state["question"], decision.question_type)
         return {"question_type": decision.question_type, "search_filter": search_filter}
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("LLM 路由失败，使用默认路由: %s", exc)
 
     # LLM failed; default to knowledge_base
     search_filter = _route_search_scope(state["question"], question_type)
@@ -606,7 +609,8 @@ def rerank_docs(state: GraphState) -> dict:
     try:
         result = llm.invoke(prompt.format(query=query, k=top_k, docs_text=docs_text))
         decision = parse_rerank_decision(str(result.content), doc_ids)
-    except Exception:
+    except Exception as exc:
+        logger.warning("LLM 精排失败，回退到原始排序: %s", exc)
         decision = RerankDecision(selected_doc_ids=[])
 
     by_id = {result.chunk_id: result for result in docs}
@@ -780,7 +784,8 @@ def check_quality(state: GraphState) -> dict:
         try:
             result = llm.invoke(prompt.format(question=question, context=context[:3000], answer=answer))
             decision = parse_quality_decision(str(result.content))
-        except Exception:
+        except Exception as exc:
+            logger.warning("LLM 质量检查失败，保守放行: %s", exc)
             decision = QualityDecision(quality_passed=True, quality_reason="质量检查调用失败，保守放行。")
 
     update = {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from uuid import uuid4
 
@@ -19,6 +20,7 @@ from src.conversations import create_conversation, add_message, get_conversation
 from langchain_core.prompts import ChatPromptTemplate
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _record_query_metrics(
@@ -278,8 +280,8 @@ async def chat_stream(
                     answer=answer,
                     debug_info=debug_info,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.exception("保存聊天记录或指标失败: %s", exc)
 
             yield {"event": "debug", "data": json.dumps(debug_info.model_dump())}
 

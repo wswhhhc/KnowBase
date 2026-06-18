@@ -126,6 +126,29 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         result = conversations.get_conversation_by_thread("no-such-thread")
         self.assertIsNone(result)
 
+    def test_delete_conversations_batch(self):
+        conv1 = conversations.create_conversation("批量1")
+        conv2 = conversations.create_conversation("批量2")
+        conv3 = conversations.create_conversation("保留")
+        conversations.add_message(conv1["id"], "user", "a")
+        conversations.add_message(conv2["id"], "assistant", "b")
+
+        conversations.delete_conversations([conv1["id"], conv2["id"]])
+
+        self.assertIsNone(conversations.get_conversation(conv1["id"]))
+        self.assertIsNone(conversations.get_conversation(conv2["id"]))
+        self.assertIsNotNone(conversations.get_conversation(conv3["id"]))
+        self.assertEqual(conversations.get_messages(conv1["id"]), [])
+        self.assertEqual(conversations.get_messages(conv2["id"]), [])
+
+    def test_delete_conversations_empty_list_does_nothing(self):
+        before = len(conversations.list_conversations())
+        try:
+            conversations.delete_conversations([])
+        except Exception as e:
+            self.fail(f"delete_conversations([]) raised {e}")
+        self.assertEqual(len(conversations.list_conversations()), before)
+
 
 if __name__ == "__main__":
     unittest.main()

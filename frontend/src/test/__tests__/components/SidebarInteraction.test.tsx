@@ -22,6 +22,9 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
+// sonner 的 mock 引用（vi.mock 已提升到文件顶部，这里拿到的引用是安全可用的）
+import { toast as sonnerToast } from 'sonner'
+
 // Mock lucide-react
 vi.mock('lucide-react', () => {
   const icons: Record<string, string> = {
@@ -46,6 +49,7 @@ vi.mock('@/lib/api', () => ({
   ingestUrl: vi.fn(),
   clearKnowledgeBase: vi.fn(),
   deleteSource: vi.fn(),
+  deleteConversations: vi.fn(),
   getKBStats: vi.fn(),
 }))
 
@@ -145,5 +149,60 @@ describe('Sidebar interactions', () => {
     await userEvent.click(docTab)
     // Doc tab active — upload area visible
     expect(screen.getByText('Upload')).toBeInTheDocument()
+  })
+
+  // ── 批量选择/删除测试 ──
+
+  it('shows checkbox for each conversation', () => {
+    render(<Sidebar {...defaultProps} />)
+    const checkboxes = screen.getAllByRole('checkbox')
+    // 全选 checkbox + 2 个对话 checkbox
+    expect(checkboxes.length).toBe(3)
+  })
+
+  it('checking a conversation checkbox enables batch delete button', async () => {
+    render(<Sidebar {...defaultProps} />)
+    const checkboxes = screen.getAllByRole('checkbox')
+    // 跳过全选 checkbox（index=0），勾选第一个对话
+    await userEvent.click(checkboxes[1])
+    // 批量删除按钮显示已选数量
+    expect(screen.getByText('1')).toBeInTheDocument()
+  })
+
+  it('select all checkbox toggles all conversations', async () => {
+    render(<Sidebar {...defaultProps} />)
+    const checkboxes = screen.getAllByRole('checkbox')
+    // 全选 checkbox 是第一个
+    await userEvent.click(checkboxes[0])
+    // 批量删除按钮显示已选数量 = 对话总数
+    expect(screen.getByText('2')).toBeInTheDocument()
+    // 再点一下取消全选
+    await userEvent.click(checkboxes[0])
+    expect(screen.queryByText('2')).not.toBeInTheDocument()
+  })
+
+  it('batch delete calls deleteConversations with selected ids on success', async () => {
+    vi.mocked(api.deleteConversations!).mockResolvedValue({ ok: true } as any)
+
+    render(<Sidebar {...defaultProps} />)
+    const checkboxes = screen.getAllByRole('checkbox')
+    // 全选
+    await userEvent.click(checkboxes[0])
+    // 批量删除按钮显示已选数量，点击它
+    await userEvent.click(screen.getByText('2'))
+    expect(api.deleteConversations).toHaveBeenCalledWith(['conv-1', 'conv-2'])
+  })
+
+  it('batch delete shows error toast on failure', async () => {
+    vi.mocked(api.deleteConversations!).mockRejectedValue(new Error('网络错误'))
+
+    render(<Sidebar {...defaultProps} />)
+    const checkboxes = screen.getAllByRole('checkbox')
+    await userEvent.click(checkboxes[0])
+    await userEvent.click(screen.getByText('2'))
+
+    await waitFor(() => {
+      expect(sonnerToast.error).toHaveBeenCalledWith('批量删除失败', expect.anything())
+    })
   })
 })

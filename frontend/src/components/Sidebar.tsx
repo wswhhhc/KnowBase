@@ -65,6 +65,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   const [urlInput, setUrlInput] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const prevKey = useRef(convRefreshKey)
 
   // 新对话创建后刷新侧栏列表
@@ -134,6 +135,33 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     } catch (err) { toast.error('导入失败', { description: String(err) }) }
   }
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+    const ids = Array.from(selectedIds)
+    try {
+      await api.deleteConversations(ids)
+      // 请求成功后再清理 UI 状态
+      if (convs.activeId && selectedIds.has(convs.activeId)) {
+        chat.clearMessages()
+        convs.setActiveId(null)
+      }
+      setSelectedIds(new Set())
+      await convs.refresh()
+      toast.success(`已删除 ${ids.length} 个对话`)
+    } catch (err) {
+      toast.error('批量删除失败', { description: String(err) })
+    }
+  }
+
   return (
     <div className="flex h-full flex-col bg-surface">
       {/* Header */}
@@ -172,13 +200,37 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         {activeView === 'chat' ? (
           tab === 'conversations' ? (
             <div className="space-y-1">
-              <Button variant="secondary" size="sm" className="w-full justify-start gap-2 mb-3" onClick={handleNewConversation}>
-                <Plus className="h-4 w-4" />新对话
-              </Button>
+              <div className="flex items-center gap-1 mb-3">
+                <Button variant="secondary" size="sm" className="flex-1 justify-start gap-2" onClick={handleNewConversation}>
+                  <Plus className="h-4 w-4" />新对话
+                </Button>
+                {convs.conversations.length > 0 && (
+                  <label className="flex items-center gap-1 cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors px-1">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === convs.conversations.length && convs.conversations.length > 0}
+                      onChange={() =>
+                        setSelectedIds(
+                          selectedIds.size === convs.conversations.length
+                            ? new Set()
+                            : new Set(convs.conversations.map((c) => c.id)),
+                        )
+                      }
+                      className="h-3.5 w-3.5 accent-primary shrink-0 cursor-pointer"
+                    />
+                    全选
+                  </label>
+                )}
+                {selectedIds.size > 0 && (
+                  <Button variant="destructive" size="sm" className="gap-1" onClick={handleBatchDelete}>
+                    <Trash2 className="h-3.5 w-3.5" />{selectedIds.size}
+                  </Button>
+                )}
+              </div>
               {convs.conversations.map((c) => (
                 <div
                   key={c.id}
-                  className={`group flex items-center rounded-md px-3 py-2 text-sm transition-all cursor-pointer ${
+                  className={`group flex items-center rounded-md px-3 py-2 text-sm transition-all ${
                     convs.activeId === c.id
                       ? 'bg-primary/10 text-primary'
                       : 'text-foreground/70 hover:bg-muted hover:text-foreground'
@@ -198,7 +250,14 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
                     </div>
                   ) : (
                     <>
-                      <span className="truncate flex-1" onClick={() => switchConversation(c)}>{truncate(c.title, 24)}</span>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(c.id)}
+                        onChange={() => toggleSelect(c.id)}
+                        className="mr-2 h-3.5 w-3.5 accent-primary shrink-0 cursor-pointer"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span className="truncate flex-1 cursor-pointer" onClick={() => switchConversation(c)}>{truncate(c.title, 24)}</span>
                       <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-60 transition-opacity flex-shrink-0 mr-1">{formatTime(c.updated_at)}</span>
                       <button
                         onClick={(e) => { e.stopPropagation(); setRenamingId(c.id); setRenameValue(c.title) }}

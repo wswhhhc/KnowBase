@@ -1,7 +1,9 @@
 """Extended API route coverage — error paths for documents, KB, metrics, conversations."""
 
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -9,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
-from src.conversations import init_db as init_conversations_db
+from src import conversations
 
 
 class FakeKnowledgeBase:
@@ -68,11 +70,19 @@ class APIRoutesCoverageTests(unittest.TestCase):
     def setUpClass(cls):
         cls.fake_kb = FakeKnowledgeBase()
         app.dependency_overrides[get_knowledge_base] = lambda: cls.fake_kb
-        init_conversations_db()
+
+        # Use a temp database for all test data
+        cls._temp_dir = tempfile.TemporaryDirectory()
+        cls._original_db_path = conversations._DB_PATH
+        conversations._DB_PATH = Path(cls._temp_dir.name) / "conversations.db"
+        conversations.init_db()
+
         cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls):
+        conversations._DB_PATH = cls._original_db_path
+        cls._temp_dir.cleanup()
         app.dependency_overrides.clear()
 
     # ── Documents routes ──

@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from src.api.models import ConversationCreate, ConversationOut, ExportOut, MessageFeedback, MessageOut
 from src.conversations import (
     create_conversation, list_conversations, get_conversation, update_title,
-    delete_conversation, get_messages, update_feedback, export_conversation,
+    delete_conversation, delete_conversations, get_messages, update_feedback, export_conversation,
 )
 
 router = APIRouter()
@@ -38,6 +38,15 @@ async def update(conv_id: str, body: ConversationCreate) -> ConversationOut:
     if not conv:
         raise HTTPException(404, "对话不存在")
     return ConversationOut(**conv)
+
+
+@router.post("/batch-delete")
+async def delete_batch(body: list[str]):
+    """批量删除多个对话。"""
+    if not body:
+        return {"ok": True}
+    delete_conversations(body)
+    return {"ok": True}
 
 
 @router.delete("/{conv_id}")

@@ -5,7 +5,9 @@ responses return the expected shapes. Heavy mocking is avoided —
 only the knowledge base dependency is overridden to avoid real Chroma/LLM calls.
 """
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -13,7 +15,7 @@ from langchain_core.documents import Document
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
-from src.conversations import init_db as init_conversations_db
+from src import conversations
 
 
 class FakeKnowledgeBase:
@@ -87,11 +89,18 @@ class FastAPISmokeTests(unittest.TestCase):
         cls.fake_kb = FakeKnowledgeBase()
         app.dependency_overrides[get_knowledge_base] = lambda: cls.fake_kb
 
-        init_conversations_db()
+        # Use a temp database for all test data
+        cls._temp_dir = tempfile.TemporaryDirectory()
+        cls._original_db_path = conversations._DB_PATH
+        conversations._DB_PATH = Path(cls._temp_dir.name) / "conversations.db"
+        conversations.init_db()
+
         cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls):
+        conversations._DB_PATH = cls._original_db_path
+        cls._temp_dir.cleanup()
         app.dependency_overrides.clear()
         cls.patcher_chroma.stop()
         cls.patcher_embeddings.stop()

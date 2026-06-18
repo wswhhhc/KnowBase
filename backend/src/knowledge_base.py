@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 import hashlib
 import json
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import List, Optional, Tuple
 
 import jieba
@@ -160,7 +163,8 @@ class KnowledgeBase:
             if self._hotspot_path.exists():
                 with open(self._hotspot_path) as f:
                     self.hit_counter = json.load(f)
-        except Exception:
+        except Exception as exc:
+            logger.warning("热点计数加载失败: %s", exc)
             self.hit_counter = {}
 
     def _save_hotspots(self):
@@ -169,8 +173,8 @@ class KnowledgeBase:
             self._hotspot_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self._hotspot_path, "w") as f:
                 json.dump(self.hit_counter, f, ensure_ascii=False)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("热点计数持久化失败: %s", exc)
 
     def _rebuild_all(self):
         """Build doc_by_id, existing_chunk_ids, and BM25 from all_docs (full rebuild).

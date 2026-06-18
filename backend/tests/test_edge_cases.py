@@ -15,7 +15,6 @@ from langchain_core.documents import Document
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
-from src.conversations import init_db as init_conversations_db
 from src import conversations
 
 
@@ -119,7 +118,19 @@ class APIEdgeCaseTests(unittest.TestCase):
         cls.patcher_embeddings.start()
         cls.patcher_api_key.start()
 
-        init_conversations_db()
+        # Use a temp database for all test data
+        cls._temp_dir = tempfile.TemporaryDirectory()
+        cls._original_db_path = conversations._DB_PATH
+        conversations._DB_PATH = Path(cls._temp_dir.name) / "conversations.db"
+        conversations.init_db()
+
+    @classmethod
+    def tearDownClass(cls):
+        conversations._DB_PATH = cls._original_db_path
+        cls._temp_dir.cleanup()
+        cls.patcher_chroma.stop()
+        cls.patcher_embeddings.stop()
+        cls.patcher_api_key.stop()
 
     @classmethod
     def tearDownClass(cls):

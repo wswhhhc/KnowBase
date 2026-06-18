@@ -4,7 +4,9 @@ Uses TestClient with a mocked KnowledgeBase dependency via app.dependency_overri
 Tests happy paths and error paths (422, 404) for every endpoint.
 """
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -14,7 +16,7 @@ from langchain_core.documents import Document
 from src.api.deps import get_knowledge_base
 from src.api.main import app
 from src.api.models import ConversationCreate, IngestResponse, URLIngestRequest
-from src.conversations import init_db as init_conversations_db
+from src import conversations
 
 
 class FakeKnowledgeBase:
@@ -98,11 +100,18 @@ class APIEndpointTests(unittest.TestCase):
         cls.fake_kb = FakeKnowledgeBase()
         app.dependency_overrides[get_knowledge_base] = lambda: cls.fake_kb
 
-        init_conversations_db()
+        # Use a temp database for all test data
+        cls._temp_dir = tempfile.TemporaryDirectory()
+        cls._original_db_path = conversations._DB_PATH
+        conversations._DB_PATH = Path(cls._temp_dir.name) / "conversations.db"
+        conversations.init_db()
+
         cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls):
+        conversations._DB_PATH = cls._original_db_path
+        cls._temp_dir.cleanup()
         app.dependency_overrides.clear()
         cls.patcher_chroma.stop()
         cls.patcher_embeddings.stop()
@@ -166,6 +175,26 @@ class APIEndpointTests(unittest.TestCase):
         create_resp = self.client.post("/api/conversations", json={"title": "删除测试"})
         conv_id = create_resp.json()["id"]
         resp = self.client.delete(f"/api/conversations/{conv_id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"ok": True})
+
+    def test_delete_conversations_batch(self):
+        r1 = self.client.post("/api/conversations", json={"title": "批量A"}).json()
+        r2 = self.client.post("/api/conversations", json={"title": "批量B"}).json()
+        r3 = self.client.post("/api/conversations", json={"title": "保留"}).json()
+
+        resp = self.client.post("/api/conversations/batch-delete", json=[r1["id"], r2["id"]])
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"ok": True})
+
+        # Verify deleted
+        self.assertEqual(self.client.get(f"/api/conversations/{r1['id']}").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/conversations/{r2['id']}").status_code, 404)
+        # Verify kept
+        self.assertEqual(self.client.get(f"/api/conversations/{r3['id']}").status_code, 200)
+
+    def test_delete_conversations_batch_empty(self):
+        resp = self.client.post("/api/conversations/batch-delete", json=[])
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), {"ok": True})
 

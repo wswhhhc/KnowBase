@@ -109,6 +109,16 @@ def update_title(conv_id: str, title: str):
     conn.close()
 
 
+def delete_conversations(conv_ids: list[str]):
+    """批量删除多个对话及其消息。"""
+    conn = _get_conn()
+    placeholders = ",".join("?" for _ in conv_ids)
+    conn.execute(f"DELETE FROM messages WHERE conversation_id IN ({placeholders})", conv_ids)
+    conn.execute(f"DELETE FROM conversations WHERE id IN ({placeholders})", conv_ids)
+    conn.commit()
+    conn.close()
+
+
 def delete_conversation(conv_id: str):
     """Delete a conversation and its messages."""
     conn = _get_conn()
