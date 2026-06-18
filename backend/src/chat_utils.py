@@ -53,6 +53,7 @@ def record_query_metrics(
         used_web_search=debug_info.used_web_search,
         used_rerank=debug_info.used_rerank,
         used_rewrite=debug_info.used_rewrite,
+        retrieval_k=debug_info.retrieval_k,
     )
 
 

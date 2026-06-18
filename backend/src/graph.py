@@ -407,7 +407,7 @@ def retrieve_docs(state: GraphState, kb: KnowledgeBase) -> dict:
     ]
 
     context, sources = _format_context(enriched_results)
-    return {"documents": enriched_results, "context": context, "sources": sources}
+    return {"documents": enriched_results, "context": context, "sources": sources, "retrieval_k": retrieval_k}
 
 
 def route_after_retrieval(state: GraphState) -> Literal["rerank_docs", "handle_missing_context"]:

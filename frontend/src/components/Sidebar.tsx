@@ -94,6 +94,8 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
           content: m.content,
           sources: m.sources,
           quality_reason: m.quality_reason,
+          convId: conversation.id,
+          assistantMsgId: m.role === 'assistant' ? m.id : undefined,
         })),
         conversation.thread_id,
       )

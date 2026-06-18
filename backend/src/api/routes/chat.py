@@ -216,6 +216,8 @@ async def chat_stream(
             )
 
             # Persist before notifying the client so sidebar refresh sees the final title.
+            conv_id = None
+            assistant_msg_id = 0
             try:
                 existing = get_conversation_by_thread(thread_id)
                 if existing:
