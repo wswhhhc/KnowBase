@@ -28,7 +28,7 @@ interface SidebarProps {
 
 function KBSummary() {
   const [stats, setStats] = useState<{ chunk_count: number; source_count: number } | null>(null)
-  useEffect(() => { api.getKBStats().then(setStats).catch(() => {}) }, [])
+  useEffect(() => { api.getKBStats().then(setStats).catch((e: unknown) => toast.error('加载知识库统计失败', { description: String(e) })) }, [])
   return (
     <div className="px-3 py-4">
       <p className="text-xs text-muted-foreground/50 tracking-wide uppercase px-1 mb-2">知识库</p>

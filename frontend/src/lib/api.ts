@@ -216,7 +216,7 @@ export interface ChatStreamCallbacks {
   onToken?: (text: string) => void
   onDebug?: (data: DebugInfo) => void
   onSources?: (data: { sources: Source[]; quality_reason: string; evidence_level: string; evidence_summary: string; outcome_category: string }) => void
-  onDone?: (data: { thread_id: string; answer: string; sources: Source[]; quality_reason: string; evidence_level: string; evidence_summary: string; outcome_category: string; elapsed_ms: number }) => void
+  onDone?: (data: { thread_id: string; conv_id: string; assistant_msg_id: number; answer: string; sources: Source[]; quality_reason: string; evidence_level: string; evidence_summary: string; outcome_category: string; elapsed_ms: number }) => void
   onError?: (message: string) => void
 }
 

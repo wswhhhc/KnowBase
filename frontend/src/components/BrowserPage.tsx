@@ -45,7 +45,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, th
     loadChunks('', '', 0, pageSize)
     Promise.all([api.getKBStats(), api.getKBSourceNames(), api.getKBConfig()])
       .then(([s, srcs, cfg]) => { setStats(s); setSources(srcs); setKbConfig(cfg) })
-      .catch(() => {})
+      .catch((e) => toast.error('加载失败', { description: String(e) }))
       .finally(() => setLoading(false))
   }, [])
 
@@ -57,7 +57,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, th
       const [srcs, s] = await Promise.all([api.getKBSourceNames(), api.getKBStats()])
       setSources(srcs)
       setStats(s)
-    } catch { /* ignore */ }
+    } catch (e) { toast.error('搜索失败', { description: String(e) }) }
     setLoading(false)
   }
 
@@ -66,7 +66,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, th
     setPage(newPage)
     try {
       await loadChunks(selectedSource, searchQuery, newPage, pageSize)
-    } catch { /* ignore */ }
+    } catch (e) { toast.error('翻页失败', { description: String(e) }) }
     setLoading(false)
   }
 
@@ -79,7 +79,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, th
         const m = new Map<string, number>()
         data.forEach((h) => m.set(h.chunk_id, h.hits))
         setHotspots(m)
-      } catch { /* ignore */ }
+      } catch (e) { toast.error('热点数据加载失败', { description: String(e) }) }
     }
   }
 
@@ -140,7 +140,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, th
       const [s, srcs, cfg] = await Promise.all([api.getKBStats(), api.getKBSourceNames(), api.getKBConfig()])
       setStats(s); setSources(srcs); setKbConfig(cfg)
       await loadChunks(selectedSource, searchQuery, page, pageSize)
-    } catch { /* ignore */ }
+    } catch (e) { toast.error('刷新失败', { description: String(e) }) }
   }
 
   const totalPages = chunks.reduce((acc, c) => acc + Math.ceil(c.content.length / 800), 0)

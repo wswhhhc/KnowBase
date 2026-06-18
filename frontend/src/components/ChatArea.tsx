@@ -354,16 +354,18 @@ function MessageBubble({ message, prevMessage, threadId }: {
   const isFirstAssistant = !isUser && prevMessage?.role === 'user'
 
   const handleExport = async () => {
-    if (!threadId) return
+    // Use the first assistant message's convId (whole-conversation export)
+    const convId = message.convId || threadId
+    if (!convId) return
     setExporting(true)
     try {
-      const result = await api.exportConversation(threadId)
+      const result = await api.exportConversation(convId)
       const blob = new Blob([result.markdown], { type: 'text/markdown' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url; a.download = `knowbase-${threadId.slice(0, 8)}.md`
+      a.href = url; a.download = `knowbase-${convId.slice(0, 8)}.md`
       a.click(); URL.revokeObjectURL(url)
-    } catch { /* ignore */ }
+    } catch (e) { console.error('导出失败', e) }
     setExporting(false)
   }
 
@@ -426,11 +428,21 @@ function MessageBubble({ message, prevMessage, threadId }: {
                   {/* Feedback */}
                   {(message.sources && message.sources.length > 0) && (
                     <div className="flex items-center gap-0.5 ml-auto">
-                      <button onClick={() => setFeedback('helpful')}
+                      <button onClick={async () => {
+                        setFeedback('helpful')
+                        if (message.convId && message.assistantMsgId) {
+                          try { await api.updateFeedback(message.convId, message.assistantMsgId, 'helpful') } catch {}
+                        }
+                      }}
                         className={`p-1 rounded transition-colors ${feedback === 'helpful' ? 'text-emerald-400' : 'text-muted-foreground/40 hover:text-emerald-400'}`}>
                         <ThumbsUp className="h-3 w-3" />
                       </button>
-                      <button onClick={() => setFeedback('unhelpful')}
+                      <button onClick={async () => {
+                        setFeedback('unhelpful')
+                        if (message.convId && message.assistantMsgId) {
+                          try { await api.updateFeedback(message.convId, message.assistantMsgId, 'unhelpful') } catch {}
+                        }
+                      }}
                         className={`p-1 rounded transition-colors ${feedback === 'unhelpful' ? 'text-red-400' : 'text-muted-foreground/40 hover:text-red-400'}`}>
                         <ThumbsDown className="h-3 w-3" />
                       </button>

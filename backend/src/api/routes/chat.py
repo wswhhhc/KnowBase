@@ -132,6 +132,7 @@ async def chat_stream(
                                 debug_nodes.append({"name": node_name, "label": node_label, "elapsed_ms": elapsed, "summary": summary})
                             elif node_name == "retrieve_docs":
                                 srcs = update.get("sources", [])
+                                debug_retrieval_k = update.get("retrieval_k", 0) or debug_retrieval_k
                                 debug_candidates_before = len(srcs)
                                 debug_candidates_after = len(srcs)
                                 summary = f"{debug_candidates_before} 候选"
@@ -201,7 +202,7 @@ async def chat_stream(
             debug_info = DebugInfo(
                 nodes=[NodeDebug(**nd) for nd in debug_nodes],
                 rewritten_question=debug_rewritten_question,
-                retrieval_k=0,
+                retrieval_k=debug_retrieval_k,
                 candidates_before=debug_candidates_before,
                 candidates_after=debug_candidates_after,
                 after_rerank=debug_after_rerank,
@@ -224,7 +225,7 @@ async def chat_stream(
                     conv = create_conversation(title, thread_id=thread_id)
                     conv_id = conv["id"]
                 add_message(conv_id, "user", body.question)
-                add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality, debug_info=debug_info.model_dump_json())
+                assistant_msg_id = add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality, debug_info=debug_info.model_dump_json())
                 _record_query_metrics(
                     question=body.question,
                     thread_id=thread_id,
@@ -250,6 +251,8 @@ async def chat_stream(
 
             yield {"event": "done", "data": json.dumps({
                 "thread_id": thread_id,
+                "conv_id": conv_id or "",
+                "assistant_msg_id": assistant_msg_id,
                 "answer": answer,
                 "sources": final_sources,
                 "quality_reason": final_quality,

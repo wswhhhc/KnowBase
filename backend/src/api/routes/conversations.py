@@ -63,7 +63,7 @@ async def list_messages(conv_id: str) -> list[MessageOut]:
 
 @router.post("/{conv_id}/messages/{msg_id}/feedback")
 async def feedback(conv_id: str, msg_id: int, body: MessageFeedback):
-    update_feedback(msg_id, body.feedback)
+    update_feedback(msg_id, body.feedback, conv_id=conv_id)
     return {"ok": True}
 
 

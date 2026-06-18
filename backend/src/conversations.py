@@ -128,20 +128,22 @@ def delete_conversation(conv_id: str):
     conn.close()
 
 
-def add_message(conv_id: str, role: str, content: str, sources: list | None = None, quality_reason: str = "", debug_info: str = "{}"):
-    """Add a message to a conversation."""
+def add_message(conv_id: str, role: str, content: str, sources: list | None = None, quality_reason: str = "", debug_info: str = "{}") -> int:
+    """Add a message to a conversation. Returns the message row id."""
     conn = _get_conn()
     now = datetime.now(UTC).isoformat()
-    conn.execute(
+    cursor = conn.execute(
         "INSERT INTO messages (conversation_id, role, content, sources, quality_reason, debug_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (conv_id, role, content, json.dumps(sources or [], ensure_ascii=False), quality_reason, debug_info, now),
     )
+    msg_id = cursor.lastrowid
     conn.execute(
         "UPDATE conversations SET updated_at = ? WHERE id = ?",
         (now, conv_id),
     )
     conn.commit()
     conn.close()
+    return msg_id
 
 
 def get_messages(conv_id: str) -> list[dict]:
@@ -217,9 +219,16 @@ def list_assistant_debug_pairs() -> list[dict]:
     return pairs
 
 
-def update_feedback(msg_row_id: int, feedback: str):
-    """Update feedback for a message."""
+def update_feedback(msg_row_id: int, feedback: str, conv_id: str | None = None):
+    """Update feedback for a message. Optionally verify it belongs to the given conversation."""
     conn = _get_conn()
+    if conv_id:
+        row = conn.execute(
+            "SELECT id FROM messages WHERE id = ? AND conversation_id = ?", (msg_row_id, conv_id)
+        ).fetchone()
+        if not row:
+            conn.close()
+            return
     conn.execute("UPDATE messages SET feedback = ? WHERE id = ?", (feedback, msg_row_id))
     conn.commit()
     conn.close()

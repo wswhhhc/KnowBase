@@ -12,6 +12,10 @@ export interface ChatMessage {
   outcome_category?: string
   streaming?: boolean
   debugData?: DebugInfo
+  /** Conversation ID, set on first SSE done event */
+  convId?: string
+  /** Message row ID from backend, set on SSE done */
+  assistantMsgId?: number
 }
 
 export function useChat(onNewConversation?: (threadId: string) => void) {
@@ -20,6 +24,7 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
   const [streamingNodes, setStreamingNodes] = useState<string[]>([])
   const abortRef = useRef<AbortController | null>(null)
   const threadIdRef = useRef<string | null>(null)
+  const convIdRef = useRef<string | null>(null)
 
   const sendMessage = useCallback(
     (question: string, webSearchEnabled: boolean, searchStrategy: string) => {
@@ -78,6 +83,7 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
         onDone(data) {
           const isNew = !threadIdRef.current
           threadIdRef.current = data.thread_id
+          convIdRef.current = data.conv_id
           setMessages((prev) =>
             prev.map((m) =>
               m.id === msgId
@@ -91,6 +97,8 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
                     outcome_category: data.outcome_category,
                     streaming: false,
                     debugData: debugData,
+                    convId: data.conv_id,
+                    assistantMsgId: data.assistant_msg_id,
                   }
                 : m,
             ),
