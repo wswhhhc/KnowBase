@@ -11,7 +11,6 @@ from uuid import uuid4
 from langchain_core.documents import Document
 
 from src.graph import (
-    finalize,
     run_query,
 )
 from src.graph_routing import (
@@ -19,6 +18,7 @@ from src.graph_routing import (
     route_after_classifier,
 )
 from src.graph_nodes import (
+    finalize,
     route_after_retrieval,
     should_retry,
 )
