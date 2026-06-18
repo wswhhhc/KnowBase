@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Sidebar from '@/components/Sidebar'
 import { useConversations, useSources } from '@/hooks/useData'
 import * as api from '@/lib/api'
-import { mockConversations, mockSources, mockKBStats } from '@/test/mocks/data'
+import { mockConversations, mockMessages, mockSources, mockKBStats } from '@/test/mocks/data'
 
 // Mock framer-motion
 vi.mock('framer-motion', () => ({
@@ -203,6 +203,28 @@ describe('Sidebar interactions', () => {
 
     await waitFor(() => {
       expect(sonnerToast.error).toHaveBeenCalledWith('批量删除失败', expect.anything())
+    })
+  })
+
+  it('switching conversation loads messages with convId and assistantMsgId', async () => {
+    vi.mocked(api.getMessages).mockResolvedValue(mockMessages as any)
+    const loadMessages = vi.fn()
+    render(<Sidebar {...defaultProps} chat={{ ...defaultProps.chat, loadMessages }} />)
+    await userEvent.click(screen.getAllByText('测试对话')[0])
+
+    await waitFor(() => {
+      expect(loadMessages).toHaveBeenCalled()
+    })
+
+    const loaded = loadMessages.mock.calls[0][0] as any[]
+    // Each message should carry conversation.id as convId
+    loaded.forEach((m: any) => {
+      expect(m.convId).toBe('conv-1')
+    })
+    // Assistant messages should have assistantMsgId from the db row id
+    const assistantMsgs = loaded.filter((m: any) => m.role === 'assistant')
+    assistantMsgs.forEach((m: any) => {
+      expect(m.assistantMsgId).toBeGreaterThan(0)
     })
   })
 })
