@@ -22,10 +22,14 @@ class ConversationEdgeCaseTests(unittest.TestCase):
 
     def test_update_title_works(self):
         conv = conversations.create_conversation("旧标题")
-        conversations.update_title(conv["id"], "新标题")
+        updated = conversations.update_title(conv["id"], "新标题")
         stored = conversations.get_conversation(conv["id"])
+        self.assertTrue(updated)
         self.assertIsNotNone(stored)
         self.assertEqual(stored["title"], "新标题")
+
+    def test_update_title_nonexistent_returns_false(self):
+        self.assertFalse(conversations.update_title("missing-conv", "新标题"))
 
     def test_delete_conversation_cascades_messages(self):
         conv = conversations.create_conversation("删除测试")
@@ -34,18 +38,15 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         messages_before = conversations.get_messages(conv["id"])
         self.assertEqual(len(messages_before), 2)
 
-        conversations.delete_conversation(conv["id"])
+        deleted = conversations.delete_conversation(conv["id"])
 
+        self.assertTrue(deleted)
         messages_after = conversations.get_messages(conv["id"])
         self.assertEqual(len(messages_after), 0)
         self.assertIsNone(conversations.get_conversation(conv["id"]))
 
     def test_delete_nonexistent_conversation(self):
-        """Deleting a non-existent conversation should not raise."""
-        try:
-            conversations.delete_conversation("nonexistent-id")
-        except Exception as e:
-            self.fail(f"delete_conversation raised {e}")
+        self.assertFalse(conversations.delete_conversation("nonexistent-id"))
 
     def test_get_messages_empty_returns_empty_list(self):
         conv = conversations.create_conversation("空消息测试")
@@ -103,9 +104,10 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         assistant_msg = [m for m in messages if m["role"] == "assistant"][0]
         msg_id = assistant_msg["id"]
 
-        conversations.update_feedback(msg_id, "like")
+        updated_ok = conversations.update_feedback(msg_id, "like")
         updated = conversations.get_messages(conv["id"])
         updated_assistant = [m for m in updated if m["role"] == "assistant"][0]
+        self.assertTrue(updated_ok)
         self.assertEqual(updated_assistant["feedback"], "like")
 
     def test_update_feedback_dislike(self):
@@ -114,9 +116,13 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         msgs = conversations.get_messages(conv["id"])
         msg_id = msgs[0]["id"]
 
-        conversations.update_feedback(msg_id, "dislike")
+        updated_ok = conversations.update_feedback(msg_id, "dislike")
         updated = conversations.get_messages(conv["id"])
+        self.assertTrue(updated_ok)
         self.assertEqual(updated[0]["feedback"], "dislike")
+
+    def test_update_feedback_nonexistent_returns_false(self):
+        self.assertFalse(conversations.update_feedback(9999, "like"))
 
     def test_create_conversation_defaults_title(self):
         conv = conversations.create_conversation()

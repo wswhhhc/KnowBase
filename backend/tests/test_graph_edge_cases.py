@@ -7,10 +7,12 @@ from uuid import uuid4
 from langchain_core.messages import HumanMessage, AIMessage
 
 from src.graph import (
-    parse_rerank_decision,
-    parse_quality_decision,
     run_query,
     _initial_state,
+)
+from src.graph_utils import (
+    parse_rerank_decision,
+    parse_quality_decision,
 )
 from src.knowledge_base import RetrievalResult
 

@@ -24,7 +24,6 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
   const [streamingNodes, setStreamingNodes] = useState<string[]>([])
   const abortRef = useRef<AbortController | null>(null)
   const threadIdRef = useRef<string | null>(null)
-  const convIdRef = useRef<string | null>(null)
 
   const sendMessage = useCallback(
     (question: string, webSearchEnabled: boolean, searchStrategy: string) => {
@@ -83,7 +82,6 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
         onDone(data) {
           const isNew = !threadIdRef.current
           threadIdRef.current = data.thread_id
-          convIdRef.current = data.conv_id
           setMessages((prev) =>
             prev.map((m) =>
               m.id === msgId
@@ -133,6 +131,7 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort()
+    abortRef.current = null
     setIsStreaming(false)
     setStreamingNodes([])
     setMessages((prev) =>
@@ -141,7 +140,11 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
   }, [])
 
   const clearMessages = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
     setMessages([])
+    setIsStreaming(false)
+    setStreamingNodes([])
     threadIdRef.current = null
   }, [])
 

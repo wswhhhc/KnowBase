@@ -34,7 +34,8 @@ async def get(conv_id: str) -> ConversationOut:
 
 @router.patch("/{conv_id}")
 async def update(conv_id: str, body: ConversationCreate) -> ConversationOut:
-    update_title(conv_id, body.title)
+    if not update_title(conv_id, body.title):
+        raise HTTPException(404, "对话不存在")
     conv = get_conversation(conv_id)
     if not conv:
         raise HTTPException(404, "对话不存在")
@@ -52,7 +53,8 @@ async def delete_batch(body: list[str]):
 
 @router.delete("/{conv_id}")
 async def delete(conv_id: str):
-    delete_conversation(conv_id)
+    if not delete_conversation(conv_id):
+        raise HTTPException(404, "对话不存在")
     return {"ok": True}
 
 
@@ -63,7 +65,8 @@ async def list_messages(conv_id: str) -> list[MessageOut]:
 
 @router.post("/{conv_id}/messages/{msg_id}/feedback")
 async def feedback(conv_id: str, msg_id: int, body: MessageFeedback):
-    update_feedback(msg_id, body.feedback, conv_id=conv_id)
+    if not update_feedback(msg_id, body.feedback, conv_id=conv_id):
+        raise HTTPException(404, "消息不存在")
     return {"ok": True}
 
 

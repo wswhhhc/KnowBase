@@ -98,15 +98,16 @@ def get_conversation(conv_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def update_title(conv_id: str, title: str):
-    """Update conversation title."""
+def update_title(conv_id: str, title: str) -> bool:
+    """Update conversation title and return whether a row was changed."""
     conn = _get_conn()
-    conn.execute(
+    cursor = conn.execute(
         "UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?",
         (title, datetime.now(UTC).isoformat(), conv_id),
     )
     conn.commit()
     conn.close()
+    return cursor.rowcount > 0
 
 
 def delete_conversations(conv_ids: list[str]):
@@ -119,13 +120,14 @@ def delete_conversations(conv_ids: list[str]):
     conn.close()
 
 
-def delete_conversation(conv_id: str):
+def delete_conversation(conv_id: str) -> bool:
     """Delete a conversation and its messages."""
     conn = _get_conn()
     conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conv_id,))
-    conn.execute("DELETE FROM conversations WHERE id = ?", (conv_id,))
+    cursor = conn.execute("DELETE FROM conversations WHERE id = ?", (conv_id,))
     conn.commit()
     conn.close()
+    return cursor.rowcount > 0
 
 
 def add_message(conv_id: str, role: str, content: str, sources: list | None = None, quality_reason: str = "", debug_info: str = "{}") -> int:
@@ -219,7 +221,7 @@ def list_assistant_debug_pairs() -> list[dict]:
     return pairs
 
 
-def update_feedback(msg_row_id: int, feedback: str, conv_id: str | None = None):
+def update_feedback(msg_row_id: int, feedback: str, conv_id: str | None = None) -> bool:
     """Update feedback for a message. Optionally verify it belongs to the given conversation."""
     conn = _get_conn()
     if conv_id:
@@ -228,10 +230,11 @@ def update_feedback(msg_row_id: int, feedback: str, conv_id: str | None = None):
         ).fetchone()
         if not row:
             conn.close()
-            return
-    conn.execute("UPDATE messages SET feedback = ? WHERE id = ?", (feedback, msg_row_id))
+            return False
+    cursor = conn.execute("UPDATE messages SET feedback = ? WHERE id = ?", (feedback, msg_row_id))
     conn.commit()
     conn.close()
+    return cursor.rowcount > 0
 
 
 def export_conversation(conv_id: str) -> str:

@@ -164,9 +164,9 @@ class FastAPISmokeTests(unittest.TestCase):
         resp = self.client.get("/api/conversations/nonexistent-id")
         self.assertEqual(resp.status_code, 404)
 
-    def test_delete_unknown_conversation_returns_ok(self):
+    def test_delete_unknown_conversation_returns_404(self):
         resp = self.client.delete("/api/conversations/nonexistent-id")
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 404)
 
 
 if __name__ == "__main__":

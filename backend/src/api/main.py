@@ -14,14 +14,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import chat, conversations, documents, knowledge_base, metrics
-from src.api.deps import get_knowledge_base
 from src.conversations import init_db
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    get_knowledge_base()
     yield
 
 

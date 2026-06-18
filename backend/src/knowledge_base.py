@@ -100,6 +100,7 @@ class KnowledgeBase:
 
         # Retrieval hotspot tracking (chunk_id → hit count)
         self.hit_counter: dict[str, int] = {}
+        self._hotspot_dirty = False
         self._hotspot_path = Path(DATA_DIR) / "hotspots.json"
         self._load_hotspots()
 
@@ -123,11 +124,14 @@ class KnowledgeBase:
             self.hit_counter = {}
 
     def _save_hotspots(self):
-        """Persist hotspot counter to JSON file."""
+        """Persist hotspot counter to JSON file (no-op if not dirty)."""
+        if not self._hotspot_dirty:
+            return
         try:
             self._hotspot_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self._hotspot_path, "w") as f:
                 json.dump(self.hit_counter, f, ensure_ascii=False)
+            self._hotspot_dirty = False
         except Exception as exc:
             logger.warning("热点计数持久化失败: %s", exc)
 
@@ -361,7 +365,7 @@ class KnowledgeBase:
                 continue
             # Count each retrieval hit for hotspot analysis
             self.hit_counter[item.chunk_id] = self.hit_counter.get(item.chunk_id, 0) + 1
-            self._save_hotspots()
+            self._hotspot_dirty = True
             results.append(
                 RetrievalResult(
                     chunk_id=item.chunk_id,
@@ -371,6 +375,7 @@ class KnowledgeBase:
                     bm25_score=item.bm25_score,
                 )
             )
+        self._save_hotspots()
         return results
 
     def get_neighbor_chunks(self, chunk_id: str, window: int = 1) -> list[Document]:
@@ -477,6 +482,7 @@ class KnowledgeBase:
         self._bm25_corpus = []
         self.bm25_index = None
         self.hit_counter = {}
+        self._hotspot_dirty = True
         self._save_hotspots()
 
     def search_content(self, query: str) -> List[Document]:

@@ -569,6 +569,7 @@ class LoadSaveHotspotsTests(_BaseKBMockTest):
     def test_save_writes_to_file(self):
         self.kb._hotspot_path = self.tmp_path
         self.kb.hit_counter = {"chunk_a:0:id1": 5, "chunk_b:0:id2": 3}
+        self.kb._hotspot_dirty = True
         self.kb._save_hotspots()
 
         with open(self.tmp_path, encoding="utf-8") as f:

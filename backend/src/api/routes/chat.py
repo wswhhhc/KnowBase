@@ -56,7 +56,7 @@ async def chat_stream(
 
     async def event_generator():
         accumulated_answer = ""
-        seen_nodes: set[str] = set()
+        seen_nodes: list[str] = []
         final_sources = []
         final_quality = ""
         final_quality_ok = True
@@ -98,8 +98,8 @@ async def chat_stream(
                         node_label = NODE_LABELS.get(node_name, node_name)
                         is_new = node_label not in seen_nodes
                         if is_new:
-                            seen_nodes.add(node_label)
-                        yield {"event": "node", "data": json.dumps({"label": node_label, "nodes": list(seen_nodes)})}
+                            seen_nodes.append(node_label)
+                        yield {"event": "node", "data": json.dumps({"label": node_label, "nodes": seen_nodes})}
 
                         if isinstance(update, dict):
                             accumulated_answer = update.get("answer", accumulated_answer)

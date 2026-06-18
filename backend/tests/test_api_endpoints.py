@@ -208,8 +208,11 @@ class APIEndpointTests(unittest.TestCase):
     def test_feedback_happy_path(self):
         create_resp = self.client.post("/api/conversations", json={"title": "反馈测试"})
         conv_id = create_resp.json()["id"]
+        # Create a real message first so feedback has a target
+        from src.conversations import add_message
+        msg_id = add_message(conv_id, "user", "test question")
         resp = self.client.post(
-            f"/api/conversations/{conv_id}/messages/9999/feedback",
+            f"/api/conversations/{conv_id}/messages/{msg_id}/feedback",
             json={"feedback": "like"},
         )
         self.assertEqual(resp.status_code, 200)

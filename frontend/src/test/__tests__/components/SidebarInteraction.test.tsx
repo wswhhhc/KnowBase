@@ -98,18 +98,20 @@ describe('Sidebar interactions', () => {
     expect(clearMessages).toHaveBeenCalled()
   })
 
-  it('conversation delete button calls remove', async () => {
+  it('deleting the active conversation clears local chat state', async () => {
     const remove = vi.fn()
+    const clearMessages = vi.fn()
     vi.mocked(useConversations).mockReturnValue({
       conversations: mockConversations, activeId: 'conv-1', setActiveId: vi.fn(),
       create: vi.fn(), remove, rename: vi.fn(),
       refresh: vi.fn().mockResolvedValue(mockConversations), loading: false,
     })
 
-    render(<Sidebar {...defaultProps} />)
+    render(<Sidebar {...defaultProps} chat={{ ...defaultProps.chat, clearMessages }} />)
     const trashButtons = screen.getAllByText('Trash2')
     await userEvent.click(trashButtons[0])
     expect(remove).toHaveBeenCalled()
+    expect(clearMessages).toHaveBeenCalled()
   })
 
   it('shows 暂无对话 when empty', () => {
@@ -225,6 +227,72 @@ describe('Sidebar interactions', () => {
     const assistantMsgs = loaded.filter((m: any) => m.role === 'assistant')
     assistantMsgs.forEach((m: any) => {
       expect(m.assistantMsgId).toBeGreaterThan(0)
+    })
+  })
+
+  // ── upload/ingest-url refresh 结果逻辑 ──
+
+  it('upload document shows success toast only when refresh returns true', async () => {
+    const refresh = vi.fn()
+    vi.mocked(useSources).mockReturnValue({
+      sources: mockSources, refresh,
+    })
+    refresh.mockResolvedValue(true)
+    render(<Sidebar {...defaultProps} />)
+    await userEvent.click(screen.getByText('文档'))
+    const file = new File(['test'], 'test.txt', { type: 'text/plain' })
+    const input = screen.getByLabelText(/选择文件/)
+    await userEvent.upload(input, file)
+    await waitFor(() => {
+      expect(sonnerToast.success).toHaveBeenCalledWith('文档已上传', expect.anything())
+    })
+  })
+
+  it('upload document skips success toast when refresh returns false', async () => {
+    const refresh = vi.fn()
+    vi.mocked(useSources).mockReturnValue({
+      sources: mockSources, refresh,
+    })
+    refresh.mockResolvedValue(false)
+    render(<Sidebar {...defaultProps} />)
+    await userEvent.click(screen.getByText('文档'))
+    const file = new File(['test'], 'test.txt', { type: 'text/plain' })
+    const input = screen.getByLabelText(/选择文件/)
+    await userEvent.upload(input, file)
+    await waitFor(() => {
+      expect(sonnerToast.success).not.toHaveBeenCalled()
+    })
+  })
+
+  it('ingest url shows success toast only when refresh returns true', async () => {
+    const refresh = vi.fn()
+    vi.mocked(useSources).mockReturnValue({
+      sources: mockSources, refresh,
+    })
+    refresh.mockResolvedValue(true)
+    render(<Sidebar {...defaultProps} />)
+    await userEvent.click(screen.getByText('文档'))
+    const input = screen.getByPlaceholderText('https://…')
+    await userEvent.type(input, 'https://example.com')
+    await userEvent.click(screen.getByText('Globe'))
+    await waitFor(() => {
+      expect(sonnerToast.success).toHaveBeenCalledWith('网页已导入')
+    })
+  })
+
+  it('ingest url skips success toast when refresh returns false', async () => {
+    const refresh = vi.fn()
+    vi.mocked(useSources).mockReturnValue({
+      sources: mockSources, refresh,
+    })
+    refresh.mockResolvedValue(false)
+    render(<Sidebar {...defaultProps} />)
+    await userEvent.click(screen.getByText('文档'))
+    const input = screen.getByPlaceholderText('https://…')
+    await userEvent.type(input, 'https://example.com')
+    await userEvent.click(screen.getByText('Globe'))
+    await waitFor(() => {
+      expect(sonnerToast.success).not.toHaveBeenCalled()
     })
   })
 })

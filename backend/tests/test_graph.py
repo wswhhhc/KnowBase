@@ -5,12 +5,18 @@ from uuid import uuid4
 from langchain_core.documents import Document
 
 from src.graph import (
+    run_query,
+)
+from src.graph_routing import (
     detect_question_type,
+    route_after_classifier,
+)
+from src.graph_utils import (
     parse_quality_decision,
     parse_rerank_decision,
+)
+from src.graph_nodes import (
     route_after_rerank,
-    run_query,
-    route_after_classifier,
     route_after_retrieval,
 )
 from src.knowledge_base import RetrievalResult
@@ -133,7 +139,7 @@ class GraphRoutingTests(unittest.TestCase):
         run_query(question="第一轮问什么", thread_id=thread_id, knowledge_base=kb)
 
         fake_llm = FakeLLM(["你上一轮问的是：第一轮问什么。"])
-        with patch("src.graph._get_llm", return_value=fake_llm):
+        with patch("src.graph_utils._get_llm", return_value=fake_llm):
             result = run_query(
                 question="我刚刚问了什么",
                 thread_id=thread_id,
@@ -158,7 +164,7 @@ class GraphRoutingTests(unittest.TestCase):
             '{"quality_passed":true,"quality_reason":"PASS","retry_strategy":"none"}',
         ])
 
-        with patch("src.graph._get_llm", return_value=fake_llm):
+        with patch("src.graph_utils._get_llm", return_value=fake_llm):
             result = run_query(
                 question="LangGraph 如何记忆对话？",
                 thread_id=str(uuid4()),
@@ -182,9 +188,9 @@ class GraphRoutingTests(unittest.TestCase):
             }
         ]
 
-        with patch("src.graph.route_question", return_value={"question_type": "knowledge_base"}):
-            with patch("src.graph._get_llm", return_value=fake_llm):
-                with patch("src.graph._tavily_configured", return_value=True):
+        with patch("src.graph_routing.route_question", return_value={"question_type": "knowledge_base"}):
+            with patch("src.graph_utils._get_llm", return_value=fake_llm):
+                with patch("src.graph_nodes._tavily_configured", return_value=True):
                     with patch("src.web_search.web_search", return_value=(web_results, "")):
                         result = run_query(
                             question="李白简介",

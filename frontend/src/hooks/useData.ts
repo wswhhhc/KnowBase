@@ -12,11 +12,12 @@ export function useConversations() {
       const list = await api.getConversations()
       setConversations(list)
       return list
-    } catch { /* ignore */ }
-    finally {
+    } catch (e) {
+      console.error('加载对话列表失败:', e)
+      return []
+    } finally {
       setLoading(false)
     }
-    return []
   }
 
   useEffect(() => { refresh() }, [])
@@ -44,8 +45,18 @@ export function useConversations() {
 
 export function useSources() {
   const [sources, setSources] = useState<DocSource[]>([])
-  const refresh = async () => {
-    try { setSources(await api.getSources()) } catch { /* ignore */ }
+  const [sourceError, setSourceError] = useState<string | null>(null)
+  const refresh = async (): Promise<boolean> => {
+    try {
+      setSources(await api.getSources())
+      setSourceError(null)
+      return true
+    } catch (e) {
+      console.error('加载来源列表失败:', e)
+      setSourceError(e instanceof Error ? e.message : '未知错误')
+      return false
+    }
   }
-  return { sources, refresh }
+  useEffect(() => { refresh() }, [])
+  return { sources, sourceError, refresh }
 }

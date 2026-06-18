@@ -261,7 +261,7 @@ export function chatStream(
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
-        let event = ''
+        let event = 'message'
         for (const line of lines) {
           if (line.startsWith('event: ')) {
             event = line.slice(7).trim()
@@ -289,7 +289,8 @@ export function chatStream(
                   callbacks.onError?.(parsed.message)
                   break
               }
-            } catch { /* skip parse errors */ }
+            } catch (e) { console.warn('SSE parse error', e) }
+            event = 'message'
           }
         }
       }

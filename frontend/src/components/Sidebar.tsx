@@ -83,10 +83,10 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
 
   const switchConversation = async (conversation: Conversation) => {
     onNavigate('chat')
-    convs.setActiveId(conversation.id)
     onLoadingMessages?.(true)
     try {
       const msgs = await api.getMessages(conversation.id)
+      convs.setActiveId(conversation.id)
       chat.loadMessages(
         msgs.map((m) => ({
           id: `${m.role}-${m.id}`,
@@ -99,7 +99,9 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         })),
         conversation.thread_id,
       )
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error('切换对话失败:', e)
+    }
     onLoadingMessages?.(false)
   }
 
@@ -107,6 +109,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     onNavigate('chat')
     chat.clearMessages()
     convs.setActiveId(null)
+    setSelectedIds(new Set())
   }
 
   const handleRename = async (id: string) => {
@@ -121,8 +124,9 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     if (!file) return
     try {
       await api.uploadDocument(file)
-      await srcs.refresh()
-      toast.success('文档已上传', { description: file.name })
+      if (await srcs.refresh()) {
+        toast.success('文档已上传', { description: file.name })
+      }
     } catch (err) { toast.error('上传失败', { description: String(err) }) }
     e.target.value = ''
   }
@@ -132,8 +136,9 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     try {
       await api.ingestUrl(urlInput.trim())
       setUrlInput('')
-      await srcs.refresh()
-      toast.success('网页已导入')
+      if (await srcs.refresh()) {
+        toast.success('网页已导入')
+      }
     } catch (err) { toast.error('导入失败', { description: String(err) }) }
   }
 
@@ -268,7 +273,14 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
                         <Pencil className="h-3 w-3" />
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); convs.remove(c.id) }}
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          const isActive = convs.activeId === c.id
+                          await convs.remove(c.id)
+                          if (isActive) {
+                            chat.clearMessages()
+                          }
+                        }}
                         className="opacity-0 group-hover:opacity-60 text-muted-foreground hover:text-destructive transition-all"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -303,7 +315,12 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">文档来源</span>
                   {srcs.sources.length > 0 && (
-                    <button onClick={async () => { await api.clearKnowledgeBase(); await srcs.refresh(); toast.success('知识库已清空') }}
+                    <button onClick={async () => {
+                      try {
+                        await api.clearKnowledgeBase()
+                        if (await srcs.refresh()) toast.success('知识库已清空')
+                      } catch (e) { toast.error('清空失败', { description: String(e) }) }
+                    }}
                       className="text-[10px] text-destructive/50 hover:text-destructive transition-colors">清空</button>
                   )}
                 </div>
@@ -312,7 +329,12 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
                     <div key={s.source} className="group flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-foreground/70 hover:bg-muted transition-colors">
                       <span className="truncate flex-1">{s.source}</span>
                       <span className="text-[10px] text-muted-foreground mr-2 font-mono">{s.count}</span>
-                      <button onClick={() => { api.deleteSource(s.source); srcs.refresh(); toast.success('已删除来源') }}
+                      <button onClick={async () => {
+                        try {
+                          await api.deleteSource(s.source)
+                          if (await srcs.refresh()) toast.success('已删除来源')
+                        } catch (e) { toast.error('删除失败', { description: String(e) }) }
+                      }}
                         className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all">
                         <Trash2 className="h-3 w-3" />
                       </button>

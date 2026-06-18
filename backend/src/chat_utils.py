@@ -77,4 +77,5 @@ def generate_title(question: str) -> str:
         title = str(result.content).strip().strip('"').strip("'")[:30]
         return title if title else question[:30]
     except Exception:
+        logger.warning("对话标题生成失败，回退到原始问题。", exc_info=True)
         return question[:30]
