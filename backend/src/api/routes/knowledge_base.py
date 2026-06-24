@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, Query
 
 from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import KBChunk, KBStats
+from src.kb_models import normalize_source
 from src.knowledge_base import KnowledgeBase
 from config.settings import CHUNK_SIZE, CHUNK_OVERLAP
 
@@ -33,7 +32,7 @@ async def chunks(
     kb._ensure_loaded()
     docs = kb.all_docs
     if source:
-        docs = [d for d in docs if d.metadata.get("source", "") == Path(source).name]
+        docs = [d for d in docs if d.metadata.get("source", "") == normalize_source(source)]
     if search:
         keywords = [kw.strip().lower() for kw in search.split() if kw.strip()]
         docs = [d for d in docs if any(kw in d.page_content.lower() for kw in keywords)]

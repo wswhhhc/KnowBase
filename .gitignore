@@ -34,3 +34,5 @@ data/eval_reports/
 frontend/coverage/
 backend/.coverage
 backend/.coverage.*
+videos/
+output/

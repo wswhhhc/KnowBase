@@ -22,11 +22,14 @@ from urllib3.connection import HTTPConnection, HTTPSConnection
 from urllib3.poolmanager import PoolManager
 
 
+from src.kb_models import normalize_source
+
+
 def load_document(file_path: str, source_name: str | None = None) -> List[Document]:
     """Load a document by file extension and return LangChain Documents."""
     path = Path(file_path)
     ext = path.suffix.lower()
-    display_source = Path(source_name or path.name).name
+    display_source = normalize_source(source_name or path.name)
 
     loader = _LOADER_MAP.get(ext)
     if loader is None:

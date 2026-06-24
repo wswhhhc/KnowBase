@@ -35,7 +35,19 @@ def content_hash(content: str) -> str:
 
 
 def chunk_id(source: str, chunk_index: int, content_hash: str) -> str:
-    return f"{Path(source).name}:{chunk_index}:{content_hash[:16]}"
+    return f"{normalize_source(source)}:{chunk_index}:{content_hash[:16]}"
+
+
+def normalize_source(source: str) -> str:
+    """Produce a stable source identifier.
+
+    For URLs the full address is preserved (``https://example.com/page``).
+    For local file paths only the basename is kept (``report.pdf``).
+    Idempotent — calling again on an already normalized value is a no-op.
+    """
+    if source.startswith("http://") or source.startswith("https://"):
+        return source
+    return Path(source).name
 
 
 def infer_source_type(source: str) -> str:
@@ -49,7 +61,7 @@ def document_chunk_id(doc: Document) -> str:
     existing = doc.metadata.get("chunk_id")
     if existing:
         return str(existing)
-    source = Path(doc.metadata.get("source", "unknown")).name
+    source = normalize_source(doc.metadata.get("source", "unknown"))
     chunk_index = int(doc.metadata.get("chunk_index", 0))
     c_hash = doc.metadata.get("content_hash") or content_hash(doc.page_content)
     cid = chunk_id(source, chunk_index, c_hash)

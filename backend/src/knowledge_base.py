@@ -38,6 +38,7 @@ from src.kb_models import (
     content_hash as compute_content_hash,
     chunk_id as _chunk_id,
     infer_source_type,
+    normalize_source,
     document_chunk_id as _document_chunk_id,
 )
 from src.loaders import load_document
@@ -179,7 +180,7 @@ class KnowledgeBase:
             if not content:
                 continue
             metadata = dict(metadatas[index] or {}) if index < len(metadatas) else {}
-            source = Path(metadata.get("source", "unknown")).name
+            source = normalize_source(metadata.get("source", "unknown"))
             content_hash = metadata.get("content_hash") or compute_content_hash(content)
             chunk_index = int(metadata.get("chunk_index", index))
             metadata.setdefault("source", source)
@@ -206,11 +207,11 @@ class KnowledgeBase:
         Call only after the new data has been safely written to Chroma.
         """
         self._ensure_loaded()
-        src = Path(source_name).name
+        src = normalize_source(source_name)
         old_ids = {
             doc.metadata["chunk_id"]
             for doc in self.all_docs
-            if Path(doc.metadata.get("source", "")).name == src
+            if normalize_source(doc.metadata.get("source", "")) == src
         }
         if not old_ids:
             return
@@ -275,7 +276,7 @@ class KnowledgeBase:
         current_heading: dict[str, str] = {}
 
         for split in splits:
-            source = Path(split.metadata.get("source", "unknown")).name
+            source = normalize_source(split.metadata.get("source", "unknown"))
             chunk_index = per_source_counts[source]
             per_source_counts[source] += 1
             content_hash = compute_content_hash(split.page_content)
@@ -459,7 +460,7 @@ class KnowledgeBase:
         """Return chunk counts by source file."""
         self._ensure_loaded()
         counts = Counter(
-            Path(doc.metadata.get("source", "未知来源")).name
+            normalize_source(doc.metadata.get("source", "未知来源"))
             for doc in self.all_docs
         )
         return sorted(counts.items())
@@ -489,11 +490,11 @@ class KnowledgeBase:
         Returns the number of chunks removed.
         """
         self._ensure_loaded()
-        source_name = Path(source_name).name
+        source_name = normalize_source(source_name)
         before = sum(
             1
             for doc in self.all_docs
-            if Path(doc.metadata.get("source", "")).name == source_name
+            if normalize_source(doc.metadata.get("source", "")) == source_name
         )
 
         # Chroma: delete by metadata filter
@@ -503,7 +504,7 @@ class KnowledgeBase:
         self.all_docs = [
             doc
             for doc in self.all_docs
-            if Path(doc.metadata.get("source", "")).name != source_name
+            if normalize_source(doc.metadata.get("source", "")) != source_name
         ]
         self._rebuild_all()
         return before
