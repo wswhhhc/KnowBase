@@ -180,7 +180,14 @@ class KnowledgeBase:
             if not content:
                 continue
             metadata = dict(metadatas[index] or {}) if index < len(metadatas) else {}
-            source = normalize_source(metadata.get("source", "unknown"))
+            source = metadata.get("source", "unknown")
+            # 修复旧数据：如果 source 是 basename 但 metadata 中有完整 url，
+            # 用 url 覆盖（normalize_source 对 URL 保留完整地址）。
+            if source and "/" not in source and not source.startswith("http"):
+                url = metadata.get("url")
+                if url and (url.startswith("http://") or url.startswith("https://")):
+                    source = url
+            source = normalize_source(source)
             content_hash = metadata.get("content_hash") or compute_content_hash(content)
             chunk_index = int(metadata.get("chunk_index", index))
             metadata.setdefault("source", source)
