@@ -22,6 +22,7 @@ export interface Message {
   content: string
   sources: Source[]
   quality_reason: string
+  debug_info?: Record<string, unknown>
   feedback?: string | null
   created_at: string
 }

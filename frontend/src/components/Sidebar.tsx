@@ -9,7 +9,7 @@ import { formatTime, truncate } from '@/lib/utils'
 import * as api from '@/lib/api'
 import { useConversations, useSources } from '@/hooks/useData'
 import type { ChatMessage } from '@/hooks/useChat'
-import type { Conversation } from '@/lib/api'
+import type { Conversation, DebugInfo } from '@/lib/api'
 import type { ViewType } from '@/App'
 
 interface SidebarProps {
@@ -94,6 +94,10 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
           content: m.content,
           sources: m.sources,
           quality_reason: m.quality_reason,
+          debugData: m.debug_info as DebugInfo | undefined,
+          evidence_level: (m.debug_info as Record<string, string> | undefined)?.evidence_level,
+          evidence_summary: (m.debug_info as Record<string, string> | undefined)?.evidence_summary,
+          outcome_category: (m.debug_info as Record<string, string> | undefined)?.outcome_category,
           convId: conversation.id,
           assistantMsgId: m.role === 'assistant' ? m.id : undefined,
         })),

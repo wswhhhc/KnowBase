@@ -204,9 +204,42 @@ class KnowledgeBase:
         """Ingest a file and return the number of new chunks.
 
         Supported formats: .txt, .md, .pdf, .docx, .html (.htm).
+        If a source with the same name already exists, old chunks are replaced
+        only after the new chunks have been successfully written.
         """
         docs = load_document(file_path, source_name=source_name)
-        return self._process_documents(docs)
+
+        # Record old chunk_ids before any writes, so we can clean up stale ones
+        # after the new data is safely persisted.
+        old_ids: set[str] = set()
+        if source_name:
+            self._ensure_loaded()
+            src = Path(source_name).name
+            old_ids = {
+                doc.metadata["chunk_id"]
+                for doc in self.all_docs
+                if Path(doc.metadata.get("source", "")).name == src
+            }
+
+        new_count = self._process_documents(docs)
+
+        # Write succeeded — now remove stale chunks (old content that changed).
+        if source_name and old_ids:
+            new_ids = {
+                d.metadata["chunk_id"]
+                for d in self._prepare_splits(docs)
+                if d.metadata.get("chunk_id")
+            }
+            stale_ids = old_ids - new_ids
+            if stale_ids:
+                self.vector_store.delete(ids=list(stale_ids))
+                self.all_docs = [
+                    doc for doc in self.all_docs
+                    if doc.metadata["chunk_id"] not in stale_ids
+                ]
+                self._rebuild_all()
+
+        return new_count
 
     def ingest_url(self, url: str) -> int:
         """Fetch a public URL and ingest its content.

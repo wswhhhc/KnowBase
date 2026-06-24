@@ -661,6 +661,39 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
                 mock_load.assert_called_once_with("/fake/path/doc.pdf", source_name="my_doc.pdf")
                 self.assertEqual(result, 2)
 
+    def test_ingest_file_replaces_old_chunks_when_source_exists(self):
+        """Re-uploading same source name removes old chunks from vector_store."""
+        self.kb.all_docs.append(
+            Document(
+                page_content="stale content that will be replaced",
+                metadata={
+                    "source": "replaced.txt",
+                    "chunk_id": "replaced.txt:0:oldhash1234",
+                    "chunk_index": 0,
+                    "content_hash": "oldhash1234",
+                    "source_type": "local_file",
+                },
+            ),
+        )
+        self.kb._rebuild_all()
+        self.kb.vector_store.delete.reset_mock()
+
+        fake_docs = [
+            Document(page_content="全新的文档内容" * 100, metadata={"source": "replaced.txt"}),
+        ]
+
+        with patch("src.knowledge_base.load_document", return_value=fake_docs):
+            result = self.kb.ingest_file("/fake/path/replaced.txt", source_name="replaced.txt")
+
+        self.assertGreater(result, 0)
+        # Stale chunk should be removed from in-memory state
+        stale_id = "replaced.txt:0:oldhash1234"
+        self.assertNotIn(stale_id, self.kb.doc_by_id)
+        self.assertNotIn(stale_id, self.kb.existing_chunk_ids)
+        self.assertFalse(
+            any(d.metadata["chunk_id"] == stale_id for d in self.kb.all_docs)
+        )
+
 
 class KBEnsureLoadedTests(_BaseKBMockTest):
     """Test _ensure_loaded."""

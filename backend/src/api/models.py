@@ -40,6 +40,7 @@ class MessageOut(BaseModel):
     content: str
     sources: list[ChatSource] = []
     quality_reason: str = ""
+    debug_info: dict = {}
     feedback: str | None = None
     created_at: str
 

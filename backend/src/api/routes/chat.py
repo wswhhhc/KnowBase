@@ -227,7 +227,12 @@ async def chat_stream(
                     conv = create_conversation(title, thread_id=thread_id)
                     conv_id = conv["id"]
                 add_message(conv_id, "user", body.question)
-                assistant_msg_id = add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality, debug_info=debug_info.model_dump_json())
+                assistant_msg_id = add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality, debug_info=json.dumps({
+                    **debug_info.model_dump(),
+                    "evidence_level": final_evidence_level,
+                    "evidence_summary": final_evidence_summary,
+                    "outcome_category": final_outcome_category,
+                }))
                 _record_query_metrics(
                     question=body.question,
                     thread_id=thread_id,

@@ -129,10 +129,10 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                       className={`px-2 py-1 text-[10px] font-medium rounded-sm transition-colors ${
                         searchStrategy === s ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
                       }`}>
-                      {s === 'fast' ? '快速' : s === 'balanced' ? '均衡' : s === 'high_quality' ? '深度' : '全文'}
+                      {s === 'fast' ? '快速' : s === 'balanced' ? '均衡' : s === 'high_quality' ? '精准' : '深度'}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>{s === 'fast' ? '快速：不重排' : s === 'balanced' ? '均衡：条件重排' : s === 'high_quality' ? '深度：必重排' : '全文：扩检索+重排'}</TooltipContent>
+                  <TooltipContent>{s === 'fast' ? '快速：不重排' : s === 'balanced' ? '均衡：条件重排' : s === 'high_quality' ? '精准：强制重排+质量检查' : '深度：扩检索+重排'}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ))}

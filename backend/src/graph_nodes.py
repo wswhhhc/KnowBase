@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import zlib
 from collections import OrderedDict
 from typing import List, Literal
 
@@ -444,7 +445,8 @@ def check_quality(state: GraphState) -> dict:
 
     strategy = state.get("search_strategy", "balanced")
     web_search_available = state.get("web_search_enabled", False) and _tavily_configured()
-    if strategy != "high_quality" and not web_search_available and hash(question + answer) % 3 != 0:
+    # 确定性采样：adler32 保证同一输入在不同进程/重启后结果一致
+    if strategy != "high_quality" and not web_search_available and zlib.adler32((question + answer).encode("utf-8")) % 3 != 0:
         decision = QualityDecision(quality_passed=True, quality_reason="质量检查采样跳过。")
     else:
         llm = gu._get_llm()

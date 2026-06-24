@@ -26,7 +26,7 @@ async def upload_file(file: UploadFile = File(...), kb: KnowledgeBase = Depends(
         chunk_count = kb.ingest_file(str(file_path), source_name=source_name)
         return IngestResponse(
             chunk_count=chunk_count, total_docs=kb.document_count,
-            message=f"已添加 {chunk_count} 个新片段" if chunk_count else "文件已存在，无新增片段",
+            message=f"已添加 {chunk_count} 个新片段" if chunk_count else "文件内容无变化，未新增片段",
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
