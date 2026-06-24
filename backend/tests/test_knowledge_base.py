@@ -15,6 +15,7 @@ from src.kb_models import (
     compute_content_hash as _content_hash,
     document_chunk_id as _document_chunk_id,
     infer_source_type as _infer_source_type,
+    normalize_source,
 )
 
 
@@ -221,6 +222,38 @@ class DocumentChunkIdTests(unittest.TestCase):
         doc = Document(page_content="test", metadata={"chunk_id": "custom:0:id"})
         result = _document_chunk_id(doc)
         self.assertEqual(result, "custom:0:id")
+
+
+class NormalizeSourceTests(unittest.TestCase):
+    """Test normalize_source — URL vs file path distinction."""
+
+    def test_url_preserved_as_is(self):
+        self.assertEqual(normalize_source("https://example.com/page"), "https://example.com/page")
+
+    def test_url_with_trailing_slash(self):
+        self.assertEqual(normalize_source("https://site.com/docs/"), "https://site.com/docs/")
+
+    def test_url_with_path_and_query(self):
+        self.assertEqual(normalize_source("https://blog.example/posts/2025?id=1"), "https://blog.example/posts/2025?id=1")
+
+    def test_local_file_takes_basename(self):
+        self.assertEqual(normalize_source("/home/user/docs/report.pdf"), "report.pdf")
+
+    def test_local_file_windows_path(self):
+        self.assertEqual(normalize_source("C:\\Users\\me\\doc.txt"), "doc.txt")
+
+    def test_relative_path_takes_basename(self):
+        self.assertEqual(normalize_source("./data/sample.txt"), "sample.txt")
+
+    def test_plain_filename_stays_unchanged(self):
+        self.assertEqual(normalize_source("readme.md"), "readme.md")
+
+    def test_different_urls_same_basename_dont_collide(self):
+        url_a = normalize_source("https://foo.com/docs/index.html")
+        url_b = normalize_source("https://bar.com/docs/index.html")
+        self.assertNotEqual(url_a, url_b)
+        self.assertEqual(url_a, "https://foo.com/docs/index.html")
+        self.assertEqual(url_b, "https://bar.com/docs/index.html")
 
 
 # ---- NEW TEST CLASSES BELOW ----
@@ -693,6 +726,39 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
         self.assertFalse(
             any(d.metadata["chunk_id"] == stale_id for d in self.kb.all_docs)
         )
+
+    def test_different_urls_same_basename_no_collision(self):
+        """Two URLs with the same path basename must not interfere."""
+        self.kb.all_docs.append(
+            Document(
+                page_content="content from foo.com",
+                metadata={
+                    "source": "https://foo.com/docs/index.html",
+                    "chunk_id": "https://foo.com/docs/index.html:0:aaa111",
+                    "chunk_index": 0,
+                    "content_hash": "aaa111",
+                },
+            ),
+        )
+        self.kb._rebuild_all()
+
+        self.kb.vector_store.delete.reset_mock()
+
+        url_b_docs = [
+            Document(page_content="全" * 200, metadata={"source": "https://bar.com/docs/index.html"}),
+        ]
+
+        with patch("src.knowledge_base.load_document", return_value=url_b_docs):
+            self.kb.ingest_file("/fake/path/page.html", source_name="https://bar.com/docs/index.html")
+
+        # foo.com chunk must still be present
+        self.assertIn("https://foo.com/docs/index.html:0:aaa111", self.kb.doc_by_id)
+        self.assertIn("https://foo.com/docs/index.html:0:aaa111", self.kb.existing_chunk_ids)
+
+        # bar.com old_ids is empty (first import), so _replace_old_chunks should
+        # not have called delete at all — verifying delete was not invoked.
+        # (delete was also called by _process_documents internally for dedup,
+        #  so we verify foo.com chunk survived instead.)
 
 
 class KBEnsureLoadedTests(_BaseKBMockTest):
