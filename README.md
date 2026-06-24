@@ -67,7 +67,8 @@ uv run streamlit run src/app.py
 ```
 KnowBase/
 ├── backend/                    # FastAPI 后端
-│   ├── config/                 # pydantic-settings 配置
+│   ├── config/
+│   │   └── settings.py         # pydantic-settings 配置
 │   ├── src/
 │   │   ├── api/                # REST API 路由层
 │   │   │   ├── main.py         # 应用入口 + CORS
@@ -89,7 +90,7 @@ KnowBase/
 │   │   ├── metrics.py          # JSONL 日志
 │   │   ├── chat_utils.py       # 聊天路由辅助（标题生成/指标/NODE_LABELS）
 │   │   └── utils.py            # 工具函数（含流式上传）
-│   └── tests/
+│   └── tests/                  # 22 个测试文件
 ├── frontend/                   # React + Vite + Tailwind 前端
 │   └── src/
 │       ├── components/
@@ -127,8 +128,7 @@ KnowBase/
 
 ## 测试
 
-### 后端测试（Python unittest，348 个用例）
-
+### 后端测试（Python unittest，368 个用例）
 ```bash
 cd backend
 
@@ -145,8 +145,7 @@ uv run python -m unittest tests.test_knowledge_base -v    # 知识库测试
 uv run python -m unittest tests.test_conversations -v     # 对话管理测试
 ```
 
-### 前端测试（vitest，141 个用例）
-
+### 前端测试（vitest，147 个用例）
 ```bash
 cd frontend
 npm test               # 运行一次
