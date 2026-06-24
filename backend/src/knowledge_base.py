@@ -190,12 +190,19 @@ class KnowledgeBase:
             source = normalize_source(source)
             content_hash = metadata.get("content_hash") or compute_content_hash(content)
             chunk_index = int(metadata.get("chunk_index", index))
-            metadata.setdefault("source", source)
+            metadata["source"] = source
             metadata.setdefault("content_hash", content_hash)
             metadata.setdefault("chunk_index", chunk_index)
             # Legacy Chroma rows used UUID ids and had no chunk_id metadata.
             # Always backfill the stable id so restarts do not re-ingest samples.
-            metadata.setdefault("chunk_id", _chunk_id(source, chunk_index, content_hash))
+            existing_chunk_id = metadata.get("chunk_id")
+            if existing_chunk_id:
+                expected_prefix = f"{source}:{chunk_index}:"
+                if not str(existing_chunk_id).startswith(expected_prefix):
+                    metadata["legacy_chunk_id"] = str(existing_chunk_id)
+                    metadata["chunk_id"] = _chunk_id(source, chunk_index, content_hash)
+            else:
+                metadata["chunk_id"] = _chunk_id(source, chunk_index, content_hash)
             metadata.setdefault("legacy_chroma_id", ids[index] if index < len(ids) else "")
             docs.append(Document(page_content=content, metadata=metadata))
         return docs

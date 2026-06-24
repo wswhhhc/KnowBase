@@ -224,6 +224,44 @@ class DocumentChunkIdTests(unittest.TestCase):
         self.assertEqual(result, "custom:0:id")
 
 
+class LegacyChromaMigrationTests(unittest.TestCase):
+    def test_documents_from_chroma_result_upgrades_legacy_url_source(self):
+        result = {
+            "documents": ["content"],
+            "metadatas": [{
+                "source": "index.html",
+                "url": "https://foo.com/docs/index.html",
+                "chunk_index": 0,
+            }],
+            "ids": ["legacy-row-id"],
+        }
+
+        docs = KnowledgeBase._documents_from_chroma_result(result)
+
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0].metadata["source"], "https://foo.com/docs/index.html")
+
+    def test_documents_from_chroma_result_rebuilds_legacy_url_chunk_id(self):
+        result = {
+            "documents": ["content"],
+            "metadatas": [{
+                "source": "index.html",
+                "url": "https://foo.com/docs/index.html",
+                "chunk_index": 0,
+                "chunk_id": "index.html:0:oldbadid12345678",
+            }],
+            "ids": ["legacy-row-id"],
+        }
+
+        docs = KnowledgeBase._documents_from_chroma_result(result)
+
+        self.assertEqual(len(docs), 1)
+        migrated = docs[0].metadata
+        self.assertEqual(migrated["source"], "https://foo.com/docs/index.html")
+        self.assertTrue(migrated["chunk_id"].startswith("https://foo.com/docs/index.html:0:"))
+        self.assertEqual(migrated["legacy_chunk_id"], "index.html:0:oldbadid12345678")
+
+
 class NormalizeSourceTests(unittest.TestCase):
     """Test normalize_source — URL vs file path distinction."""
 
