@@ -223,6 +223,21 @@ class DocumentChunkIdTests(unittest.TestCase):
         result = _document_chunk_id(doc)
         self.assertEqual(result, "custom:0:id")
 
+    def test_document_chunk_id_repairs_legacy_url_chunk_id(self):
+        doc = Document(
+            page_content="content",
+            metadata={
+                "source": "index.html",
+                "url": "https://foo.com/docs/index.html",
+                "chunk_index": 0,
+                "chunk_id": "index.html:0:oldbadid12345678",
+            },
+        )
+        result = _document_chunk_id(doc)
+        self.assertTrue(result.startswith("https://foo.com/docs/index.html:0:"))
+        self.assertEqual(doc.metadata["source"], "https://foo.com/docs/index.html")
+        self.assertEqual(doc.metadata["legacy_chunk_id"], "index.html:0:oldbadid12345678")
+
 
 class LegacyChromaMigrationTests(unittest.TestCase):
     def test_documents_from_chroma_result_upgrades_legacy_url_source(self):
@@ -797,6 +812,53 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
         # not have called delete at all — verifying delete was not invoked.
         # (delete was also called by _process_documents internally for dedup,
         #  so we verify foo.com chunk survived instead.)
+
+    def test_replace_old_chunks_deletes_legacy_chroma_row_ids(self):
+        stale = Document(
+            page_content="old content",
+            metadata={
+                "source": "https://foo.com/docs/index.html",
+                "chunk_id": "https://foo.com/docs/index.html:0:oldhash1234567890",
+                "chunk_index": 0,
+                "legacy_chroma_id": "uuid-1234",
+            },
+        )
+        self.kb.all_docs.append(stale)
+        self.kb._rebuild_all()
+        self.kb.vector_store.delete.reset_mock()
+
+        fresh_docs = [
+            Document(page_content="new content" * 100, metadata={"source": "https://foo.com/docs/index.html"}),
+        ]
+
+        self.kb._replace_old_chunks("https://foo.com/docs/index.html", fresh_docs)
+
+        self.kb.vector_store.delete.assert_called_once_with(ids=["uuid-1234"])
+
+    def test_process_documents_dedups_against_loaded_canonical_chunk_ids(self):
+        self.kb._loaded = False
+        self.kb.all_docs = []
+        self.kb.doc_by_id = {}
+        self.kb.existing_chunk_ids = {"legacy-uuid-row-id"}
+        self.kb.vector_store.get.return_value = {
+            "ids": ["legacy-uuid-row-id"],
+            "documents": ["same content" * 100],
+            "metadatas": [{
+                "source": "same.txt",
+                "chunk_index": 0,
+                "url": "",
+            }],
+        }
+        self.kb.vector_store.add_documents.reset_mock()
+
+        docs = [
+            Document(page_content="same content" * 100, metadata={"source": "same.txt"}),
+        ]
+
+        count = self.kb._process_documents(docs)
+
+        self.assertEqual(count, 0)
+        self.kb.vector_store.add_documents.assert_not_called()
 
 
 class KBEnsureLoadedTests(_BaseKBMockTest):

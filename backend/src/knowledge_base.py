@@ -35,6 +35,7 @@ from config.settings import (
 from src.kb_models import (
     RetrievalResult,
     FusionScore,
+    canonical_source_from_metadata,
     content_hash as compute_content_hash,
     chunk_id as _chunk_id,
     infer_source_type,
@@ -180,14 +181,7 @@ class KnowledgeBase:
             if not content:
                 continue
             metadata = dict(metadatas[index] or {}) if index < len(metadatas) else {}
-            source = metadata.get("source", "unknown")
-            # 修复旧数据：如果 source 是 basename 但 metadata 中有完整 url，
-            # 用 url 覆盖（normalize_source 对 URL 保留完整地址）。
-            if source and "/" not in source and not source.startswith("http"):
-                url = metadata.get("url")
-                if url and (url.startswith("http://") or url.startswith("https://")):
-                    source = url
-            source = normalize_source(source)
+            source = canonical_source_from_metadata(metadata)
             content_hash = metadata.get("content_hash") or compute_content_hash(content)
             chunk_index = int(metadata.get("chunk_index", index))
             metadata["source"] = source
@@ -206,6 +200,15 @@ class KnowledgeBase:
             metadata.setdefault("legacy_chroma_id", ids[index] if index < len(ids) else "")
             docs.append(Document(page_content=content, metadata=metadata))
         return docs
+
+    @staticmethod
+    def _vector_store_id(doc: Document) -> str:
+        """Return the underlying Chroma row id for a document."""
+        return str(
+            doc.metadata.get("legacy_chroma_id")
+            or doc.metadata.get("chunk_id")
+            or ""
+        )
 
     def load_preset_documents(self) -> int:
         """Load sample text documents from data/ without duplicating existing chunks."""
@@ -237,7 +240,13 @@ class KnowledgeBase:
         stale_ids = old_ids - new_ids
         if not stale_ids:
             return
-        self.vector_store.delete(ids=list(stale_ids))
+        stale_docs = [
+            doc for doc in self.all_docs
+            if doc.metadata.get("chunk_id") in stale_ids
+        ]
+        vector_ids = [self._vector_store_id(doc) for doc in stale_docs if self._vector_store_id(doc)]
+        if vector_ids:
+            self.vector_store.delete(ids=vector_ids)
         self.all_docs = [
             doc for doc in self.all_docs
             if doc.metadata["chunk_id"] not in stale_ids
@@ -331,6 +340,9 @@ class KnowledgeBase:
 
     def _process_documents(self, docs: List[Document]) -> int:
         """Split documents, store new chunks in Chroma, and extend BM25 incrementally."""
+        # Load persisted docs first so dedup compares against canonical chunk_ids,
+        # not raw Chroma row ids from startup.
+        self._ensure_loaded()
         splits = self._prepare_splits(docs)
         new_splits = [
             doc
@@ -340,9 +352,6 @@ class KnowledgeBase:
 
         if not new_splits:
             return 0
-
-        # Ensure full state is loaded before we append new docs
-        self._ensure_loaded()
 
         ids = [doc.metadata["chunk_id"] for doc in new_splits]
         self.vector_store.add_documents(new_splits, ids=ids)
@@ -510,9 +519,14 @@ class KnowledgeBase:
             for doc in self.all_docs
             if normalize_source(doc.metadata.get("source", "")) == source_name
         )
-
-        # Chroma: delete by metadata filter
-        self.vector_store.delete(filter={"source": source_name})
+        target_docs = [
+            doc
+            for doc in self.all_docs
+            if normalize_source(doc.metadata.get("source", "")) == source_name
+        ]
+        vector_ids = [self._vector_store_id(doc) for doc in target_docs if self._vector_store_id(doc)]
+        if vector_ids:
+            self.vector_store.delete(ids=vector_ids)
 
         # In-memory: rebuild from remaining chunks
         self.all_docs = [

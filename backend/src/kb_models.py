@@ -52,6 +52,21 @@ def normalize_source(source: str) -> str:
     return Path(source.replace("\\", "/")).name
 
 
+def canonical_source_from_metadata(metadata: dict, default: str = "unknown") -> str:
+    """Return the canonical source identifier for persisted metadata.
+
+    Legacy Chroma rows may have stored only a basename in ``source`` for web
+    pages while preserving the full URL separately in ``url``. In that case the
+    URL should win so source identity remains stable and collision-free.
+    """
+    source = str(metadata.get("source", default))
+    if source and "/" not in source and not source.startswith("http"):
+        url = metadata.get("url")
+        if isinstance(url, str) and (url.startswith("http://") or url.startswith("https://")):
+            source = url
+    return normalize_source(source)
+
+
 def infer_source_type(source: str) -> str:
     """Infer source_type from a source identifier."""
     if source.startswith("http://") or source.startswith("https://"):
@@ -61,16 +76,21 @@ def infer_source_type(source: str) -> str:
 
 def document_chunk_id(doc: Document) -> str:
     existing = doc.metadata.get("chunk_id")
-    if existing:
+    if existing and not any(key in doc.metadata for key in ("source", "chunk_index", "url", "content_hash")):
         return str(existing)
-    source = normalize_source(doc.metadata.get("source", "unknown"))
+    source = canonical_source_from_metadata(doc.metadata)
     chunk_index = int(doc.metadata.get("chunk_index", 0))
     c_hash = doc.metadata.get("content_hash") or content_hash(doc.page_content)
+    expected_prefix = f"{source}:{chunk_index}:"
+    if existing and str(existing).startswith(expected_prefix):
+        return str(existing)
+    if existing:
+        doc.metadata.setdefault("legacy_chunk_id", str(existing))
     cid = chunk_id(source, chunk_index, c_hash)
-    doc.metadata.setdefault("source", source)
+    doc.metadata["source"] = source
     doc.metadata.setdefault("chunk_index", chunk_index)
     doc.metadata.setdefault("content_hash", c_hash)
-    doc.metadata.setdefault("chunk_id", cid)
+    doc.metadata["chunk_id"] = cid
     return cid
 
 
