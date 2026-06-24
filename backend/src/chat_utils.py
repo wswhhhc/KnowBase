@@ -61,7 +61,16 @@ def generate_title(question: str) -> str:
     """Use LLM to generate a short conversation title from the first question."""
     try:
         from langchain_openai import ChatOpenAI
-        from config.settings import require_siliconflow_api_key, SILICONFLOW_BASE_URL, LLM_MODEL
+        from config.settings import (
+            _is_configured_api_key,
+            settings,
+            require_siliconflow_api_key,
+            SILICONFLOW_BASE_URL,
+            LLM_MODEL,
+        )
+
+        if not _is_configured_api_key(settings.siliconflow_api_key):
+            return question[:30]
 
         llm = ChatOpenAI(
             model=LLM_MODEL,
