@@ -47,7 +47,9 @@ def normalize_source(source: str) -> str:
     """
     if source.startswith("http://") or source.startswith("https://"):
         return source
-    return Path(source).name
+    # Normalize Windows-style backslashes first so basename extraction
+    # behaves consistently on Linux/macOS CI runners too.
+    return Path(source.replace("\\", "/")).name
 
 
 def infer_source_type(source: str) -> str:
