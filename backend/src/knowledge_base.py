@@ -200,6 +200,35 @@ class KnowledgeBase:
             total += self.ingest_file(str(file_path), source_name=file_path.name)
         return total
 
+    def _replace_old_chunks(self, source_name: str, new_docs: list[Document]) -> None:
+        """Remove stale chunks for *source_name* that are not in *new_docs*.
+
+        Call only after the new data has been safely written to Chroma.
+        """
+        self._ensure_loaded()
+        src = Path(source_name).name
+        old_ids = {
+            doc.metadata["chunk_id"]
+            for doc in self.all_docs
+            if Path(doc.metadata.get("source", "")).name == src
+        }
+        if not old_ids:
+            return
+        new_ids = {
+            d.metadata["chunk_id"]
+            for d in self._prepare_splits(new_docs)
+            if d.metadata.get("chunk_id")
+        }
+        stale_ids = old_ids - new_ids
+        if not stale_ids:
+            return
+        self.vector_store.delete(ids=list(stale_ids))
+        self.all_docs = [
+            doc for doc in self.all_docs
+            if doc.metadata["chunk_id"] not in stale_ids
+        ]
+        self._rebuild_all()
+
     def ingest_file(self, file_path: str, source_name: str | None = None) -> int:
         """Ingest a file and return the number of new chunks.
 
@@ -208,48 +237,23 @@ class KnowledgeBase:
         only after the new chunks have been successfully written.
         """
         docs = load_document(file_path, source_name=source_name)
-
-        # Record old chunk_ids before any writes, so we can clean up stale ones
-        # after the new data is safely persisted.
-        old_ids: set[str] = set()
-        if source_name:
-            self._ensure_loaded()
-            src = Path(source_name).name
-            old_ids = {
-                doc.metadata["chunk_id"]
-                for doc in self.all_docs
-                if Path(doc.metadata.get("source", "")).name == src
-            }
-
         new_count = self._process_documents(docs)
-
-        # Write succeeded — now remove stale chunks (old content that changed).
-        if source_name and old_ids:
-            new_ids = {
-                d.metadata["chunk_id"]
-                for d in self._prepare_splits(docs)
-                if d.metadata.get("chunk_id")
-            }
-            stale_ids = old_ids - new_ids
-            if stale_ids:
-                self.vector_store.delete(ids=list(stale_ids))
-                self.all_docs = [
-                    doc for doc in self.all_docs
-                    if doc.metadata["chunk_id"] not in stale_ids
-                ]
-                self._rebuild_all()
-
+        if source_name:
+            self._replace_old_chunks(source_name, docs)
         return new_count
 
     def ingest_url(self, url: str) -> int:
         """Fetch a public URL and ingest its content.
 
-        Returns the number of new chunks added.
+        If the same URL was previously imported, old chunks are replaced
+        only after the new content has been successfully written.
         """
         from src.loaders import load_url
 
         docs = load_url(url)
-        return self._process_documents(docs)
+        new_count = self._process_documents(docs)
+        self._replace_old_chunks(url, docs)
+        return new_count
 
     def add_document(self, file_path: str) -> int:
         """Compatibility wrapper for older UI code."""
