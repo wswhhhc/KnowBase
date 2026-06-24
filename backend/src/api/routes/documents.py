@@ -44,7 +44,7 @@ async def ingest_url(body: URLIngestRequest, kb: KnowledgeBase = Depends(get_kno
         raise HTTPException(400, str(e))
 
 
-@router.delete("/source/{source_name}")
+@router.delete("/source/{source_name:path}")
 async def delete_source(source_name: str, kb: KnowledgeBase = Depends(get_knowledge_base)) -> IngestResponse:
     removed = kb.delete_source(source_name)
     if removed == 0:

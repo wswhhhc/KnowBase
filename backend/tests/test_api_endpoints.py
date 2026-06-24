@@ -79,6 +79,8 @@ class FakeKnowledgeBase:
     def delete_source(self, source_name):
         if source_name == "existing.txt":
             return 2
+        if source_name == "https://example.com/page":
+            return 1
         return 0
 
     def clear(self):
@@ -289,6 +291,13 @@ class APIEndpointTests(unittest.TestCase):
         self.assertIn("chunk_count", data)
         self.assertIn("message", data)
         self.assertEqual(data["chunk_count"], 2)
+
+    def test_delete_url_source_happy_path(self):
+        resp = self.client.delete("/api/documents/source/https%3A%2F%2Fexample.com%2Fpage")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["chunk_count"], 1)
+        self.assertIn("https://example.com/page", data["message"])
 
     def test_delete_source_404(self):
         resp = self.client.delete("/api/documents/source/nonexistent.txt")

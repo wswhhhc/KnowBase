@@ -57,6 +57,8 @@ class FakeKnowledgeBase:
     def delete_source(self, source_name):
         if source_name == "existing.txt":
             return 2
+        if source_name == "https://example.com/page":
+            return 1
         return 0
 
     def clear(self):
@@ -111,6 +113,10 @@ class APIRoutesCoverageTests(unittest.TestCase):
 
     def test_delete_source_existing(self):
         response = self.client.delete("/api/documents/source/existing.txt")
+        self.assertEqual(response.status_code, 200)
+
+    def test_delete_url_source_existing(self):
+        response = self.client.delete("/api/documents/source/https%3A%2F%2Fexample.com%2Fpage")
         self.assertEqual(response.status_code, 200)
 
     def test_clear_knowledge_base(self):
