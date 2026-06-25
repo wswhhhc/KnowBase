@@ -4,9 +4,11 @@
 
 ## 功能
 
-- **双前端**：React 杂志编辑风 UI（默认） + Streamlit 经典界面（兼容）
+- **杂志编辑风 React UI**（Streamlit 旧版已移除）
 - 预设知识库问答和 `.txt` / `.md` / `.pdf` / `.docx` / `.html` 动态上传
 - URL 一键导入网页内容
+- **工作区系统** — 多工作区管理，每个工作区独立对话和书签
+- **书签收藏** — 知识库浏览时收藏片段，跨工作区管理
 - **API Key 鉴权** — 写操作端点（上传/删除/清空/对话 CRUD/聊天）受 Bearer Token 保护，前端 `api.ts` 自动带 Authorization 头。空 `API_KEY` 时跳过鉴权，本地开发无感
 - SSE 流式输出回答，边生成边展示，支持引用编号 `[1]` 标记来源
 - **引用编号系统** — LLM 回答用 `[1]`、`[2]` 编号标注来源，前端渲染为交互式引用标签（hover 显示来源详情）
@@ -17,7 +19,6 @@
 - **自适应向量召回：** 根据文档总数动态调整召回候选数（30~100）
 - 邻居 chunk 上下文补全 + 标题追踪
 - **热点追踪：** 知识库浏览页按被检索次数高亮显示热门片段
-- **深度阅读模式：** 切换知识库浏览为内容优先的深度阅读视图
 - **消息反馈** — ThumbsUp/ThumbsDown 持结构化原因选择
 - **来源固定与排除** — 来源卡片支持固定和排除，跨消息状态保持
 - **重答与简洁模式** — 回答底部「重新回答」「更简洁」「继续追问」
@@ -26,9 +27,11 @@
 - **首次使用引导** — 空状态显示三步路径（上传→提问→查看来源）
 - **无答案兜底** — 四种失败场景显示明确指导 + 快捷操作
 - **证据可信度解释** — 强/中/弱标签带 tooltip 解释证据构成
-- 知识库内容浏览（杂志藏书阁风格网格，支持分页）
+- 知识库内容浏览（杂志藏书阁风格网格，支持分页 + 懒加载）
 - **对话标题 LLM 自动生成：** 根据问题语义自动生成标题
 - 指标面板（编辑式数据看板，耗时分布/质量通过率/查询日志）
+- **移动端适配** — 抽屉式侧栏 + 响应式头部
+- **SSE 节流** — 高频 token 更新时合并渲染
 - 浅色/深色模式切换
 - 离线 RAG 评估脚本
 
@@ -47,9 +50,10 @@ EMBEDDING_MODEL=BAAI/bge-m3
 # 可选
 TAVILY_API_KEY=tvly-xxx            # 联网搜索兜底
 API_KEY=your-secret-key             # API 鉴权（空值=跳过，本地开发无感）
+LANGSMITH_API_KEY=lsv2-xxx          # LangSmith 追踪
 ```
 
-### 2. 启动开发环境（推荐）
+### 2. 启动开发环境
 
 ```bash
 # 一键启动（后端 8000 + 前端 5173）
@@ -62,12 +66,6 @@ cd frontend && npm run dev
 ```
 
 打开 http://localhost:5173
-
-### 3. 旧版 Streamlit（可选）
-
-```bash
-uv run streamlit run src/app.py
-```
 
 ## 项目结构
 
@@ -86,18 +84,23 @@ KnowBase/
 │   │   │       ├── conversations.py  # 对话 CRUD
 │   │   │       ├── documents.py      # 文档上传/URL导入
 │   │   │       ├── knowledge_base.py # 知识库浏览
-│   │   │       └── metrics.py        # 查询日志
-│   │   ├── graph.py            # LangGraph 工作流
+│   │   │       ├── metrics.py        # 查询日志
+│   │   │       ├── workspaces.py     # 工作区 CRUD ✨
+│   │   │       └── bookmarks.py      # 书签 CRUD ✨
+│   │   ├── graph.py            # LangGraph 图定义
+│   │   ├── graph_nodes.py      # 工作流节点函数 ✨
+│   │   ├── graph_routing.py    # 条件路由函数 ✨
+│   │   ├── graph_utils.py      # 工作流工具函数 ✨
 │   │   ├── graph_state.py      # 工作流状态/Pydantic 模型
 │   │   ├── knowledge_base.py   # 门面类，内拆 IngestionService / Retriever / HotspotTracker
 │   │   ├── kb_models.py        # 检索结果/FusionScore/helper
-│   │   ├── conversations.py    # 对话管理模块
+│   │   ├── conversations.py    # 对话管理 + 工作区 + 书签 CRUD
 │   │   ├── loaders.py          # 文档加载器
 │   │   ├── web_search.py       # Tavily 搜索
 │   │   ├── metrics.py          # JSONL 日志
 │   │   ├── chat_utils.py       # 聊天路由辅助（标题生成/指标/NODE_LABELS）
 │   │   └── utils.py            # 工具函数（含流式上传）
-│   └── tests/                  # 22 个测试文件，377 个用例
+│   └── tests/                  # 28 个测试文件，400 个用例
 ├── frontend/                   # React + Vite + Tailwind 前端
 │   └── src/
 │       ├── components/
@@ -105,7 +108,7 @@ KnowBase/
 │       │   ├── ui/             # shadcn/ui 组件
 │       │   ├── ChatArea.tsx    # 对话界面
 │       │   ├── Sidebar.tsx     # 侧栏导航（布局 + 视图切换）
-│       │   ├── BrowserPage.tsx # 知识库浏览
+│       │   ├── BrowserPage.tsx # 知识库浏览（含分页懒加载 + 书签）
 │       │   └── DashboardPage.tsx # 指标面板
 │       ├── hooks/
 │       │   ├── useChat.ts      # SSE 流式聊天 hook（来源状态管理 + 重答）
@@ -113,10 +116,11 @@ KnowBase/
 │       │   └── useTheme.ts     # 主题切换 hook
 │       └── lib/
 │           ├── api.ts          # API 客户端 + SSEParser + createChatStreamAdapter
+│           ├── api-types.ts    # 类型定义
 │           └── utils.ts        # 工具函数
 ├── docs/
 │   └── tests/                  # 测试文档：单元/集成/冒烟/P2边缘/接口/验收/缺陷/报告
-└── scripts/                    # 启动脚本
+└── scripts/                    # 一键启动脚本
 ```
 
 ## LangGraph 工作流
@@ -132,9 +136,31 @@ KnowBase/
   → 不合格 → 联网搜索 / 扩检索重试 → 重新生成
 ```
 
+## API 端点
+
+| 端点 | 功能 |
+|------|------|
+| `POST /api/chat/stream` | SSE 流式聊天（事件：node/token/sources/debug/done） |
+| `GET/POST/DELETE /api/conversations` | 对话 CRUD |
+| `PATCH /api/conversations/:id` | 重命名 |
+| `GET /api/conversations/:id/messages` | 消息列表 |
+| `POST /api/conversations/:id/messages/:msg_id/feedback` | 消息反馈 |
+| `GET /api/conversations/:id/export` | Markdown 导出 |
+| `POST /api/documents/upload` | 文件上传（流式读取） |
+| `POST /api/documents/ingest-url` | URL 导入 |
+| `DELETE /api/documents/source/:name` | 删除来源 |
+| `POST /api/documents/clear` | 清空知识库 |
+| `GET /api/knowledge-base/stats` | 统计 |
+| `GET /api/knowledge-base/chunks` | 分页浏览 |
+| `GET /api/knowledge-base/sources` | 来源列表 |
+| `GET /api/metrics/logs` | 查询日志 |
+| `DELETE /api/metrics/logs/today` | 删除今日日志 |
+| `GET/POST/PATCH/DELETE /api/workspaces` | 工作区 CRUD ✨ |
+| `GET/POST/DELETE /api/bookmarks` | 书签 CRUD ✨ |
+
 ## 测试
 
-### 后端测试（Python unittest，377 个用例）
+### 后端测试（Python unittest，28 文件，400 用例）
 ```bash
 cd backend
 
@@ -142,16 +168,18 @@ cd backend
 uv run python -m unittest discover -v
 
 # 测试分类
-uv run python -m unittest tests.test_api_endpoints -v     # 接口测试（29用例）
-uv run python -m unittest tests.test_edge_cases -v        # 边界测试（30用例）
-uv run python -m unittest tests.test_integration_graph_kb -v  # 集成测试（15用例）
-uv run python -m unittest tests.test_smoke -v             # 冒烟测试（10用例）
-uv run python -m unittest tests.test_graph -v             # 工作流测试
-uv run python -m unittest tests.test_knowledge_base -v    # 知识库测试
-uv run python -m unittest tests.test_conversations -v     # 对话管理测试
+uv run python -m unittest tests.test_api_endpoints -v       # 接口测试
+uv run python -m unittest tests.test_edge_cases -v          # 边界测试
+uv run python -m unittest tests.test_integration_graph_kb -v  # 集成测试
+uv run python -m unittest tests.test_smoke -v               # 冒烟测试
+uv run python -m unittest tests.test_graph -v               # 工作流测试
+uv run python -m unittest tests.test_knowledge_base -v      # 知识库测试
+uv run python -m unittest tests.test_conversations -v       # 对话管理测试
+uv run python -m unittest tests.test_chat_route -v          # 聊天路由集成测试
+uv run python -m unittest tests.test_routing -v             # 路由分类测试
 ```
 
-### 前端测试（vitest，149 个用例）
+### 前端测试（vitest，18 文件，159 用例）
 ```bash
 cd frontend
 npm test               # 运行一次
@@ -165,7 +193,7 @@ npm run test:coverage  # 覆盖率
 
 | 文档 | 内容 |
 |------|------|
-| [01-unit-test.md](docs/tests/01-unit-test.md) | 单元测试用例清单（111 后端 + 32 前端） |
+| [01-unit-test.md](docs/tests/01-unit-test.md) | 单元测试用例清单 |
 | [02-integration-test.md](docs/tests/02-integration-test.md) | 跨模块集成测试 |
 | [03-smoke-test.md](docs/tests/03-smoke-test.md) | 核心功能冒烟测试 |
 | [04-edge-test.md](docs/tests/04-edge-test.md) | P2 边界/异常测试 |
@@ -188,6 +216,7 @@ cd backend && uv run python -m src.evaluate
 | 构建工具 | Vite 6 |
 | UI 组件 | shadcn/ui + Radix + Tailwind CSS |
 | 动效 | framer-motion |
+| 图标 | lucide-react |
 | 字体 | Instrument Serif / Inter Tight / JetBrains Mono |
 | 后端框架 | FastAPI + uvicorn |
 | 流式传输 | SSE (sse-starlette) |
@@ -195,3 +224,4 @@ cd backend && uv run python -m src.evaluate
 | 向量库 | Chroma (本地) |
 | 搜索引擎 | BM25 (jieba + rank-bm25) |
 | 检索融合 | RRF 倒数排序融合 |
+| 追踪 | LangSmith（可选） |

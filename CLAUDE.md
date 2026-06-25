@@ -45,27 +45,31 @@ KnowBase/
 │   │   └── settings.py         # pydantic-settings，含环境变量 → .env 映射
 │   ├── src/
 │   │   ├── api/                # FastAPI 路由层（main / deps / models / routes/*）
-│   │   ├── graph.py            # LangGraph 工作流（图定义 + 全部节点）
+│   │   ├── graph.py            # LangGraph 图定义
+│   │   ├── graph_nodes.py      # 工作流节点函数（原 graph.py 拆分所得）
+│   │   ├── graph_routing.py    # 条件路由函数（原 graph.py 拆分所得）
+│   │   ├── graph_utils.py      # 工作流工具函数（原 graph.py 拆分所得）
 │   │   ├── graph_state.py      # GraphState TypedDict + Pydantic 决策模型
 │   │   ├── knowledge_base.py   # 门面类，拆分 IngestionService / Retriever / HotspotTracker
 │   │   ├── kb_models.py        # 检索结果数据类和 helper
-│   │   ├── conversations.py    # 对话 CRUD（SQLite 持久化）
+│   │   ├── conversations.py    # 对话 CRUD + 工作区管理 + 书签 CRUD（SQLite 持久化）
 │   │   ├── loaders.py          # 多格式文档加载器（txt/md/pdf/docx/html + URL）
 │   │   ├── web_search.py       # Tavily 联网搜索（可选）
 │   │   ├── metrics.py          # 查询 JSONL 日志
 │   │   ├── chat_utils.py       # 节点标签/指标记录/标题生成
 │   │   └── utils.py            # 文件上传校验 + 唯一临时文件名
-│   └── tests/                  # 22 个测试文件，377 个用例
+│   └── tests/                  # 28 个测试文件，400 个用例
 ├── frontend/                   # React 19 + Vite + Tailwind
 │   └── src/
 │       ├── components/
 │       │   ├── sidebar/        # ConversationList / DocumentPanel / KBSummary
 │       │   ├── ChatArea / Sidebar / BrowserPage / DashboardPage + ui/
 │       ├── hooks/              # useChat（SSE 流式）/ useData / useTheme
-│       └── lib/                # api.ts（SSEParser + 全量 API 客户端）/ api-types.ts / api-types.generated.ts / utils.ts
+│       └── lib/                # api.ts（SSEParser + 全量 API 客户端）/ api-types.ts / utils.ts
 │   ├── data/                   # chroma_db / checkpoints.db / conversations.db / logs
 ├── docs/
 │   └── tests/                  # 8 份测试文档（单元/集成/冒烟/边界/接口/验收/缺陷/报告）
+└── scripts/                    # 一键启动脚本
 ```
 
 ### API 端点
@@ -87,6 +91,8 @@ KnowBase/
 | `GET /api/knowledge-base/sources` | 来源列表 |
 | `GET /api/metrics/logs` | 查询日志 |
 | `DELETE /api/metrics/logs/today` | 删除今日日志 |
+| `GET/POST/PATCH/DELETE /api/workspaces` | 工作区 CRUD |
+| `GET/POST/DELETE /api/bookmarks` | 书签 CRUD |
 
 ### LangGraph 工作流
 
@@ -109,12 +115,13 @@ KnowBase/
 - Tavily 为可选依赖，未配 Key 时不显示在 UI 中。
 - 搜索策略：`fast`（无 rerank）、`balanced`（默认、条件 rerank）、`high_quality`（必走 rerank）。
 - 前端 `api.ts` 包含 `SSEParser`（支持 CRLF/CR）和 `createChatStreamAdapter`，`api.ts` 自动带 Authorization 头，后端所有写操作 + 读操作端点均受鉴权保护。
+- 工作流逻辑已从 `graph.py` 拆分为 `graph_nodes.py`（节点函数）、`graph_routing.py`（条件路由）、`graph_utils.py`（工具函数），`graph.py` 仅保留图定义。对应测试分布在 `test_graph.py` / `test_graph_coverage.py` / `test_graph_edge_cases.py` / `test_routing.py`。
 
 ### 测试策略
 
-**后端**：Python unittest（377 个用例）。LLM mock 用 `FakeLLM`/`FakeResponse` + `unittest.mock.patch`，Chroma mock 用 patch 替换，SQLite 用 `tempfile.TemporaryDirectory` 隔离。含 SSE 手写类型漂移检测（test_sse_type_sync）、ChatRoute SSE 集成测试（7 种事件类型）。
+**后端**：Python unittest（28 文件，400 用例）。LLM mock 用 `FakeLLM`/`FakeResponse` + `unittest.mock.patch`，Chroma mock 用 patch 替换，SQLite 用 `tempfile.TemporaryDirectory` 隔离。含 SSE 手写类型漂移检测（test_sse_type_sync）、ChatRoute SSE 集成测试（7 种事件类型）、工作区/书签/路由分类测试。
 
-**前端**：vitest + @testing-library/react（149 个用例）。SSE 用 `ReadableStream` 模拟（含 CRLF 回归测试），mock 数据在 `src/test/mocks/data.ts`。覆盖 hooks、组件渲染、交互、API 客户端。
+**前端**：vitest + @testing-library/react（18 文件，159 用例）。SSE 用 `ReadableStream` 模拟（含 CRLF 回归测试），mock 数据在 `src/test/mocks/data.ts`。覆盖 hooks、组件渲染、交互、API 客户端。含 Sidebar 交互测试（上传/URL 导入 toast 反馈）。
 
 ```bash
 # 后端全部
