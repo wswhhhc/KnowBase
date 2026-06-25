@@ -41,6 +41,8 @@ vi.mock('lucide-react', () => {
     LayoutGrid: 'LayoutGrid',
     List: 'List',
     X: 'X',
+    Bookmark: 'Bookmark',
+    BookmarkCheck: 'BookmarkCheck',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])

@@ -91,11 +91,17 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
   const [exportSources, setExportSources] = useState(true)
   const [exportDebug, setExportDebug] = useState(false)
   const [bookmarked, setBookmarked] = useState(false)
+  const [bookmarkNote, setBookmarkNote] = useState('')
+  const [bookmarkOpen, setBookmarkOpen] = useState(false)
 
   const isFirstAssistant = !isUser && prevMessage?.role === 'user'
 
-  const handleBookmarkToggle = async () => {
+  const handleBookmarkToggle = () => {
     if (bookmarked) return
+    setBookmarkOpen(true)
+  }
+
+  const handleBookmarkConfirm = async () => {
     const convId = message.convId || threadId
     try {
       await api.createBookmark({
@@ -103,8 +109,10 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
         message_id: message.assistantMsgId || 0,
         content: message.content.slice(0, 500),
         source: message.sources?.[0]?.source || '',
+        note: bookmarkNote || undefined,
       })
       setBookmarked(true)
+      setBookmarkOpen(false)
     } catch (e) { console.error('收藏失败', e) }
   }
 
@@ -304,6 +312,36 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                     >
                       <MessageSquare className="h-3 w-3" />继续追问
                     </button>
+                  </div>
+                )}
+
+                {/* Bookmark button for successful answers */}
+                {!isUser && message.outcome_category === 'success' && !message.streaming && (
+                  <div className="relative mt-2">
+                    <button onClick={handleBookmarkToggle}
+                      className={`inline-flex items-center gap-1 text-[10px] transition-colors ${bookmarked ? 'text-amber-400' : 'text-muted-foreground/50 hover:text-amber-400'}`}
+                      title={bookmarked ? '已收藏' : '收藏此回答'}>
+                      {bookmarked ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
+                      {bookmarked ? '已收藏' : '收藏'}
+                    </button>
+                    {bookmarkOpen && (
+                      <div className="absolute bottom-full left-0 mb-2 w-56 rounded-lg border border-border bg-surface shadow-xl p-2.5 z-50">
+                        <p className="text-[10px] font-medium text-muted-foreground mb-2">添加备注（可选）</p>
+                        <input
+                          value={bookmarkNote}
+                          onChange={(e) => setBookmarkNote(e.target.value)}
+                          placeholder="为什么收藏这条回答？"
+                          className="w-full text-[10px] px-2 py-1 rounded border border-border bg-background outline-none placeholder:text-muted-foreground/30 mb-2"
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <button onClick={() => setBookmarkOpen(false)}
+                            className="flex-1 text-[10px] py-1 rounded text-muted-foreground hover:text-foreground bg-muted/50 transition-colors">取消</button>
+                          <button onClick={handleBookmarkConfirm}
+                            className="flex-1 text-[10px] py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors">保存</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

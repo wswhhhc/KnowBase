@@ -16,6 +16,7 @@ function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [highlightChunkId, setHighlightChunkId] = useState<string | null>(null)
+  const [activeWsId, setActiveWsId] = useState<string>('')
   const chat = useChat((threadId) => {
     setActiveThreadId(threadId)
     setConvRefreshKey((k) => k + 1)
@@ -48,6 +49,7 @@ function App() {
           convRefreshKey={convRefreshKey}
           activeThreadId={activeThreadId}
           onLoadingMessages={setIsLoadingMessages}
+          onWorkspaceChange={setActiveWsId}
         />
       </div>
 

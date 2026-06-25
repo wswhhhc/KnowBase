@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useEffect, useState, useRef } from 'react'
 import { Button, Input, ScrollArea, Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui'
-import { BookOpen, PanelRightOpen, ArrowLeft, Search, FileText, Hash, ExternalLink, Layers, Sun, Moon, Flame, List, LayoutGrid, Upload, Globe, RefreshCw } from 'lucide-react'
+import { BookOpen, PanelRightOpen, ArrowLeft, Search, FileText, Hash, ExternalLink, Layers, Sun, Moon, Flame, List, LayoutGrid, Upload, Globe, RefreshCw, Bookmark, BookmarkCheck } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { KBStats, KBChunk, KBConfig, HotspotEntry } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -37,7 +37,20 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
+  const [bookmarkedChunks, setBookmarkedChunks] = useState<Set<string>>(new Set())
   const pageSize = 50
+
+  const handleChunkBookmark = async (chunk: KBChunk) => {
+    if (bookmarkedChunks.has(chunk.chunk_id)) return
+    try {
+      await api.createBookmark({
+        chunk_id: chunk.chunk_id,
+        content: chunk.content.slice(0, 500),
+        source: chunk.source,
+      })
+      setBookmarkedChunks((prev) => new Set(prev).add(chunk.chunk_id))
+    } catch (e) { toast.error('收藏失败', { description: String(e) }) }
+  }
 
   const loadChunks = async (src: string, q: string, p: number, ps: number) => {
     const res = await api.getKBChunks(src, q, p * ps, ps)
@@ -430,6 +443,13 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                       <div className="mt-3 flex items-center gap-2 text-[9px] text-muted-foreground/40">
                         <span>{chunk.content.length} 字</span>
                         {chunk.page && <><span>·</span><span>第 {chunk.page} 页</span></>}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleChunkBookmark(chunk) }}
+                          className={`ml-auto ${bookmarkedChunks.has(chunk.chunk_id) ? 'text-amber-400' : 'text-muted-foreground/30 hover:text-amber-400'} transition-colors`}
+                          title={bookmarkedChunks.has(chunk.chunk_id) ? '已收藏' : '收藏此片段'}
+                        >
+                          {bookmarkedChunks.has(chunk.chunk_id) ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
+                        </button>
                       </div>
 
                       {/* Hover indicator */}

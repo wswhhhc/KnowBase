@@ -21,6 +21,7 @@ vi.mock('lucide-react', () => {
     Search: 'Search', FileText: 'FileText', Hash: 'Hash', ExternalLink: 'ExternalLink',
     Layers: 'Layers', Sun: 'Sun', Moon: 'Moon', Flame: 'Flame', Upload: 'Upload',
     Globe: 'Globe', RefreshCw: 'RefreshCw', LayoutGrid: 'LayoutGrid', List: 'List', X: 'X',
+    Bookmark: 'Bookmark', BookmarkCheck: 'BookmarkCheck',
   }
   return Object.fromEntries(Object.keys(icons).map((n) => [n, () => <span>{n}</span>]))
 })
@@ -30,6 +31,7 @@ vi.mock('@/lib/api', () => ({
   getKBSourceNames: vi.fn(),
   getKBConfig: vi.fn(),
   getKBHotspots: vi.fn(),
+  createBookmark: vi.fn(),
   uploadDocument: vi.fn(),
   ingestUrl: vi.fn(),
 }))

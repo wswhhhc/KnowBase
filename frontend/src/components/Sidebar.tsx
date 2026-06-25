@@ -26,6 +26,7 @@ interface SidebarProps {
   convRefreshKey: number
   activeThreadId: string | null
   onLoadingMessages?: (loading: boolean) => void
+  onWorkspaceChange?: (wsId: string) => void
 }
 
 const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[] = [
@@ -34,7 +35,7 @@ const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[]
   { view: 'dashboard', icon: BarChart3, label: '指标' },
 ]
 
-export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages }: SidebarProps) {
+export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages, onWorkspaceChange }: SidebarProps) {
   const wss = useWorkspaces()
   const convs = useConversations(wss.activeWorkspaceId || undefined)
   const srcs = useSources()
@@ -117,7 +118,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         <div className="flex items-center gap-1">
           <select
             value={wss.activeWorkspaceId}
-            onChange={(e) => wss.setActiveWorkspaceId(e.target.value)}
+            onChange={(e) => { wss.setActiveWorkspaceId(e.target.value); onWorkspaceChange?.(e.target.value) }}
             className="flex-1 text-xs bg-transparent border border-border rounded-md px-2 py-1.5 text-foreground outline-none focus:border-primary/50"
           >
             {wss.workspaces.map((ws) => (
