@@ -9,6 +9,7 @@ from collections import OrderedDict
 from typing import List, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 
 from config.settings import (
@@ -165,16 +166,27 @@ def retrieve_docs(state: GraphState, kb) -> dict:
             continue
         for n in neighbors:
             cid = n.metadata.get("chunk_id", "")
-            if cid and cid not in seen_ids:
+            if cid and cid not in seen_ids and cid not in excluded_set:
                 seen_ids.add(cid)
                 enriched_docs.append(n)
 
-    # Ensure pinned chunks are always included (even if low score)
+    # Force-include pinned chunks even if they never hit the top-K
     if pinned_set:
-        for result in docs:
-            if result.chunk_id in pinned_set and result.chunk_id not in seen_ids:
-                enriched_docs.append(result.document)
-                seen_ids.add(result.chunk_id)
+        pinned_missing = pinned_set - seen_ids
+        if pinned_missing:
+            pinned_raw = kb.vector_store.get(
+                ids=list(pinned_missing),
+                include=["documents", "metadatas"],
+            )
+            for cid_str, doc_content, doc_meta in zip(
+                pinned_raw.get("ids", []),
+                pinned_raw.get("documents", []) or [],
+                pinned_raw.get("metadatas", []) or [],
+            ):
+                if doc_content:
+                    doc = Document(page_content=doc_content, metadata=dict(doc_meta))
+                    enriched_docs.append(doc)
+                    seen_ids.add(cid_str)
 
     enriched_results = [
         RetrievalResult(

@@ -135,6 +135,8 @@ def _persist_and_record(
     final_outcome_category: str,
     debug_info: DebugInfo,
     elapsed: int,
+    pinned_chunk_ids: list[str] | None = None,
+    excluded_chunk_ids: list[str] | None = None,
 ) -> tuple[str, int]:
     """Persist conversation and metrics, returning (conv_id, assistant_msg_id)."""
     assistant_msg_id = 0
@@ -146,13 +148,17 @@ def _persist_and_record(
             title = generate_title(question)
             conv = create_conversation(title, thread_id=thread_id)
             conv_id = conv["id"]
+        debug_dict = debug_info.model_dump()
+        debug_dict["evidence_level"] = final_evidence_level
+        debug_dict["evidence_summary"] = final_evidence_summary
+        debug_dict["outcome_category"] = final_outcome_category
+        # Persist pin/exclude state so frontend can restore on reload
+        if pinned_chunk_ids:
+            debug_dict["pinned"] = pinned_chunk_ids
+        if excluded_chunk_ids:
+            debug_dict["excluded"] = excluded_chunk_ids
         add_message(conv_id, "user", question)
-        assistant_msg_id = add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality, debug_info=json.dumps({
-            **debug_info.model_dump(),
-            "evidence_level": final_evidence_level,
-            "evidence_summary": final_evidence_summary,
-            "outcome_category": final_outcome_category,
-        }))
+        assistant_msg_id = add_message(conv_id, "assistant", answer, sources=final_sources, quality_reason=final_quality, debug_info=json.dumps(debug_dict))
         _record_query_metrics(
             question=question,
             thread_id=thread_id,
@@ -303,6 +309,8 @@ async def chat_stream(
                 final_outcome_category=final_outcome_category,
                 debug_info=debug_info,
                 elapsed=elapsed,
+                pinned_chunk_ids=body.pinned_chunk_ids,
+                excluded_chunk_ids=body.excluded_chunk_ids,
             )
 
             yield {"event": "debug", "data": json.dumps(debug_info.model_dump())}
