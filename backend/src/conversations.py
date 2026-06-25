@@ -114,9 +114,13 @@ def get_conversation_by_thread(thread_id: str) -> dict | None:
 
 
 def list_conversations(workspace_id: str | None = None) -> list[dict]:
-    """Return conversations ordered by update time desc, optionally filtered by workspace."""
+    """Return conversations ordered by update time desc, optionally filtered by workspace.
+
+    Pass ``workspace_id=''`` to filter for the default workspace.
+    Pass ``workspace_id=None`` to return all conversations (no filter).
+    """
     conn = _get_conn()
-    if workspace_id:
+    if workspace_id is not None:
         rows = conn.execute(
             "SELECT id, thread_id, title, workspace_id, created_at, updated_at FROM conversations WHERE workspace_id = ? ORDER BY updated_at DESC",
             (workspace_id,),

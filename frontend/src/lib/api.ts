@@ -46,16 +46,12 @@ export interface Workspace {
 }
 
 export const getConversations = (workspaceId?: string) => {
-  const params = workspaceId !== undefined && workspaceId !== ''
-    ? `?workspace_id=${encodeURIComponent(workspaceId)}`
-    : workspaceId === '' ? '?workspace_id=' : ''
+  const params = workspaceId !== undefined ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
   return req<Conversation[]>(`/conversations${params}`)
 }
 
 export const createConversation = (title = '新对话', workspaceId?: string) => {
-  const params = workspaceId !== undefined && workspaceId !== ''
-    ? `?workspace_id=${encodeURIComponent(workspaceId)}`
-    : workspaceId === '' ? '?workspace_id=' : ''
+  const params = workspaceId !== undefined ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
   return req<Conversation>(`/conversations${params}`, {
     method: 'POST',
     body: JSON.stringify({ title }),
