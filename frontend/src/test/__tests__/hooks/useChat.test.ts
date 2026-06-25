@@ -179,6 +179,79 @@ describe('useChat', () => {
     expect(result.current.messages).toEqual(mockMessages)
   })
 
+  describe('pinned / excluded source isolation', () => {
+    const sourceMsg = {
+      id: 'm1', role: 'assistant' as const, content: '回答',
+      sources: [{ chunk_id: 'doc.txt:0:a', source: 'doc.txt', content: 'chunk A', score: 0.9, index: 1 }],
+    }
+
+    it('pinned_chunk_ids and excluded_chunk_ids sent in fetch body', async () => {
+      // 1. Simulate a chat that returns sources
+      const donePayload = {
+        thread_id: 'thread-pin',
+        answer: '回答',
+        sources: [{ chunk_id: 'doc.txt:0:a', source: 'doc.txt', content: 'chunk A', score: 0.9, index: 1 }],
+        quality_reason: 'PASS', evidence_level: 'strong', evidence_summary: '充分', outcome_category: 'success', elapsed_ms: 100,
+      }
+      const stream = createMockSSEStream([
+        { event: 'done', data: JSON.stringify(donePayload) },
+      ])
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: stream, headers: new Headers() })
+      vi.stubGlobal('fetch', fetchMock)
+
+      const { result } = renderHook(() => useChat())
+      await act(async () => { await result.current.sendMessage('q', false, 'balanced') })
+
+      // Wait for stream to finish
+      await waitFor(() => expect(result.current.isStreaming).toBe(false))
+
+      // 2. Pin the source
+      act(() => {
+        result.current.setPinnedSources((prev) =>
+          prev.map((ps) => (ps.chunk_id === 'doc.txt:0:a' ? { ...ps, pinned: true } : ps)),
+        )
+      })
+
+      // 3. Send another message — fetch body should include pinned_chunk_ids
+      const stream2 = createMockSSEStream([
+        { event: 'done', data: JSON.stringify({ thread_id: 'thread-pin', answer: '回答2', sources: [], quality_reason: 'PASS', evidence_level: 'strong', evidence_summary: '充分', outcome_category: 'success', elapsed_ms: 10 }) },
+      ])
+      const fetchMock2 = vi.fn().mockResolvedValue({ ok: true, body: stream2, headers: new Headers() })
+      vi.stubGlobal('fetch', fetchMock2)
+
+      await act(async () => { await result.current.sendMessage('q2', false, 'balanced') })
+      await waitFor(() => expect(result.current.isStreaming).toBe(false))
+
+      const lastCallBody = JSON.parse(fetchMock2.mock.calls[0][1].body)
+      expect(lastCallBody.pinned_chunk_ids).toContain('doc.txt:0:a')
+      vi.unstubAllGlobals()
+    })
+
+    it('pinnedSources are isolated between conversations', async () => {
+      const { result } = renderHook(() => useChat())
+
+      // Load conversation A with a source
+      act(() => {
+        result.current.loadMessages([
+          { id: '1', role: 'user' as const, content: 'hi' },
+          sourceMsg,
+        ], 'thread-a')
+      })
+
+      expect(result.current.pinnedSources.length).toBeGreaterThan(0)
+      const pinnedInA = result.current.pinnedSources.length
+
+      // Load conversation B — pinnedSources should be empty (different conversation)
+      act(() => {
+        result.current.loadMessages([
+          { id: '1', role: 'user' as const, content: 'hello' },
+        ], 'thread-b')
+      })
+
+      expect(result.current.pinnedSources).toEqual([])
+    })
+  })
+
   it('blocks concurrent sendMessage when isStreaming', async () => {
     const stream = new ReadableStream({
       start(controller) {
