@@ -321,8 +321,36 @@ def export_conversation(conv_id: str, fmt: str = "markdown", include_sources: bo
         parts.append(f"### {role_label}\n{msg['content']}\n")
         if include_sources and msg["sources"]:
             parts.append(f"**来源：** {', '.join(s.get('source', '?') for s in msg['sources'])}\n")
-        if include_debug and msg["quality_reason"]:
-            parts.append(f"*质量检查：{msg['quality_reason']}*\n")
+        if include_debug:
+            di = msg.get("debug_info", {})
+            if isinstance(di, str):
+                try:
+                    import json
+                    di = json.loads(di)
+                except (json.JSONDecodeError, TypeError):
+                    di = {}
+            if di:
+                debug_lines = []
+                if di.get("evidence_level"):
+                    debug_lines.append(f"证据等级：{di['evidence_level']}")
+                if di.get("evidence_summary"):
+                    debug_lines.append(f"证据摘要：{di['evidence_summary']}")
+                if di.get("outcome_category"):
+                    debug_lines.append(f"结果分类：{di['outcome_category']}")
+                if di.get("rewritten_question"):
+                    debug_lines.append(f"改写后查询：{di['rewritten_question']}")
+                if di.get("retry_count", 0) > 0:
+                    debug_lines.append(f"重试次数：{di['retry_count']}")
+                if di.get("used_rerank"):
+                    debug_lines.append(f"使用重排：是")
+                if di.get("used_web_search"):
+                    debug_lines.append(f"联网搜索：是（{di.get('web_results_count', 0)} 条）")
+                if di.get("nodes"):
+                    debug_lines.append(f"节点数：{len(di['nodes'])}")
+                if debug_lines:
+                    parts.append("*调试信息：*  " + "  \n".join(debug_lines) + "\n")
+            elif msg.get("quality_reason"):
+                parts.append(f"*质量检查：{msg['quality_reason']}*\n")
         parts.append("\n---\n\n")
     return "".join(parts)
 

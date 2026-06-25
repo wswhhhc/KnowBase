@@ -158,6 +158,56 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         result = conversations.export_conversation("nonexistent", fmt="json")
         self.assertEqual(result, {})
 
+    def test_export_markdown_include_debug_false_omits_debug(self):
+        """Export with include_debug=False should not include debug info."""
+        conv = conversations.create_conversation("调试测试")
+        conv_id = conv["id"]
+        conversations.add_message(conv_id, "user", "测试问题")
+        debug_json = json.dumps({"evidence_level": "strong", "evidence_summary": "2个片段"})
+        conversations.add_message(conv_id, "assistant", "测试回答", debug_info=debug_json)
+        md = conversations.export_conversation(conv_id, fmt="markdown", include_debug=False)
+        self.assertNotIn("证据等级", md)
+        self.assertNotIn("evidence", md)
+
+    def test_export_markdown_include_debug_true_shows_debug_summary(self):
+        """Export with include_debug=True should include debug info summary."""
+        conv = conversations.create_conversation("调试测试2")
+        conv_id = conv["id"]
+        conversations.add_message(conv_id, "user", "另一个问题")
+        debug_json = json.dumps({
+            "evidence_level": "strong",
+            "evidence_summary": "2个本地片段",
+            "outcome_category": "success",
+            "rewritten_question": "改写后的问题",
+            "retry_count": 1,
+            "used_rerank": True,
+            "used_web_search": True,
+            "web_results_count": 3,
+            "nodes": [{"name": "retrieve", "label": "检索", "elapsed_ms": 100}],
+        })
+        conversations.add_message(conv_id, "assistant", "完整回答", debug_info=debug_json)
+        md = conversations.export_conversation(conv_id, fmt="markdown", include_debug=True)
+        self.assertIn("证据等级", md)
+        self.assertIn("改写后查询", md)
+        self.assertIn("重试次数：1", md)
+        self.assertIn("使用重排：是", md)
+        self.assertIn("联网搜索：是（3 条）", md)
+        self.assertIn("节点数：1", md)
+
+    def test_export_json_sources_omitted_when_flag_false(self):
+        """export_json with include_sources=False should not contain sources."""
+        conv = conversations.create_conversation("来源测试")
+        conversations.add_message(conv["id"], "assistant", "回答", sources=[{"source": "test.txt"}])
+        data = conversations.export_conversation(conv["id"], fmt="json", include_sources=False)
+        self.assertNotIn("sources", data["messages"][0])
+
+    def test_export_json_debug_omitted_when_flag_false(self):
+        """export_json with include_debug=False should not contain debug_info."""
+        conv = conversations.create_conversation("调试测试3")
+        conversations.add_message(conv["id"], "assistant", "回答", debug_info=json.dumps({"evidence_level": "weak"}))
+        data = conversations.export_conversation(conv["id"], fmt="json", include_debug=False)
+        self.assertNotIn("debug_info", data["messages"][0])
+
     def test_update_feedback_works(self):
         conv = conversations.create_conversation("反馈测试")
         conversations.add_message(conv["id"], "user", "问题")
