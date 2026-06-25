@@ -97,7 +97,16 @@ describe('BrowserPage interactions', () => {
     await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
 
     await userEvent.click(screen.getByText('RefreshCw'))
-    // getKBChunks should be called at least once after refresh
     expect(api.getKBChunks).toHaveBeenCalled()
+  })
+
+  it('createBookmark receives workspace_id when passed as prop', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} workspaceId="ws-1" />) })
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
+    const bmBtns = screen.getAllByText('Bookmark')
+    await userEvent.click(bmBtns[0])
+    expect(api.createBookmark).toHaveBeenCalled()
+    const callArg = vi.mocked(api.createBookmark).mock.calls[0][0]
+    expect(callArg.workspace_id).toBe('ws-1')
   })
 })

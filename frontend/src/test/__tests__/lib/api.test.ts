@@ -347,4 +347,17 @@ describe('chatStream (SSE)', () => {
     expect(callArg.thread_id).toBe('thread-1')
     vi.unstubAllGlobals()
   })
+
+  it('chatStream sends workspace_id in body', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: { getReader: () => new ReadableStream({ start(c) { c.close() } }).getReader() },
+    })
+    vi.stubGlobal('fetch', mock)
+
+    api.chatStream('q', 't-1', false, 'balanced', {}, [], [], 'ws-2')
+    const callArg = JSON.parse(mock.mock.calls[0][1].body)
+    expect(callArg.workspace_id).toBe('ws-2')
+    vi.unstubAllGlobals()
+  })
 })
