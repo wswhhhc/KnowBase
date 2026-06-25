@@ -248,9 +248,8 @@ async def chat_stream(
                     _ttfb_set = True
 
                 if mode == "updates":
-                    # First non-token data counts as first_token too
-                    if first_token_time == 0 and not _ttfb_set:
-                        first_token_time = first_chunk_time
+                    if first_token_time == 0:
+                        first_token_time = int((time.monotonic() - t0) * 1000)
 
                     for node_name, update in data.items():
                         # first_token from graph update (first meaningful response data)
