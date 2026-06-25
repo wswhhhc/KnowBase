@@ -355,22 +355,19 @@ class IngestionService:
                           "skip" (only add if source doesn't exist yet).
         """
         docs = load_document(file_path, source_name=source_name)
+        if source_name and version_mode == "skip":
+            src_norm = normalize_source(source_name)
+            existing = any(
+                normalize_source(d.metadata.get("source", "")) == src_norm
+                for d in self._all_docs
+            )
+            if existing:
+                return 0
+
+        if source_name and version_mode == "replace":
+            self._replace_old_chunks(source_name, docs)
+
         new_count = self._process_documents(docs)
-        if source_name:
-            src = source_name
-            if version_mode == "replace":
-                self._replace_old_chunks(src, docs)
-            elif version_mode == "skip":
-                # For skip, if any existing chunks for this source, undo the add
-                existing = [d for d in self._all_docs if normalize_source(d.metadata.get("source", "")) == normalize_source(src)]
-                if existing:
-                    # Remove the newly added chunks
-                    new_ids = [d.metadata["chunk_id"] for d in self._prepare_splits(docs) if d.metadata.get("chunk_id")]
-                    self._all_docs[:] = [d for d in self._all_docs if d.metadata.get("chunk_id", "") not in new_ids]
-                    self._rebuild_all()
-                    return 0
-            else:  # append — default call _replace_old_chunks keeps old behavior
-                self._replace_old_chunks(src, docs)
         return new_count
 
     def ingest_url(self, url: str, version_mode: str = "replace") -> int:

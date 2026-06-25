@@ -17,19 +17,18 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
   const [suggested, setSuggested] = useState<string[] | null>(null)
   const [versionPrompted, setVersionPrompted] = useState<{ res: any; file: File; sourceName: string } | null>(null)
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, versionMode?: string) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
     setSuggested(null)
     setVersionPrompted(null)
     try {
-      const res: any = await api.uploadDocument(file)
-      if (res.existing_version && !res.message?.includes('无变化')) {
-        // Source exists — prompt user for version action
+      const res: any = await api.uploadDocument(file, versionMode)
+      if (res.existing_version && !versionMode) {
+        // Source exists and user hasn't chosen a mode yet — prompt for action
         setVersionPrompted({ res, file, sourceName: file.name })
         setUploading(false)
-        // Still refresh to show existing sources
         await onRefresh()
         return
       }
@@ -43,29 +42,17 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
       toast.error('上传失败', { description: String(err) })
     }
     setUploading(false)
-    e.target.value = ''
   }
 
   const handleVersionAction = async (action: 'replace' | 'append' | 'skip') => {
     if (!versionPrompted) return
-    const { res: _res, file } = versionPrompted
-    setUploading(true)
+    const { file } = versionPrompted
     setVersionPrompted(null)
-    try {
-      const res2: any = await api.uploadDocument(file, action)
-      await onRefresh()
-      if (action === 'skip') {
-        toast.info('已跳过，未重复导入')
-      } else {
-        toast.success(action === 'replace' ? '已替换为新版本' : '已追加新版本')
-      }
-      if (res2.suggested_questions?.length) {
-        setSuggested(res2.suggested_questions)
-      }
-    } catch (err) {
-      toast.error('上传失败', { description: String(err) })
-    }
-    setUploading(false)
+    // Re-trigger upload with the chosen version mode
+    await handleUpload(
+      { target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>,
+      action,
+    )
   }
 
   const handleIngestUrl = async () => {
