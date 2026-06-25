@@ -54,4 +54,5 @@ export interface DebugInfo {
   retry_count: number
   used_web_search: boolean
   web_results_count: number
+  context_sources: Source[]
 }

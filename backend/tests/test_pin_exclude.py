@@ -158,6 +158,104 @@ class RetrieveDocsPinExcludeTests(unittest.TestCase):
         source_ids = [s["chunk_id"] for s in result["sources"]]
         self.assertEqual(len(source_ids), 2)
 
+    def test_short_entity_query_boosts_exact_content_matches(self):
+        kb = MockKB()
+        ai_doc = Document(
+            page_content="人工智能技术简介。",
+            metadata={"source": "sample_ai.txt", "chunk_id": "sample_ai.txt:0:a"},
+        )
+        xiyou_doc = Document(
+            page_content="孙悟空保护唐僧西天取经，二人是师徒关系。",
+            metadata={"source": "sample_西游记.txt", "chunk_id": "sample_西游记.txt:22:x", "section": "西游记人物关系"},
+        )
+        kb.set_hybrid_results([
+            RetrievalResult(chunk_id="sample_ai.txt:0:a", document=ai_doc, score=0.6),
+            RetrievalResult(chunk_id="sample_西游记.txt:22:x", document=xiyou_doc, score=0.4),
+        ])
+        kb.set_neighbors({})
+
+        state = retrieve_docs({
+            **{
+                "question": "孙悟空和唐僧什么关系",
+                "messages": [],
+                "question_type": "knowledge_base",
+                "rewritten_question": "",
+                "documents": [],
+                "context": "",
+                "answer": "",
+                "sources": [],
+                "retry_count": 0,
+                "retrieval_k": 5,
+                "score_threshold": None,
+                "quality_ok": True,
+                "quality_reason": "",
+                "retry_strategy": "none",
+                "web_search_results": [],
+                "web_context": "",
+                "web_search_error": "",
+                "used_web_search": False,
+                "web_search_enabled": False,
+                "search_strategy": "balanced",
+                "search_filter": {},
+                "pinned_chunk_ids": [],
+                "excluded_chunk_ids": [],
+                "evidence_level": "none",
+                "evidence_summary": "",
+                "outcome_category": "success",
+                "used_rerank": False,
+                "used_rewrite": False,
+            }
+        }, kb)
+        self.assertEqual(state["sources"][0]["source"], "sample_西游记.txt")
+
+    def test_query_mentioning_source_name_boosts_source_title_match(self):
+        kb = MockKB()
+        manual_doc = Document(
+            page_content="考勤制度与打卡说明。",
+            metadata={"source": "员工手册_考勤与办公规范.md", "chunk_id": "员工手册_考勤与办公规范.md:0:m"},
+        )
+        xiyou_doc = Document(
+            page_content="《西游记》中妖怪故事很多。",
+            metadata={"source": "sample_西游记.txt", "chunk_id": "sample_西游记.txt:17:y", "section": "西游记中的妖怪"},
+        )
+        kb.set_hybrid_results([
+            RetrievalResult(chunk_id="员工手册_考勤与办公规范.md:0:m", document=manual_doc, score=0.55),
+            RetrievalResult(chunk_id="sample_西游记.txt:17:y", document=xiyou_doc, score=0.45),
+        ])
+        kb.set_neighbors({})
+
+        state = retrieve_docs({
+            "question": "西游记有多少只妖怪",
+            "messages": [],
+            "question_type": "knowledge_base",
+            "rewritten_question": "",
+            "documents": [],
+            "context": "",
+            "answer": "",
+            "sources": [],
+            "retry_count": 0,
+            "retrieval_k": 5,
+            "score_threshold": None,
+            "quality_ok": True,
+            "quality_reason": "",
+            "retry_strategy": "none",
+            "web_search_results": [],
+            "web_context": "",
+            "web_search_error": "",
+            "used_web_search": False,
+            "web_search_enabled": False,
+            "search_strategy": "balanced",
+            "search_filter": {},
+            "pinned_chunk_ids": [],
+            "excluded_chunk_ids": [],
+            "evidence_level": "none",
+            "evidence_summary": "",
+            "outcome_category": "success",
+            "used_rerank": False,
+            "used_rewrite": False,
+        }, kb)
+        self.assertEqual(state["sources"][0]["source"], "sample_西游记.txt")
+
 
 if __name__ == "__main__":
     unittest.main()

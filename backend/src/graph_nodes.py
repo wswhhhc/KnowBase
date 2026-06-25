@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 import re
 import zlib
 from collections import OrderedDict
@@ -28,7 +29,7 @@ from config.settings import (
 )
 from src import graph_utils as gu
 from src.graph_state import GraphState, QualityDecision, RerankDecision
-from src.kb_models import RetrievalResult
+from src.kb_models import RetrievalResult, normalize_source
 from src.utils import extract_context_terms, json_from_text
 
 
@@ -127,6 +128,77 @@ def summarize_history(state: GraphState) -> dict:
 # ── Retrieval ────────────────────────────────────────────────────────
 
 
+def _normalize_match_text(text: str) -> str:
+    return re.sub(r"[\s_./\\\-《》“”\"'‘’：:，,。！？!?；;（）()\[\]【】]+", "", text.lower())
+
+
+def _query_terms(query: str, top_n: int = 6) -> list[str]:
+    terms = extract_context_terms(query, top_n=top_n)
+    if not terms:
+        rough_terms = re.split(r"[\s，,。！？!?；;：:（）()\[\]【】]+", query)
+        terms = [term.strip().lower() for term in rough_terms if len(term.strip()) >= 2]
+
+    seen: set[str] = set()
+    ordered_terms: list[str] = []
+    for term in terms:
+        norm = _normalize_match_text(term)
+        if len(norm) < 2 or norm in seen:
+            continue
+        seen.add(norm)
+        ordered_terms.append(norm)
+    return ordered_terms
+
+
+def _document_relevance_boost(doc: Document, query: str, query_terms: list[str]) -> float:
+    query_norm = _normalize_match_text(query)
+    short_query = len(query_norm) <= RERANK_QUERY_LENGTH or len(query_terms) <= 4
+
+    source = normalize_source(str(doc.metadata.get("source", "")))
+    source_stem = Path(source).stem
+    source_norm = _normalize_match_text(source)
+    source_stem_norm = _normalize_match_text(source_stem)
+    section_norm = _normalize_match_text(str(doc.metadata.get("section", "")))
+    content_text = str(doc.metadata.get("original_content") or doc.page_content or "")
+    content_norm = _normalize_match_text(content_text)
+
+    bonus = 0.0
+
+    if query_norm:
+        if source_stem_norm and source_stem_norm in query_norm:
+            bonus += 0.08
+        if section_norm and section_norm in query_norm:
+            bonus += 0.06
+        if short_query and query_norm in content_norm:
+            bonus += 0.08
+
+    content_hits = 0
+    source_hits = 0
+    section_hits = 0
+    for term in query_terms:
+        if term in content_norm:
+            content_hits += 1
+        if term in source_norm or (source_stem_norm and term in source_stem_norm):
+            source_hits += 1
+        if term in section_norm:
+            section_hits += 1
+
+    if short_query:
+        if content_hits >= 2:
+            bonus += 0.24
+        elif content_hits == 1:
+            bonus += 0.08
+    elif content_hits:
+        bonus += min(content_hits, 4) * 0.015
+    if source_hits:
+        bonus += min(source_hits, 3) * 0.08
+    if section_hits:
+        bonus += min(section_hits, 3) * 0.06
+    if short_query and (content_hits + source_hits + section_hits) >= max(2, len(query_terms)):
+        bonus += 0.08
+
+    return bonus
+
+
 def retrieve_docs(state: GraphState, kb) -> dict:
     query = state.get("rewritten_question") or state["question"]
     strategy = state.get("search_strategy", "balanced")
@@ -139,6 +211,8 @@ def retrieve_docs(state: GraphState, kb) -> dict:
     excluded_ids = state.get("excluded_chunk_ids", []) or []
     excluded_set = set(excluded_ids)
     pinned_set = set(pinned_ids)
+    query_terms = _query_terms(query)
+    short_query = len(_normalize_match_text(query)) <= RERANK_QUERY_LENGTH or len(query_terms) <= 4
 
     docs = kb.hybrid_search(
         query,
@@ -154,8 +228,9 @@ def retrieve_docs(state: GraphState, kb) -> dict:
     doc_by_id = {r.chunk_id: r.document for r in docs}
     enriched_docs = []
     seen_ids: set[str] = set()
+    neighbor_window = 2 if short_query else 1
     for result in docs:
-        neighbors = kb.get_neighbor_chunks(result.chunk_id, window=1)
+        neighbors = kb.get_neighbor_chunks(result.chunk_id, window=neighbor_window)
         if not neighbors:
             n = doc_by_id.get(result.chunk_id)
             if n is not None:
@@ -188,14 +263,19 @@ def retrieve_docs(state: GraphState, kb) -> dict:
                     enriched_docs.append(doc)
                     seen_ids.add(cid_str)
 
-    enriched_results = [
-        RetrievalResult(
-            chunk_id=d.metadata.get("chunk_id", ""),
-            document=d,
-            score=score_by_id.get(d.metadata.get("chunk_id", ""), 0.0),
+    enriched_results = []
+    for d in enriched_docs:
+        chunk_id = d.metadata.get("chunk_id", "")
+        base_score = score_by_id.get(chunk_id, 0.0)
+        boost = _document_relevance_boost(d, query, query_terms)
+        enriched_results.append(
+            RetrievalResult(
+                chunk_id=chunk_id,
+                document=d,
+                score=base_score + boost,
+            )
         )
-        for d in enriched_docs
-    ]
+    enriched_results.sort(key=lambda item: item.score, reverse=True)
 
     context, sources = gu._format_context(enriched_results)
     return {"documents": enriched_results, "context": context, "sources": sources, "retrieval_k": retrieval_k}
@@ -293,14 +373,20 @@ def rerank_docs(state: GraphState) -> dict:
         return {}
 
     strategy = state.get("search_strategy", "balanced")
+    query = state.get("rewritten_question") or state["question"]
     top_k = TOP_K_RERANK * 3 if strategy == "deep" else TOP_K_RERANK
 
     if not _should_rerank(state):
-        top = docs[:top_k]
+        # Short entity/relation questions often have noisy top-3 vector hits.
+        # If retrieval already found more candidates, keep a wider context slice
+        # instead of truncating before the relevant chunk reaches the prompt.
+        no_rerank_limit = top_k
+        if len(query) < RERANK_QUERY_LENGTH:
+            no_rerank_limit = max(top_k, min(len(docs), 8))
+        top = docs[:no_rerank_limit]
         context, sources = gu._format_context(top)
         return {"documents": top, "context": context, "sources": sources, "used_rerank": False}
 
-    query = state.get("rewritten_question") or state["question"]
     doc_ids = {result.chunk_id for result in docs}
     docs_text = "\n\n".join(
         f"ID: {result.chunk_id}\n来源: {result.document.metadata.get('source', '未知来源')}\n内容: {result.document.page_content[:500]}"

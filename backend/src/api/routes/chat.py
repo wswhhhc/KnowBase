@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessageChunk
 from sse_starlette.sse import EventSourceResponse
 
 from src.api.deps import get_knowledge_base, verify_api_key
-from src.api.models import ChatRequest, DebugInfo, NodeDebug
+from src.api.models import ChatRequest, ChatSource, DebugInfo, NodeDebug
 from src.graph import run_query
 from src.knowledge_base import KnowledgeBase
 from src.chat_utils import NODE_LABELS, record_query_metrics, generate_title
@@ -322,6 +322,7 @@ async def chat_stream(
                 retry_count=debug_state.retry_count,
                 used_web_search=debug_state.used_web_search,
                 web_results_count=debug_state.web_results_count,
+                context_sources=[ChatSource.model_validate(source) for source in final_sources if isinstance(source, dict)],
             )
 
             # Persist before notifying the client so sidebar refresh sees the final title.

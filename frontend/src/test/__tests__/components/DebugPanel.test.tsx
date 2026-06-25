@@ -73,4 +73,15 @@ describe('DebugPanel', () => {
     expect(screen.getByText(/质量检查未通过/)).toBeInTheDocument()
     expect(screen.getByText(/回答不完整/)).toBeInTheDocument()
   })
+
+  it('shows prompt context chunks when provided', async () => {
+    const user = userEvent.setup()
+    render(<DebugPanel debugData={mockDebugInfo} />)
+
+    await user.click(screen.getByText('链路详情'))
+
+    expect(screen.getByText('送入模型的段落')).toBeInTheDocument()
+    expect(screen.getByText(/sample_西游记\.txt/)).toBeInTheDocument()
+    expect(screen.getByText(/孙悟空保护唐僧西天取经/)).toBeInTheDocument()
+  })
 })

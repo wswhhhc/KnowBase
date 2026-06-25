@@ -47,6 +47,9 @@ export const mockDebugInfo: DebugInfo = {
   retry_count: 0,
   used_web_search: false,
   web_results_count: 0,
+  context_sources: [
+    { index: 1, source: 'sample_西游记.txt', chunk_id: 'sample_西游记.txt:22:abc', chunk_index: 22, page: null, content: '孙悟空保护唐僧西天取经，二人是师徒关系。', score: 0.91 },
+  ],
 }
 
 export const mockMessagesFull: Message[] = [
@@ -74,6 +77,9 @@ export const mockSSEDebugEvent: DebugInfo = {
   retry_count: 0,
   used_web_search: false,
   web_results_count: 0,
+  context_sources: [
+    { index: 1, source: 'sample_西游记.txt', chunk_id: 'sample_西游记.txt:22:abc', chunk_index: 22, page: null, content: '孙悟空保护唐僧西天取经，二人是师徒关系。', score: 0.91 },
+  ],
 }
 
 export const mockExportData = { markdown: '# 测试对话\n\n### 👤 用户\n年假政策\n\n### 🤖 助手\n5天\n\n---\n' }

@@ -202,6 +202,37 @@ class RerankDocsTests(unittest.TestCase):
         ))
         self.assertFalse(result["used_rerank"])
 
+    def test_short_query_keeps_wider_context_when_rerank_is_skipped(self):
+        docs = [
+            _doc(0.9, "ai:0:1"),
+            _doc(0.8, "langchain:0:1"),
+            _doc(0.7, "python:0:1"),
+            RetrievalResult(
+                chunk_id="sample_西游记.txt:22:1",
+                document=Document(
+                    page_content="孙悟空保护唐僧西天取经，是唐僧的大徒弟。",
+                    metadata={"source": "sample_西游记.txt", "chunk_id": "sample_西游记.txt:22:1"},
+                ),
+                score=0.6,
+            ),
+            RetrievalResult(
+                chunk_id="sample_西游记.txt:23:1",
+                document=Document(
+                    page_content="唐僧与孙悟空是师徒关系。",
+                    metadata={"source": "sample_西游记.txt", "chunk_id": "sample_西游记.txt:23:1"},
+                ),
+                score=0.59,
+            ),
+        ]
+        result = rerank_docs(_state(
+            search_strategy="balanced",
+            documents=docs,
+            question="孙悟空和唐僧什么关系",
+        ))
+        self.assertFalse(result["used_rerank"])
+        self.assertGreater(len(result["documents"]), 3)
+        self.assertTrue(any(d.document.metadata.get("source") == "sample_西游记.txt" for d in result["documents"]))
+
     def test_llm_json_exception_falls_back(self):
         """LLM returns invalid JSON → parse_rerank_decision returns empty list
         → fall back to docs[:top_k]."""

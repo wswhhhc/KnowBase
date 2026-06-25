@@ -139,6 +139,7 @@ class DebugInfo(BaseModel):
     retry_count: int = 0
     used_web_search: bool = False
     web_results_count: int = 0
+    context_sources: list[ChatSource] = Field(default_factory=list)
 
 
 class SourceOut(BaseModel):

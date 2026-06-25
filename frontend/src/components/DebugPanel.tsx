@@ -83,6 +83,29 @@ export default function DebugPanel({ debugData }: DebugPanelProps) {
                   </div>
                 )}
               </div>
+
+              {(debugData.context_sources?.length ?? 0) > 0 && (
+                <>
+                  <div className="my-2 border-t border-border/40" />
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground/45">
+                      送入模型的段落
+                    </div>
+                    {debugData.context_sources.map((source) => (
+                      <div key={`${source.chunk_id}-${source.index}`} className="rounded-md border border-border/40 bg-background/40 px-2 py-1.5">
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60">
+                          <span className="text-foreground/70">[{source.index}] {source.source}</span>
+                          {source.chunk_index != null && <span>#{source.chunk_index}</span>}
+                          {typeof source.score === 'number' && <span>{source.score.toFixed(3)}</span>}
+                        </div>
+                        <div className="mt-1 text-[10px] text-foreground/75 leading-relaxed line-clamp-3">
+                          {source.content}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </motion.div>
         )}
