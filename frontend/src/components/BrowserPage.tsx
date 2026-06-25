@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useEffect, useState, useRef } from 'react'
-import { Button, Input, ScrollArea, Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui'
+import { Button, Input, ScrollArea, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui'
 import { BookOpen, PanelRightOpen, ArrowLeft, Search, FileText, Hash, ExternalLink, Layers, Sun, Moon, Flame, List, LayoutGrid, Upload, Globe, RefreshCw, Bookmark, BookmarkCheck } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { KBStats, KBChunk, KBConfig, HotspotEntry } from '@/lib/api'
@@ -21,6 +21,8 @@ interface BrowserPageProps {
 export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, highlightChunkId, onHighlightConsumed, workspaceId }: BrowserPageProps) {
   const theme = useTheme()
   const scrollRef = useRef<HTMLDivElement>(null)
+  const didInitSourceFilterRef = useRef(false)
+  const skipNextSourceSearchRef = useRef(false)
   const [stats, setStats] = useState<KBStats | null>(null)
   const [chunks, setChunks] = useState<KBChunk[]>([])
   const [sources, setSources] = useState<string[]>([])
@@ -85,27 +87,85 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
       .finally(() => setLoading(false))
   }, [])
 
-  // Handle highlight: filter by source name derived from chunk_id then scroll
+  // Load additional chunk pages when a citation points beyond the first page.
   useEffect(() => {
-    if (highlightChunkId && chunks.length > 0) {
-      const found = chunks.find((c) => c.chunk_id === highlightChunkId)
-      if (found) {
-        const el = document.getElementById(`chunk-${highlightChunkId}`)
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          el.classList.add('ring-2', 'ring-primary/40', 'bg-primary/5')
-          setTimeout(() => el.classList.remove('ring-2', 'ring-primary/40', 'bg-primary/5'), 2500)
-        }
-        setSelectedChunk(found)
-        // Also filter source so the chunk is visible
-        const srcName = found.source
-        if (srcName && sources.includes(srcName)) {
-          setSelectedSource(srcName)
-        }
-      }
-      onHighlightConsumed?.()
+    if (!highlightChunkId) return
+
+    const existing = allChunksRef.current.find((chunk) => chunk.chunk_id === highlightChunkId)
+    if (existing) {
+      setHighlightId(highlightChunkId)
+      return
     }
-  }, [highlightChunkId, chunks, sources])
+
+    let cancelled = false
+
+    const revealHighlightedChunk = async () => {
+      setLoading(true)
+      if (selectedSource) {
+        skipNextSourceSearchRef.current = true
+        setSelectedSource('')
+      }
+      setSearchQuery('')
+
+      try {
+        const loaded: KBChunk[] = []
+        let currentPage = 0
+
+        while (!cancelled) {
+          const res = await api.getKBChunks('', '', currentPage * pageSize, pageSize)
+          loaded.push(...res.items)
+
+          const found = loaded.find((chunk) => chunk.chunk_id === highlightChunkId)
+          if (found) {
+            allChunksRef.current = loaded
+            setChunks([...loaded])
+            setTotal(res.total)
+            setPage(currentPage)
+            setHasMore((currentPage + 1) * pageSize < res.total)
+            setHighlightId(highlightChunkId)
+            return
+          }
+
+          if ((currentPage + 1) * pageSize >= res.total || res.items.length === 0) {
+            break
+          }
+
+          currentPage += 1
+        }
+
+        onHighlightConsumed?.()
+      } catch (e) {
+        toast.error('定位引用失败', { description: String(e) })
+        onHighlightConsumed?.()
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    revealHighlightedChunk()
+
+    return () => {
+      cancelled = true
+    }
+  }, [highlightChunkId, onHighlightConsumed, selectedSource])
+
+  useEffect(() => {
+    if (!highlightId) return
+
+    const found = chunks.find((chunk) => chunk.chunk_id === highlightId)
+    if (!found) return
+
+    const el = document.getElementById(`chunk-${highlightId}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('ring-2', 'ring-primary/40', 'bg-primary/5')
+      setTimeout(() => el.classList.remove('ring-2', 'ring-primary/40', 'bg-primary/5'), 2500)
+    }
+
+    setSelectedChunk(found)
+    setHighlightId(null)
+    onHighlightConsumed?.()
+  }, [chunks, highlightId, onHighlightConsumed])
 
   const handleSearch = async () => {
     setLoading(true)
@@ -180,7 +240,17 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     return 'text-red-400/80'
   }
 
-  useEffect(() => { handleSearch() }, [selectedSource])
+  useEffect(() => {
+    if (!didInitSourceFilterRef.current) {
+      didInitSourceFilterRef.current = true
+      return
+    }
+    if (skipNextSourceSearchRef.current) {
+      skipNextSourceSearchRef.current = false
+      return
+    }
+    handleSearch()
+  }, [selectedSource])
 
   const handleSourceClick = (src: string) => {
     setSelectedSource(selectedSource === src ? '' : src)
@@ -427,7 +497,10 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                     {/* Bookmark for slice view */}
                     <div className="mt-1.5 flex items-center justify-end">
                       <button
-                        onClick={() => handleChunkBookmark(chunk)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleChunkBookmark(chunk)
+                        }}
                         className={`${bookmarkedChunks.has(chunk.chunk_id) ? 'text-amber-400' : 'text-muted-foreground/20 hover:text-amber-400'} transition-colors`}
                         title={bookmarkedChunks.has(chunk.chunk_id) ? '已收藏' : '收藏此段落'}
                       >
@@ -527,15 +600,18 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
       </ScrollArea>
 
       {/* Detail dialog */}
-      <Dialog open={!!selectedChunk} onOpenChange={(open) => { if (!open) setSelectedChunk(null) }}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">{selectedChunk?.source}</span>
-              <span className="text-xs text-muted-foreground font-mono">#{selectedChunk?.chunk_index}</span>
-            </DialogTitle>
-          </DialogHeader>
+        <Dialog open={!!selectedChunk} onOpenChange={(open) => { if (!open) setSelectedChunk(null) }}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">{selectedChunk?.source}</span>
+                <span className="text-xs text-muted-foreground font-mono">#{selectedChunk?.chunk_index}</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                查看当前段落的完整内容与基础元信息。
+              </DialogDescription>
+            </DialogHeader>
 
           <div className="space-y-4">
             {/* Metadata chips */}

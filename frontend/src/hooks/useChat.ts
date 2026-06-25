@@ -195,7 +195,7 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
         workspaceId,
       )
     },
-    [isStreaming, pinnedByConv],
+    [isStreaming, onNewConversation, pinnedByConv, workspaceId, _finalizeStream],
   )
 
   const stopStreaming = useCallback(() => {

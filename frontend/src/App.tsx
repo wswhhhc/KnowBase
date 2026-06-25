@@ -82,6 +82,7 @@ function App() {
           activeView={activeView}
           onNavigate={setActiveView}
           onClose={() => setSidebarOpen(false)}
+          isMobile={isMobile}
           convRefreshKey={convRefreshKey}
           activeThreadId={activeThreadId}
           onLoadingMessages={setIsLoadingMessages}

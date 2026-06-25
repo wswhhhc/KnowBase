@@ -227,6 +227,41 @@ describe('useChat', () => {
       vi.unstubAllGlobals()
     })
 
+    it('sends the latest workspace_id in fetch body after workspace switch', async () => {
+      const stream = createMockSSEStream([
+        {
+          event: 'done',
+          data: JSON.stringify({
+            thread_id: 'thread-ws',
+            answer: '回答',
+            sources: [],
+            quality_reason: 'PASS',
+            evidence_level: 'strong',
+            evidence_summary: '充分',
+            outcome_category: 'success',
+            elapsed_ms: 10,
+          }),
+        },
+      ])
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: stream, headers: new Headers() })
+      vi.stubGlobal('fetch', fetchMock)
+
+      const { result } = renderHook(() => useChat())
+
+      act(() => {
+        result.current.setWorkspaceId('ws-2')
+      })
+
+      await act(async () => {
+        await result.current.sendMessage('q', false, 'balanced')
+      })
+      await waitFor(() => expect(result.current.isStreaming).toBe(false))
+
+      const lastCallBody = JSON.parse(fetchMock.mock.calls[0][1].body)
+      expect(lastCallBody.workspace_id).toBe('ws-2')
+      vi.unstubAllGlobals()
+    })
+
     it('pinnedSources are isolated between conversations', async () => {
       const { result } = renderHook(() => useChat())
 

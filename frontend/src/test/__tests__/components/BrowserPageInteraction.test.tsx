@@ -109,4 +109,66 @@ describe('BrowserPage interactions', () => {
     const callArg = vi.mocked(api.createBookmark).mock.calls[0][0]
     expect(callArg.workspace_id).toBe('ws-1')
   })
+
+  it('only fetches the first chunk page once on initial render', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} />) })
+
+    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    expect(api.getKBChunks).toHaveBeenCalledTimes(1)
+    expect(api.getKBChunks).toHaveBeenNthCalledWith(1, '', '', 0, 50)
+  })
+
+  it('loads additional pages to reveal a highlighted chunk beyond the first page', async () => {
+    const pagedChunks = Array.from({ length: 60 }, (_, index) => ({
+      source: 'doc-long.txt',
+      chunk_index: index,
+      chunk_id: `doc-long.txt:${index}:hash`,
+      page: null,
+      content: `段落 ${index}`,
+      original_content: `段落 ${index}`,
+      section: null,
+    }))
+    vi.mocked(api.getKBChunks).mockImplementation(async (_source = '', _search = '', skip = 0, limit = 50) => ({
+      items: pagedChunks.slice(skip, skip + limit),
+      total: pagedChunks.length,
+    }))
+    vi.mocked(api.getKBSourceNames).mockResolvedValue(['doc-long.txt'])
+
+    const onHighlightConsumed = vi.fn()
+
+    await act(async () => {
+      render(
+        <BrowserPage
+          {...defaultProps}
+          highlightChunkId="doc-long.txt:55:hash"
+          onHighlightConsumed={onHighlightConsumed}
+        />,
+      )
+    })
+
+    await waitFor(() => {
+      expect(screen.getAllByText('段落 55').length).toBeGreaterThan(0)
+    })
+    expect(onHighlightConsumed).toHaveBeenCalled()
+    expect(vi.mocked(api.getKBChunks)).toHaveBeenCalledWith('', '', 50, 50)
+  })
+
+  it('does not open the detail dialog when bookmarking in slice view', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} />) })
+
+    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    const sourceButtons = screen.getAllByText('doc1.txt')
+    await userEvent.click(sourceButtons[0])
+    await waitFor(() => expect(screen.getByText('网格视图')).toBeInTheDocument())
+
+    const listToggle = screen.getByText('List').closest('button')
+    expect(listToggle).not.toBeNull()
+    await userEvent.click(listToggle!)
+
+    const bookmarkButtons = screen.getAllByText('Bookmark')
+    await userEvent.click(bookmarkButtons[0])
+
+    expect(api.createBookmark).toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
 })

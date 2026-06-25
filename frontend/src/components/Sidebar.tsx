@@ -27,6 +27,7 @@ interface SidebarProps {
   activeThreadId: string | null
   onLoadingMessages?: (loading: boolean) => void
   onWorkspaceChange?: (wsId: string) => void
+  isMobile?: boolean
 }
 
 const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[] = [
@@ -35,7 +36,7 @@ const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[]
   { view: 'dashboard', icon: BarChart3, label: '指标' },
 ]
 
-export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages, onWorkspaceChange }: SidebarProps) {
+export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages, onWorkspaceChange, isMobile = false }: SidebarProps) {
   const wss = useWorkspaces()
   const convs = useConversations(wss.activeWorkspaceId || undefined)
   const srcs = useSources()
@@ -77,6 +78,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         })),
         conversation.thread_id,
       )
+      if (isMobile) onClose()
     } catch (e) {
       console.error('切换对话失败:', e)
     }
@@ -87,6 +89,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     onNavigate('chat')
     chat.clearMessages()
     convs.setActiveId(null)
+    if (isMobile) onClose()
   }
 
   const handleDelete = async (id: string) => {

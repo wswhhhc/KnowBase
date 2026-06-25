@@ -23,8 +23,17 @@ class ResizeObserverMock {
 }
 window.ResizeObserver = ResizeObserverMock as any
 
+// Mock IntersectionObserver
+class IntersectionObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+window.IntersectionObserver = IntersectionObserverMock as any
+
 // Mock scrollTo
 window.scrollTo = () => {}
+Element.prototype.scrollIntoView = () => {}
 
 // Mock localStorage
 const localStorageMock = (() => {

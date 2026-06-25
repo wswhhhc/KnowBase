@@ -189,6 +189,8 @@ def _record_query_metrics(
     elapsed: int,
     answer: str,
     debug_info: DebugInfo,
+    ttfb_ms: int = 0,
+    first_token_ms: int = 0,
 ) -> None:
     """Persist the final query metrics using actual debug flags."""
     record_query_metrics(
@@ -200,6 +202,8 @@ def _record_query_metrics(
         elapsed=elapsed,
         answer=answer,
         debug_info=debug_info,
+        ttfb_ms=ttfb_ms,
+        first_token_ms=first_token_ms,
     )
 
 

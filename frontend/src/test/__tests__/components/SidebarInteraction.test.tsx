@@ -113,6 +113,13 @@ describe('Sidebar interactions', () => {
     expect(clearMessages).toHaveBeenCalled()
   })
 
+  it('closes the drawer on mobile when creating a new conversation', async () => {
+    const onClose = vi.fn()
+    render(<Sidebar {...defaultProps} onClose={onClose} isMobile />)
+    await userEvent.click(screen.getByText('新对话'))
+    expect(onClose).toHaveBeenCalled()
+  })
+
   it('deleting the active conversation clears local chat state', async () => {
     const remove = vi.fn()
     const clearMessages = vi.fn()
@@ -244,6 +251,17 @@ describe('Sidebar interactions', () => {
     const assistantMsgs = loaded.filter((m: any) => m.role === 'assistant')
     assistantMsgs.forEach((m: any) => {
       expect(m.assistantMsgId).toBeGreaterThan(0)
+    })
+  })
+
+  it('closes the drawer on mobile when switching conversation', async () => {
+    vi.mocked(api.getMessages).mockResolvedValue(mockMessages as any)
+    const onClose = vi.fn()
+    render(<Sidebar {...defaultProps} onClose={onClose} isMobile />)
+    await userEvent.click(screen.getAllByText('测试对话')[0])
+
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled()
     })
   })
 
