@@ -110,6 +110,8 @@ class QueryLogEntry(BaseModel):
     source_count: int = 0
     answer_preview: str = ""
     error: str = ""
+    ttfb_ms: int = 0
+    first_token_ms: int = 0
 
 
 class NodeDebug(BaseModel):

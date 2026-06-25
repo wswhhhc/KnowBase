@@ -67,6 +67,8 @@ def log_query(
     used_web_search: bool | None = None,
     used_rerank: bool | None = None,
     used_rewrite: bool | None = None,
+    ttfb_ms: int = 0,
+    first_token_ms: int = 0,
 ) -> None:
     """Append one query record to the daily log file."""
     _ensure_log_dir()
@@ -88,6 +90,8 @@ def log_query(
         "used_web_search": used_web_search,
         "used_rerank": used_rerank,
         "used_rewrite": used_rewrite,
+        "ttfb_ms": ttfb_ms,
+        "first_token_ms": first_token_ms,
     }
     with open(_log_file(), "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")

@@ -75,6 +75,12 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
     last24h: 0,
   }
 
+  // Perf metrics from log entries
+  const ttfbValues = logs.map(l => (l as any).ttfb_ms || 0).filter(Boolean)
+  const firstTokenValues = logs.map(l => (l as any).first_token_ms || 0).filter(Boolean)
+  const avgTtfb = ttfbValues.length ? Math.round(ttfbValues.reduce((a, b) => a + b, 0) / ttfbValues.length) : 0
+  const avgFirstToken = firstTokenValues.length ? Math.round(firstTokenValues.reduce((a, b) => a + b, 0) / firstTokenValues.length) : 0
+
   // Time distribution (hourly buckets)
   const hourlyData = Array.from({ length: 24 }, (_, h) => ({
     hour: h,
@@ -153,8 +159,9 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
             <>
               {/* Hero stats row */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <StatCard icon={TrendingUp} label="总查询" value={stats.total.toString()} sub={`近24h ${stats.last24h} 次`} delay={0} />
-                <StatCard icon={Clock} label="平均耗时" value={`${stats.avgElapsed}ms`} sub={`检索 ${stats.avgRetrieval} 条`} delay={0.05} />
+                <StatCard icon={BarChart3} label="首 token (avg)" value={avgFirstToken ? `${avgFirstToken}ms` : '-'} sub={avgTtfb ? `TTFB avg ${avgTtfb}ms` : '等待数据'} delay={0} />
+                <StatCard icon={TrendingUp} label="总查询" value={stats.total.toString()} sub={`近24h ${stats.last24h} 次`} delay={0.05} />
+                <StatCard icon={Clock} label="平均耗时" value={`${stats.avgElapsed}ms`} sub={`检索 ${stats.avgRetrieval} 条`} delay={0.1} />
                 <StatCard icon={CheckCircle2} label="质量通过率" value={`${(stats.qualityRate * 100).toFixed(0)}%`}
                   sub={`${stats.qualityPassed}/${stats.answeredTotal || 0}`} delay={0.1} color="emerald" />
                 <StatCard icon={stats.webSearchRate > 0.3 ? AlertTriangle : HelpCircle} label="联网搜索率" value={`${(stats.webSearchRate * 100).toFixed(0)}%`}

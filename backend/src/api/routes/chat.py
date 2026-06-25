@@ -138,6 +138,8 @@ def _persist_and_record(
     pinned_chunk_ids: list[str] | None = None,
     excluded_chunk_ids: list[str] | None = None,
     workspace_id: str = "",
+    ttfb_ms: int = 0,
+    first_token_ms: int = 0,
 ) -> tuple[str, int]:
     """Persist conversation and metrics, returning (conv_id, assistant_msg_id)."""
     assistant_msg_id = 0
@@ -169,6 +171,8 @@ def _persist_and_record(
             elapsed=elapsed,
             answer=answer,
             debug_info=debug_info,
+            ttfb_ms=ttfb_ms,
+            first_token_ms=first_token_ms,
         )
     except Exception as exc:
         logger.exception("保存聊天记录或指标失败: %s", exc)
@@ -313,6 +317,8 @@ async def chat_stream(
                 pinned_chunk_ids=body.pinned_chunk_ids,
                 excluded_chunk_ids=body.excluded_chunk_ids,
                 workspace_id=body.workspace_id,
+                ttfb_ms=0,
+                first_token_ms=0,
             )
 
             yield {"event": "debug", "data": json.dumps(debug_info.model_dump())}
