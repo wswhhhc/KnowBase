@@ -13,10 +13,13 @@ interface BrowserPageProps {
   onOpenSidebar: () => void
   sidebarOpen: boolean
   onNavigate: (v: ViewType) => void
+  highlightChunkId?: string | null
+  onHighlightConsumed?: () => void
 }
 
-export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate }: BrowserPageProps) {
+export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, highlightChunkId, onHighlightConsumed }: BrowserPageProps) {
   const theme = useTheme()
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [stats, setStats] = useState<KBStats | null>(null)
   const [chunks, setChunks] = useState<KBChunk[]>([])
   const [sources, setSources] = useState<string[]>([])
@@ -24,6 +27,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate }: 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedSource, setSelectedSource] = useState('')
   const [selectedChunk, setSelectedChunk] = useState<KBChunk | null>(null)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
   const [chunkView, setChunkView] = useState<'grid' | 'slice'>('grid')
   const [hotspotMode, setHotspotMode] = useState(false)
   const [hotspots, setHotspots] = useState<Map<string, number>>(new Map())
@@ -49,6 +53,28 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate }: 
       .catch((e) => toast.error('加载失败', { description: String(e) }))
       .finally(() => setLoading(false))
   }, [])
+
+  // Handle highlight: filter by source name derived from chunk_id then scroll
+  useEffect(() => {
+    if (highlightChunkId && chunks.length > 0) {
+      const found = chunks.find((c) => c.chunk_id === highlightChunkId)
+      if (found) {
+        const el = document.getElementById(`chunk-${highlightChunkId}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.classList.add('ring-2', 'ring-primary/40', 'bg-primary/5')
+          setTimeout(() => el.classList.remove('ring-2', 'ring-primary/40', 'bg-primary/5'), 2500)
+        }
+        setSelectedChunk(found)
+        // Also filter source so the chunk is visible
+        const srcName = found.source
+        if (srcName && sources.includes(srcName)) {
+          setSelectedSource(srcName)
+        }
+      }
+      onHighlightConsumed?.()
+    }
+  }, [highlightChunkId, chunks, sources])
 
   const handleSearch = async () => {
     setLoading(true)
@@ -307,6 +333,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate }: 
                 return (
                   <motion.div
                     key={chunk.chunk_id}
+                    id={`chunk-${chunk.chunk_id}`}
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.03, duration: 0.25 }}
@@ -360,6 +387,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate }: 
                   return (
                     <motion.div
                       key={chunk.chunk_id}
+                      id={`chunk-${chunk.chunk_id}`}
                       initial={{ opacity: 0, y: 16 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: (i % 12) * 0.04, duration: 0.3 }}

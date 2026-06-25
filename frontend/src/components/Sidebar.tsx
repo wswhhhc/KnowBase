@@ -18,6 +18,7 @@ interface SidebarProps {
     messages: ChatMessage[]
     loadMessages: (msgs: ChatMessage[], threadId?: string) => void
     clearMessages: () => void
+    sendMessage: (q: string, webSearchEnabled: boolean, searchStrategy: string) => void
   }
   activeView: ViewType
   onNavigate: (v: ViewType) => void
@@ -144,7 +145,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
               clearMessages={chat.clearMessages}
             />
           ) : (
-            <DocumentPanel sources={srcs.sources} onRefresh={srcs.refresh} />
+            <DocumentPanel sources={srcs.sources} onRefresh={srcs.refresh} onSendQuestion={(q) => { onNavigate('chat'); chat.sendMessage(q, false, 'balanced') }} />
           )
         ) : activeView === 'browser' ? (
           <KBSummary />

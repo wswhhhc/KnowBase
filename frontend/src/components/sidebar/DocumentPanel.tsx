@@ -1,29 +1,38 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button, Input, Separator } from '@/components/ui'
-import { Globe, Trash2, Upload } from 'lucide-react'
+import { Globe, Trash2, Upload, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { DocSource } from '@/lib/api'
 
 interface DocumentPanelProps {
   sources: DocSource[]
   onRefresh: () => Promise<boolean>
+  onSendQuestion?: (q: string) => void
 }
 
-export default function DocumentPanel({ sources, onRefresh }: DocumentPanelProps) {
+export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: DocumentPanelProps) {
   const [urlInput, setUrlInput] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [suggested, setSuggested] = useState<string[] | null>(null)
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setUploading(true)
+    setSuggested(null)
     try {
-      await api.uploadDocument(file)
+      const res: any = await api.uploadDocument(file)
       if (await onRefresh()) {
         toast.success('文档已上传', { description: file.name })
+        if (res.suggested_questions?.length) {
+          setSuggested(res.suggested_questions)
+        }
       }
     } catch (err) {
       toast.error('上传失败', { description: String(err) })
     }
+    setUploading(false)
     e.target.value = ''
   }
 
@@ -63,10 +72,34 @@ export default function DocumentPanel({ sources, onRefresh }: DocumentPanelProps
       {/* Upload */}
       <div>
         <label className="block text-xs font-medium text-muted-foreground mb-1.5 tracking-wide uppercase">上传文档</label>
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors">
-          <Upload className="h-4 w-4" />选择文件
-          <input type="file" className="hidden" accept=".txt,.md,.pdf,.docx,.html" onChange={handleUpload} />
+        <label className={`flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2.5 text-sm transition-colors ${
+          uploading ? 'border-primary/40 bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+        }`}>
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          {uploading ? '正在处理…' : '选择文件'}
+          <input type="file" className="hidden" accept=".txt,.md,.pdf,.docx,.html" onChange={handleUpload} disabled={uploading} />
         </label>
+        {uploading && (
+          <div className="mt-1.5 h-1 w-full rounded-full bg-muted overflow-hidden">
+            <div className="h-full rounded-full bg-primary animate-pulse" style={{ width: '60%' }} />
+          </div>
+        )}
+        {suggested && suggested.length > 0 && (
+          <div className="mt-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
+            <p className="text-[10px] font-medium text-primary/80 mb-2 tracking-wide">试试问这些问题</p>
+            <div className="space-y-1">
+              {suggested.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => { onSendQuestion?.(q); setSuggested(null) }}
+                  className="block w-full text-left text-[11px] text-foreground/70 hover:text-foreground hover:bg-primary/10 rounded px-2 py-1 transition-colors"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* URL Import */}

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import IngestResponse, URLIngestRequest, SourceOut
+from src.chat_utils import generate_suggested_questions
 from src.knowledge_base import KnowledgeBase
 from src.utils import save_uploaded_file
 
@@ -24,9 +25,12 @@ async def upload_file(file: UploadFile = File(...), kb: KnowledgeBase = Depends(
     try:
         file_path, source_name = save_uploaded_file(file)
         chunk_count = kb.ingest_file(str(file_path), source_name=source_name)
+        docs_text = " ".join(d.page_content for d in kb.all_docs if d.metadata.get("source", "").startswith(source_name.rsplit(".", 1)[0]))
+        suggested = generate_suggested_questions(docs_text) if chunk_count > 0 else []
         return IngestResponse(
             chunk_count=chunk_count, total_docs=kb.document_count,
             message=f"已添加 {chunk_count} 个新片段" if chunk_count else "文件内容无变化，未新增片段",
+            suggested_questions=suggested,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))

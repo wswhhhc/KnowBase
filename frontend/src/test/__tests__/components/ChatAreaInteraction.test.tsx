@@ -83,10 +83,10 @@ describe('ChatArea interactions', () => {
 
   it('renders 4 search strategy buttons', () => {
     renderChatArea()
-    expect(screen.getByText('快速')).toBeInTheDocument()
-    expect(screen.getByText('均衡')).toBeInTheDocument()
-    expect(screen.getByText('精准')).toBeInTheDocument()
-    expect(screen.getByText('深度')).toBeInTheDocument()
+    expect(screen.getByText('⚡快速')).toBeInTheDocument()
+    expect(screen.getByText('⚖️标准')).toBeInTheDocument()
+    expect(screen.getByText('🔬严谨')).toBeInTheDocument()
+    expect(screen.getByText('🔍深度')).toBeInTheDocument()
   })
 
   it('sends message when clicking send button', async () => {

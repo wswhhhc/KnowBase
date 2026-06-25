@@ -3,6 +3,7 @@ import { Button, ScrollArea, Switch, Tooltip, TooltipContent, TooltipProvider, T
 import { useChat } from '@/hooks/useChat'
 import { useTheme } from '@/hooks/useTheme'
 import EmptyState from './EmptyState'
+import type { Source } from '@/lib/api'
 import MessageBubble from './MessageBubble'
 import type { ViewType } from '@/App'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -14,9 +15,11 @@ interface ChatAreaProps {
   sidebarOpen: boolean
   onNavigate: (v: ViewType) => void
   isLoadingMessages?: boolean
+  onCitationClick?: (source: Source) => void
+  onSendQuestion?: (q: string) => void
 }
 
-export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate, isLoadingMessages }: ChatAreaProps) {
+export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate, isLoadingMessages, onCitationClick, onSendQuestion }: ChatAreaProps) {
   const theme = useTheme()
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -130,10 +133,10 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                       className={`px-2 py-1 text-[10px] font-medium rounded-sm transition-colors ${
                         searchStrategy === s ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
                       }`}>
-                      {s === 'fast' ? '快速' : s === 'balanced' ? '均衡' : s === 'high_quality' ? '精准' : '深度'}
+                      {s === 'fast' ? '⚡快速' : s === 'balanced' ? '⚖️标准' : s === 'high_quality' ? '🔬严谨' : '🔍深度'}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>{s === 'fast' ? '快速：不重排' : s === 'balanced' ? '均衡：条件重排' : s === 'high_quality' ? '精准：强制重排+质量检查' : '深度：扩检索+重排'}</TooltipContent>
+                  <TooltipContent>{s === 'fast' ? '快速回答：不重排，最快响应。适合简单事实性问题' : s === 'balanced' ? '标准模式：智能判断是否需要重排。适合大多数情况' : s === 'high_quality' ? '严谨模式：强制重排+质量检查。质量优先，速度次之' : '深度检索：扩检索+综合回答。需要全面覆盖时使用'}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ))}
@@ -157,6 +160,9 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                     message={msg}
                     prevMessage={idx > 0 ? chat.messages[idx - 1] : undefined}
                     threadId={chat.threadId}
+                    onCitationClick={onCitationClick}
+                    onSendQuestion={onSendQuestion}
+                    onNavigateBrowser={() => onNavigate('browser')}
                   />
                 </motion.div>
               ))}

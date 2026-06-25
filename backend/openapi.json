@@ -90,7 +90,7 @@
               "schema": {
                 "$ref": "#/components/schemas/ConversationCreate",
                 "default": {
-                  "title": "æ–°å¯¹è¯"
+                  "title": "ĞÂ¶Ô»°"
                 }
               }
             }
@@ -276,7 +276,7 @@
           "conversations"
         ],
         "summary": "Delete Batch",
-        "description": "æ‰¹é‡åˆ é™¤å¤šä¸ªå¯¹è¯ã€‚",
+        "description": "ÅúÁ¿É¾³ı¶à¸ö¶Ô»°¡£",
         "operationId": "delete_batch_api_conversations_batch_delete_post",
         "requestBody": {
           "content": {
@@ -1034,6 +1034,17 @@
             "type": "string",
             "title": "Source"
           },
+          "chunk_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Id"
+          },
           "chunk_index": {
             "anyOf": [
               {
@@ -1106,7 +1117,7 @@
           "title": {
             "type": "string",
             "title": "Title",
-            "default": "æ–°å¯¹è¯"
+            "default": "ĞÂ¶Ô»°"
           }
         },
         "type": "object",
@@ -1213,6 +1224,13 @@
           "message": {
             "type": "string",
             "title": "Message"
+          },
+          "suggested_questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggested Questions"
           }
         },
         "type": "object",

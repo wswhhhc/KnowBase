@@ -1,14 +1,20 @@
 import { useState } from 'react'
-import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Skeleton } from '@/components/ui'
+import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import { evidenceLabel } from '@/lib/utils'
 import DebugPanel from './DebugPanel'
 import * as api from '@/lib/api'
 import type { Source } from '@/lib/api'
 import type { ChatMessage } from '@/hooks/useChat'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle, MessageSquare, ExternalLink, Upload } from 'lucide-react'
 
-function CitationText({ text, sources }: { text: string; sources?: Source[] }) {
+interface CitationTextProps {
+  text: string
+  sources?: Source[]
+  onCitationClick?: (source: Source) => void
+}
+
+function CitationText({ text, sources, onCitationClick }: CitationTextProps) {
   const parts = text.split(/(\[\d+(?:,\d+)*\])/g)
   const sourceMap = new Map(sources?.map((s) => [s.index, s]) ?? [])
   return (
@@ -17,10 +23,15 @@ function CitationText({ text, sources }: { text: string; sources?: Source[] }) {
         const match = part.match(/\[(\d+(?:,\d+)*)\]/)
         if (match) {
           const indices = match[1].split(',').map(Number)
+          const firstIdx = indices[0]
+          const firstSrc = sourceMap.get(firstIdx)
           return (
             <sup
               key={i}
-              className="inline-flex items-center justify-center min-w-[1.1em] h-3.5 px-0.5 rounded text-[10px] font-medium bg-primary/15 text-primary cursor-help transition-colors hover:bg-primary/25"
+              onClick={() => firstSrc && onCitationClick?.(firstSrc)}
+              className={`inline-flex items-center justify-center min-w-[1.1em] h-3.5 px-0.5 rounded text-[10px] font-medium bg-primary/15 text-primary transition-colors ${
+                onCitationClick ? 'cursor-pointer hover:bg-primary/30' : 'cursor-help hover:bg-primary/25'
+              }`}
               title={indices.map((idx) => {
                 const s = sourceMap.get(idx)
                 return s ? `${s.source}${s.chunk_index != null ? ` #${s.chunk_index}` : ''}` : `来源 ${idx}`
@@ -60,9 +71,12 @@ interface MessageBubbleProps {
   message: ChatMessage
   prevMessage?: ChatMessage
   threadId?: string | null
+  onCitationClick?: (source: Source) => void
+  onSendQuestion?: (q: string) => void
+  onNavigateBrowser?: () => void
 }
 
-export default function MessageBubble({ message, prevMessage, threadId }: MessageBubbleProps) {
+export default function MessageBubble({ message, prevMessage, threadId, onCitationClick, onSendQuestion, onNavigateBrowser }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const [sourceOpen, setSourceOpen] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -104,7 +118,7 @@ export default function MessageBubble({ message, prevMessage, threadId }: Messag
           <>
             <div className="prose-chat text-sm text-foreground">
               {message.content ? (
-                <CitationText text={message.content} sources={message.sources} />
+                <CitationText text={message.content} sources={message.sources} onCitationClick={onCitationClick} />
               ) : (
                 <span className="text-muted-foreground animate-pulse-soft italic">思考中…</span>
               )}
@@ -115,14 +129,28 @@ export default function MessageBubble({ message, prevMessage, threadId }: Messag
               <>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {message.evidence_level && message.outcome_category === 'success' && (
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                      message.evidence_level === 'strong' ? 'bg-emerald-500/10 text-emerald-400' :
-                      message.evidence_level === 'moderate' ? 'bg-yellow-500/10 text-yellow-400' :
-                      message.evidence_level === 'weak' ? 'bg-orange-500/10 text-orange-400' :
-                      'bg-red-500/10 text-red-400'
-                    }`}>
-                      ● {evidenceLabel(message.evidence_level)}
-                    </span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full cursor-help ${
+                            message.evidence_level === 'strong' ? 'bg-emerald-500/10 text-emerald-400' :
+                            message.evidence_level === 'moderate' ? 'bg-yellow-500/10 text-yellow-400' :
+                            message.evidence_level === 'weak' ? 'bg-orange-500/10 text-orange-400' :
+                            'bg-red-500/10 text-red-400'
+                          }`}>
+                            ● {evidenceLabel(message.evidence_level)}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs text-xs">
+                          {message.evidence_summary || (
+                            message.evidence_level === 'strong' ? '多个相关文档片段支持该回答，可信度较高' :
+                            message.evidence_level === 'moderate' ? '少量相关文档片段支持该回答' :
+                            message.evidence_level === 'weak' ? '仅少数文档片段触及问题，证据不够充分' :
+                            '没有找到直接相关的文档证据'
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
                   {message.outcome_category === 'no_docs' && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 知识库中未找到</span>
@@ -160,6 +188,34 @@ export default function MessageBubble({ message, prevMessage, threadId }: Messag
                   )}
                 </div>
 
+                {/* No-answer guidance panel */}
+                {(message.outcome_category === 'no_docs' || message.outcome_category === 'web_empty' || message.outcome_category === 'weak_evidence' || message.outcome_category === 'vague_question') && (
+                  <div className="mt-3 rounded-lg border border-border/60 bg-surface/30 px-3.5 py-3">
+                    <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+                      {message.outcome_category === 'no_docs' && '知识库中没有找到相关内容。你可以上传相关文档后再问一次。'}
+                      {message.outcome_category === 'web_empty' && '联网搜索也没有找到相关信息。建议换一种问法或上传相关资料。'}
+                      {message.outcome_category === 'weak_evidence' && `检索到的信息不足以支撑可靠回答。尝试更具体的问题或上传更详细的资料。${message.evidence_summary ? `（${message.evidence_summary}）` : ''}`}
+                      {message.outcome_category === 'vague_question' && '问题比较模糊，建议补充更多细节。'}
+                    </p>
+                    {onNavigateBrowser && (message.outcome_category === 'no_docs' || message.outcome_category === 'weak_evidence') && (
+                      <button onClick={onNavigateBrowser}
+                        className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-primary/70 hover:text-primary transition-colors">
+                        <Upload className="h-3 w-3" />上传文档
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Follow-up button for the whole answer */}
+                {message.outcome_category === 'success' && !message.streaming && message.content && (
+                  <button
+                    onClick={() => onSendQuestion?.(`关于上面的回答，请详细解释「${message.content.slice(0, 60)}」`)}
+                    className="mt-2 inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                  >
+                    <MessageSquare className="h-3 w-3" />继续追问
+                  </button>
+                )}
+
                 {message.sources && message.sources.length > 0 && (
                   <button
                     onClick={() => setSourceOpen(!sourceOpen)}
@@ -187,6 +243,24 @@ export default function MessageBubble({ message, prevMessage, threadId }: Messag
                           </div>
                           {s.url && <p className="text-[10px] text-primary/50 truncate mt-0.5">{s.url}</p>}
                           <p className="text-xs text-muted-foreground mt-1.5 line-clamp-3 leading-relaxed">{s.content}</p>
+                          <div className="mt-1.5 flex items-center gap-2">
+                            {onCitationClick && (
+                              <button
+                                onClick={() => onCitationClick?.(s)}
+                                className="inline-flex items-center gap-1 text-[9px] text-primary/50 hover:text-primary transition-colors"
+                              >
+                                <ExternalLink className="h-2.5 w-2.5" />查看原文
+                              </button>
+                            )}
+                            {onSendQuestion && (
+                              <button
+                                onClick={() => onSendQuestion?.(`关于「${s.source}」中的内容，请详细解释`)}
+                                className="inline-flex items-center gap-1 text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                              >
+                                <MessageSquare className="h-2.5 w-2.5" />追问
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </motion.div>

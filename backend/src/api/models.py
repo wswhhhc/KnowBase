@@ -14,6 +14,7 @@ class ChatRequest(BaseModel):
 
 class ChatSource(BaseModel):
     source: str
+    chunk_id: str | None = None
     chunk_index: int | None = None
     page: int | None = None
     score: float | None = None
@@ -57,6 +58,7 @@ class IngestResponse(BaseModel):
     chunk_count: int
     total_docs: int
     message: str
+    suggested_questions: list[str] = Field(default_factory=list)
 
 
 class URLIngestRequest(BaseModel):

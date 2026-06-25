@@ -1,6 +1,7 @@
 import { Toaster } from 'sonner'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useChat } from '@/hooks/useChat'
+import type { Source } from '@/lib/api'
 import Sidebar from '@/components/Sidebar'
 import ChatArea from '@/components/ChatArea'
 import BrowserPage from '@/components/BrowserPage'
@@ -14,10 +15,23 @@ function App() {
   const [convRefreshKey, setConvRefreshKey] = useState(0)
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
+  const [highlightChunkId, setHighlightChunkId] = useState<string | null>(null)
   const chat = useChat((threadId) => {
     setActiveThreadId(threadId)
     setConvRefreshKey((k) => k + 1)
   })
+
+  const handleCitationClick = useCallback((source: Source) => {
+    if (source.chunk_id) {
+      setHighlightChunkId(source.chunk_id)
+    }
+    setActiveView('browser')
+  }, [])
+
+  const handleSendQuestion = useCallback((q: string) => {
+    setActiveView('chat')
+    setTimeout(() => chat.sendMessage(q, false, 'balanced'), 100)
+  }, [chat])
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background noise-overlay">
@@ -45,6 +59,8 @@ function App() {
             sidebarOpen={sidebarOpen}
             onNavigate={setActiveView}
             isLoadingMessages={isLoadingMessages}
+            onCitationClick={handleCitationClick}
+            onSendQuestion={handleSendQuestion}
           />
         )}
         {activeView === 'browser' && (
@@ -52,6 +68,8 @@ function App() {
             onOpenSidebar={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
             onNavigate={setActiveView}
+            highlightChunkId={highlightChunkId}
+            onHighlightConsumed={() => setHighlightChunkId(null)}
           />
         )}
         {activeView === 'dashboard' && (

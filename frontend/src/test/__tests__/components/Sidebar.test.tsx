@@ -37,6 +37,7 @@ vi.mock('lucide-react', () => {
     Upload: 'Upload',
     Globe: 'Globe',
     FileText: 'FileText',
+    Loader2: 'Loader2',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
@@ -64,6 +65,7 @@ const defaultProps = {
     messages: [] as any[],
     loadMessages: vi.fn(),
     clearMessages: vi.fn(),
+    sendMessage: vi.fn(),
   },
   activeView: 'chat' as const,
   onNavigate: vi.fn(),

@@ -88,3 +88,38 @@ def generate_title(question: str) -> str:
     except Exception:
         logger.warning("对话标题生成失败，回退到原始问题。", exc_info=True)
         return question[:30]
+
+
+def generate_suggested_questions(docs_text: str, max_questions: int = 5) -> list[str]:
+    """Use LLM to generate suggested questions from document content."""
+    if len(docs_text.strip()) < 50:
+        return []
+    try:
+        from langchain_openai import ChatOpenAI
+        from config.settings import (
+            _is_configured_api_key,
+            settings,
+            require_siliconflow_api_key,
+            SILICONFLOW_BASE_URL,
+            LLM_MODEL,
+        )
+
+        if not _is_configured_api_key(settings.siliconflow_api_key):
+            return []
+
+        llm = ChatOpenAI(
+            model=LLM_MODEL,
+            temperature=0.3,
+            openai_api_key=require_siliconflow_api_key(),
+            openai_api_base=SILICONFLOW_BASE_URL,
+        )
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "根据以下文档内容，生成{max_n}个用户可能想问的问题，每行一个，用中文。只返回问题，不要编号和额外的文字。"),
+            ("human", docs_text[:2000]),
+        ])
+        result = llm.invoke(prompt.format(max_n=max_questions))
+        questions = [line.strip().strip('"').strip("'").strip("。") for line in str(result.content).strip().split("\n") if line.strip()]
+        return [q for q in questions if len(q) > 4][:max_questions]
+    except Exception:
+        logger.warning("建议问题生成失败，返回空列表。", exc_info=True)
+        return []

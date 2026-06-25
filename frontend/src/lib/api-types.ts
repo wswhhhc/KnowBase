@@ -69,7 +69,7 @@ export interface paths {
         put?: never;
         /**
          * Delete Batch
-         * @description 批量删除多个对话。
+         * @description ����ɾ������Ի���
          */
         post: operations["delete_batch_api_conversations_batch_delete_post"];
         delete?: never;
@@ -380,6 +380,8 @@ export interface components {
         ChatSource: {
             /** Source */
             source: string;
+            /** Chunk Id */
+            chunk_id?: string | null;
             /** Chunk Index */
             chunk_index?: number | null;
             /** Page */
@@ -397,7 +399,7 @@ export interface components {
         ConversationCreate: {
             /**
              * Title
-             * @default 新对话
+             * @default �¶Ի�
              */
             title: string;
         };
@@ -446,6 +448,8 @@ export interface components {
             total_docs: number;
             /** Message */
             message: string;
+            /** Suggested Questions */
+            suggested_questions?: string[];
         };
         /**
          * KBConfig

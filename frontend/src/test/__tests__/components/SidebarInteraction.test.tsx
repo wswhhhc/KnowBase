@@ -31,7 +31,7 @@ vi.mock('lucide-react', () => {
     MessageSquare: 'MessageSquare', Plus: 'Plus', Trash2: 'Trash2',
     BookOpen: 'BookOpen', BarChart3: 'BarChart3', PanelRightClose: 'PanelRightClose',
     Pencil: 'Pencil', Check: 'Check', X: 'X', Upload: 'Upload', Globe: 'Globe',
-    FileText: 'FileText',
+    FileText: 'FileText', Loader2: 'Loader2',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
@@ -54,7 +54,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const defaultProps = {
-  chat: { messages: [] as any[], loadMessages: vi.fn(), clearMessages: vi.fn() },
+  chat: { messages: [] as any[], loadMessages: vi.fn(), clearMessages: vi.fn(), sendMessage: vi.fn() },
   activeView: 'chat' as const,
   onNavigate: vi.fn(),
   onClose: vi.fn(),
