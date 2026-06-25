@@ -31,7 +31,7 @@ vi.mock('lucide-react', () => {
     MessageSquare: 'MessageSquare', Plus: 'Plus', Trash2: 'Trash2',
     BookOpen: 'BookOpen', BarChart3: 'BarChart3', PanelRightClose: 'PanelRightClose',
     Pencil: 'Pencil', Check: 'Check', X: 'X', Upload: 'Upload', Globe: 'Globe',
-    FileText: 'FileText', Loader2: 'Loader2',
+    FileText: 'FileText', Loader2: 'Loader2', Sun: 'Sun', Moon: 'Moon',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
@@ -44,6 +44,10 @@ vi.mock('@/hooks/useData', () => ({
   useWorkspaces: vi.fn(),
 }))
 
+vi.mock('@/hooks/useTheme', () => ({
+  useTheme: () => ({ theme: 'dark', toggle: vi.fn() }),
+}))
+
 vi.mock('@/lib/api', () => ({
   getMessages: vi.fn().mockResolvedValue([]),
   uploadDocument: vi.fn(),
@@ -53,6 +57,7 @@ vi.mock('@/lib/api', () => ({
   deleteSource: vi.fn(),
   deleteConversations: vi.fn(),
   getKBStats: vi.fn(),
+  queryLogs: vi.fn().mockResolvedValue([]),
 }))
 
 const defaultProps = {
@@ -148,9 +153,9 @@ describe('Sidebar interactions', () => {
     expect(screen.getByText('暂无对话')).toBeInTheDocument()
   })
 
-  it('in dashboard view shows hint text', () => {
+  it('in dashboard view shows summary', () => {
     render(<Sidebar {...defaultProps} activeView="dashboard" />)
-    expect(screen.getByText('打开指标面板查看详情')).toBeInTheDocument()
+    expect(screen.getByText('快速统计')).toBeInTheDocument()
   })
 
   it('navigation buttons call onNavigate', async () => {

@@ -120,18 +120,18 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
         {/* Version mode selector */}
         {versionPrompted && (
           <div className="mt-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
-            <p className="text-[10px] font-medium text-primary/80 mb-2 tracking-wide">该文档已存在，请选择操作方式</p>
+            <p className="text-2xs font-medium text-primary/80 mb-2 tracking-wide">该文档已存在，请选择操作方式</p>
             <div className="space-y-1">
               <button onClick={() => handleVersionAction('replace')}
-                className="block w-full text-left text-[11px] px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">
+                className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">
                 替换为新版本（删除旧内容后重新导入）
               </button>
               <button onClick={() => handleVersionAction('append')}
-                className="block w-full text-left text-[11px] px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">
+                className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">
                 保留两者（新旧版本共存）
               </button>
               <button onClick={() => handleVersionAction('skip')}
-                className="block w-full text-left text-[11px] px-2 py-1.5 rounded hover:bg-muted/50 text-muted-foreground transition-colors">
+                className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-muted/50 text-muted-foreground transition-colors">
                 取消，不重复导入
               </button>
             </div>
@@ -140,13 +140,13 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
 
         {suggested && suggested.length > 0 && (
           <div className="mt-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
-            <p className="text-[10px] font-medium text-primary/80 mb-2 tracking-wide">试试问这些问题</p>
+            <p className="text-2xs font-medium text-primary/80 mb-2 tracking-wide">试试问这些问题</p>
             <div className="space-y-1">
               {suggested.map((q, i) => (
                 <button
                   key={i}
                   onClick={() => { onSendQuestion?.(q); setSuggested(null) }}
-                  className="block w-full text-left text-[11px] text-foreground/70 hover:text-foreground hover:bg-primary/10 rounded px-2 py-1 transition-colors"
+                  className="block w-full text-left text-xs text-foreground/70 hover:text-foreground hover:bg-primary/10 rounded px-2 py-1 transition-colors"
                 >
                   {q}
                 </button>
@@ -180,7 +180,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">引用文档</span>
           {sources.length > 0 && (
-            <button onClick={handleClearAll} className="text-[10px] text-destructive/50 hover:text-destructive transition-colors">
+            <button onClick={handleClearAll} className="text-2xs text-destructive/50 hover:text-destructive transition-colors">
               清空
             </button>
           )}
@@ -189,7 +189,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
           {sources.map((s) => (
             <div key={s.source} className="group flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-foreground/70 hover:bg-muted transition-colors">
               <span className="truncate flex-1">{s.source}</span>
-              <span className="text-[10px] text-muted-foreground mr-2 font-mono">{s.count} 段落</span>
+              <span className="text-2xs text-muted-foreground mr-2 font-mono">{s.count} 段落</span>
               <button
                 onClick={() => handleDeleteSource(s.source)}
                 className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"

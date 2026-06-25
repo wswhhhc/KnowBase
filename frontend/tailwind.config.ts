@@ -53,6 +53,9 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      fontSize: {
+        '2xs': ['10px', { lineHeight: '14px' }],
+      },
       keyframes: {
         'fade-in': {
           from: { opacity: '0', transform: 'translateY(8px)' },

@@ -6,6 +6,7 @@ import Sidebar from '@/components/Sidebar'
 import ChatArea from '@/components/ChatArea'
 import BrowserPage from '@/components/BrowserPage'
 import DashboardPage from '@/components/DashboardPage'
+import { Sparkles, BookOpen, BarChart3 } from 'lucide-react'
 
 export type ViewType = 'chat' | 'browser' | 'dashboard'
 
@@ -90,7 +91,7 @@ function App() {
         />
       </div>
 
-      <main className="relative flex flex-1 flex-col min-w-0">
+      <main className="relative flex flex-1 flex-col min-w-0 pb-safe">
         {activeView === 'chat' && (
           <ChatArea
             chat={chat}
@@ -118,6 +119,32 @@ function App() {
             sidebarOpen={sidebarOpen}
             onNavigate={setActiveView}
           />
+        )}
+
+        {/* Mobile bottom tab bar */}
+        {isMobile && (
+          <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-surface/90 backdrop-blur-lg safe-area-bottom">
+            <div className="flex items-center justify-around h-14">
+              {([
+                { view: 'chat' as ViewType, icon: Sparkles, label: '聊天' },
+                { view: 'browser' as ViewType, icon: BookOpen, label: '工作区' },
+                { view: 'dashboard' as ViewType, icon: BarChart3, label: '指标' },
+              ]).map(({ view, icon: Icon, label }) => (
+                <button
+                  key={view}
+                  onClick={() => { setActiveView(view); setSidebarOpen(false) }}
+                  className={`flex flex-col items-center justify-center gap-0.5 h-full px-6 text-2xs font-medium transition-colors ${
+                    activeView === view
+                      ? 'text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Icon className={`h-5 w-5 ${activeView === view ? 'fill-primary/15' : ''}`} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </nav>
         )}
       </main>
 

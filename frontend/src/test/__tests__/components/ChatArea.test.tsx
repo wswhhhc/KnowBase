@@ -35,6 +35,8 @@ vi.mock('lucide-react', () => {
     Square: icon('Square'),
     Sparkles: icon('Sparkles'),
     Search: icon('Search'),
+    Scale: icon('Scale'),
+    FileSearch: icon('FileSearch'),
     Globe: icon('Globe'),
     Zap: icon('Zap'),
     RotateCcw: icon('RotateCcw'),

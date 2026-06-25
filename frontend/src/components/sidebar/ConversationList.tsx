@@ -131,7 +131,7 @@ export default function ConversationList({
               <span className="truncate flex-1 cursor-pointer" onClick={() => onSwitch(c)}>
                 {truncate(c.title, 24)}
               </span>
-              <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-60 transition-opacity flex-shrink-0 mr-1">
+              <span className="text-2xs text-muted-foreground opacity-0 group-hover:opacity-60 transition-opacity flex-shrink-0 mr-1">
                 {formatTime(c.updated_at)}
               </span>
               <button

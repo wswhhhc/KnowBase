@@ -14,7 +14,7 @@ export default function DebugPanel({ debugData }: DebugPanelProps) {
     <div className="mt-2">
       <button
         onClick={() => setOpen(!open)}
-        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
       >
         <Bug className="h-3 w-3" />
         {open ? '收起链路详情' : '链路详情'}
@@ -29,7 +29,7 @@ export default function DebugPanel({ debugData }: DebugPanelProps) {
             exit={{ opacity: 0, height: 0 }}
             className="mt-1.5 overflow-hidden"
           >
-            <div className="rounded-lg border border-border/60 bg-surface/40 px-3 py-2.5 font-mono text-[11px] leading-relaxed">
+            <div className="rounded-lg border border-border/60 bg-surface/40 px-3 py-2.5 font-mono text-xs leading-relaxed">
               {/* Node timeline */}
               <div className="space-y-1">
                 {debugData.nodes.map((node, i) => (
@@ -78,7 +78,7 @@ export default function DebugPanel({ debugData }: DebugPanelProps) {
                   )}
                 </div>
                 {!debugData.quality_passed && (
-                  <div className="text-red-400/80 text-[10px] mt-1">
+                  <div className="text-red-400/80 text-2xs mt-1">
                     质量检查未通过: {debugData.quality_reason}
                   </div>
                 )}
@@ -88,17 +88,17 @@ export default function DebugPanel({ debugData }: DebugPanelProps) {
                 <>
                   <div className="my-2 border-t border-border/40" />
                   <div className="space-y-1.5">
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground/45">
+                    <div className="text-2xs uppercase tracking-wide text-muted-foreground/45">
                       送入模型的段落
                     </div>
                     {debugData.context_sources.map((source) => (
                       <div key={`${source.chunk_id}-${source.index}`} className="rounded-md border border-border/40 bg-background/40 px-2 py-1.5">
-                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60">
+                        <div className="flex items-center gap-2 text-2xs text-muted-foreground/60">
                           <span className="text-foreground/70">[{source.index}] {source.source}</span>
                           {source.chunk_index != null && <span>#{source.chunk_index}</span>}
                           {typeof source.score === 'number' && <span>{source.score.toFixed(3)}</span>}
                         </div>
-                        <div className="mt-1 text-[10px] text-foreground/75 leading-relaxed line-clamp-3">
+                        <div className="mt-1 text-2xs text-foreground/75 leading-relaxed line-clamp-3">
                           {source.content}
                         </div>
                       </div>

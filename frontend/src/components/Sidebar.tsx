@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, ScrollArea } from '@/components/ui'
+import { Button, ScrollArea, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import {
   MessageSquare, FileText,
-  PanelRightClose, BookOpen, BarChart3, Plus, Trash2,
+  PanelRightClose, BookOpen, BarChart3, Plus, Trash2, Sun, Moon,
 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
+import { useTheme } from '@/hooks/useTheme'
 import ConversationList from '@/components/sidebar/ConversationList'
 import DocumentPanel from '@/components/sidebar/DocumentPanel'
 import KBSummary from '@/components/sidebar/KBSummary'
+import DashboardSummary from '@/components/sidebar/DashboardSummary'
 import type { ChatMessage } from '@/hooks/useChat'
 import type { Conversation, DebugInfo } from '@/lib/api'
 import type { ViewType } from '@/App'
@@ -37,6 +39,7 @@ const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[]
 ]
 
 export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages, onWorkspaceChange, isMobile = false }: SidebarProps) {
+  const theme = useTheme()
   const wss = useWorkspaces()
   const convs = useConversations(wss.activeWorkspaceId || undefined)
   const srcs = useSources()
@@ -108,12 +111,25 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
           <span className="font-heading text-xl leading-none tracking-tight text-primary">K</span>
           <div>
             <span className="block text-sm font-medium text-foreground/70 leading-tight">KnowBase</span>
-            <span className="block text-[9px] text-muted-foreground/40 tracking-widest uppercase">RAG Assistant</span>
+            <span className="block text-2xs text-muted-foreground/40 tracking-widest uppercase">RAG Assistant</span>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          <PanelRightClose className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={theme.toggle}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                  {theme.theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{theme.theme === 'dark' ? '切换浅色模式' : '切换深色模式'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <PanelRightClose className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Workspace selector */}
@@ -191,12 +207,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         ) : activeView === 'browser' ? (
           <KBSummary />
         ) : (
-          <div className="px-3 py-4">
-            <p className="text-xs text-muted-foreground/50 tracking-wide uppercase px-1 mb-2">快速统计</p>
-            <div className="rounded-lg border border-border bg-surface/30 p-3">
-              <p className="text-[10px] text-muted-foreground/50">打开指标面板查看详情</p>
-            </div>
-          </div>
+          <DashboardSummary />
         )}
       </ScrollArea>
 
@@ -205,13 +216,13 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         <div className="border-t border-border px-3 py-2">
           <div className="flex rounded-md bg-muted/50 p-0.5">
             <button onClick={() => setTab('conversations')}
-              className={`flex-1 py-1.5 text-[10px] font-medium rounded-sm transition-colors ${
+              className={`flex-1 py-1.5 text-2xs font-medium rounded-sm transition-colors ${
                 tab === 'conversations' ? 'bg-surface text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}>
               <MessageSquare className="inline h-3 w-3 mr-1" />对话
             </button>
             <button onClick={() => setTab('documents')}
-              className={`flex-1 py-1.5 text-[10px] font-medium rounded-sm transition-colors ${
+              className={`flex-1 py-1.5 text-2xs font-medium rounded-sm transition-colors ${
                 tab === 'documents' ? 'bg-surface text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}>
               <FileText className="inline h-3 w-3 mr-1" />文档

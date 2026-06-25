@@ -1,12 +1,11 @@
 import { toast } from 'sonner'
 import { useEffect, useState, useRef } from 'react'
-import { Button, Input, ScrollArea, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui'
-import { BookOpen, PanelRightOpen, ArrowLeft, Search, FileText, Hash, ExternalLink, Layers, Sun, Moon, Flame, List, LayoutGrid, Upload, Globe, RefreshCw, Bookmark, BookmarkCheck } from 'lucide-react'
+import { Button, Input, ScrollArea, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, SkeletonGrid } from '@/components/ui'
+import { BookOpen, PanelRightOpen, ArrowLeft, Search, FileText, Hash, ExternalLink, Layers, Flame, List, LayoutGrid, Upload, Globe, RefreshCw, Bookmark, BookmarkCheck, AlertTriangle } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { KBStats, KBChunk, KBConfig, HotspotEntry } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ViewType } from '@/App'
-import { useTheme } from '@/hooks/useTheme'
 import { Separator, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 
 interface BrowserPageProps {
@@ -19,7 +18,6 @@ interface BrowserPageProps {
 }
 
 export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, highlightChunkId, onHighlightConsumed, workspaceId }: BrowserPageProps) {
-  const theme = useTheme()
   const scrollRef = useRef<HTMLDivElement>(null)
   const didInitSourceFilterRef = useRef(false)
   const skipNextSourceSearchRef = useRef(false)
@@ -27,6 +25,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   const [chunks, setChunks] = useState<KBChunk[]>([])
   const [sources, setSources] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedSource, setSelectedSource] = useState('')
   const [selectedChunk, setSelectedChunk] = useState<KBChunk | null>(null)
@@ -80,10 +79,12 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   }
 
   useEffect(() => {
+    setError(null)
+    setLoading(true)
     loadChunks('', '', 0, pageSize)
     Promise.all([api.getKBStats(), api.getKBSourceNames(), api.getKBConfig()])
       .then(([s, srcs, cfg]) => { setStats(s); setSources(srcs); setKbConfig(cfg) })
-      .catch((e) => toast.error('加载失败', { description: String(e) }))
+      .catch((e) => { setError(String(e)); toast.error('加载失败', { description: String(e) }) })
       .finally(() => setLoading(false))
   }, [])
 
@@ -312,32 +313,21 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
         </div>
 
         <div className="flex items-center gap-4">
-          {stats && (
-            <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{stats.chunk_count} 段落</span>
-              <span className="flex items-center gap-1"><Layers className="h-3 w-3" />{stats.source_count} 引用文档</span>
-              <span className="flex items-center gap-1"><Hash className="h-3 w-3" />{(stats.total_chars / 1000).toFixed(0)}k 字符</span>
-            </div>
-          )}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button onClick={theme.toggle}
-                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                  {theme.theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{theme.theme === 'dark' ? '切换浅色模式' : '切换深色模式'}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
+            {stats && (
+              <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{stats.chunk_count} 段落</span>
+                <span className="flex items-center gap-1"><Layers className="h-3 w-3" />{stats.source_count} 引用文档</span>
+                <span className="flex items-center gap-1"><Hash className="h-3 w-3" />{(stats.total_chars / 1000).toFixed(0)}k 字符</span>
+              </div>
+            )}
+          </div>
       </header>
 
       {/* Document actions bar */}
       <div className="flex items-center gap-2 border-b border-border px-5 py-2 bg-surface/20">
         <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.md,.pdf,.docx,.html" onChange={handleUpload} />
         <button onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/15 transition-colors">
+          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-primary/10 text-primary hover:bg-primary/15 transition-colors">
           <Upload className="h-3 w-3" />上传文档
         </button>
         <div className="flex items-center gap-1 flex-1 max-w-sm">
@@ -346,7 +336,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleIngestUrl() }}
-            className="h-7 text-[11px] flex-1"
+            className="h-7 text-xs flex-1"
           />
           <Button size="sm" onClick={handleIngestUrl} disabled={ingesting || !urlInput.trim()}>
             <Globe className="h-3 w-3" />
@@ -372,21 +362,21 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
         </div>
         <div className="flex gap-1 flex-wrap flex-1">
           <button onClick={() => setSelectedSource('')}
-            className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors ${
+            className={`px-2.5 py-1 text-2xs font-medium rounded-md transition-colors ${
               !selectedSource ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground bg-muted/50'
             }`}>
             全部
           </button>
           {sources.slice(0, 8).map((s) => (
             <button key={s} onClick={() => handleSourceClick(s)}
-              className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors max-w-[120px] truncate ${
+              className={`px-2.5 py-1 text-2xs font-medium rounded-md transition-colors max-w-[120px] truncate ${
                 selectedSource === s ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground bg-muted/50'
               }`}>
               {s}
             </button>
           ))}
           {sources.length > 8 && (
-            <span className="px-2 py-1 text-[10px] text-muted-foreground">+{sources.length - 8}</span>
+            <span className="px-2 py-1 text-2xs text-muted-foreground">+{sources.length - 8}</span>
           )}
         </div>
       </div>
@@ -404,19 +394,19 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
               <List className="h-3 w-3" />
             </button>
           </div>
-          <span className="text-[10px] text-muted-foreground/50">
+          <span className="text-2xs text-muted-foreground/50">
             {chunkView === 'grid' ? '网格视图' : '切片视图'}
           </span>
           <div className="h-3 w-px bg-border mx-1" />
           <button onClick={toggleHotspotMode}
-            className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md transition-colors ${
+            className={`flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-md transition-colors ${
               hotspotMode ? 'bg-orange-500/15 text-orange-400' : 'text-muted-foreground hover:text-foreground bg-muted/30'
             }`}>
             <Flame className="h-3 w-3" />
             热点
           </button>
           {kbConfig && (
-            <span className="text-[10px] text-muted-foreground/30 ml-auto font-mono">
+            <span className="text-2xs text-muted-foreground/30 ml-auto font-mono">
               chunk: {kbConfig.chunk_size} · overlap: {kbConfig.chunk_overlap}
             </span>
           )}
@@ -426,17 +416,15 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
       {/* Content — magazine shelf layout */}
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-5xl px-5 py-6">
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="rounded-lg border border-border bg-surface/30 p-4 animate-pulse">
-                  <div className="h-3 bg-muted rounded w-2/3 mb-3" />
-                  <div className="h-2 bg-muted rounded w-full mb-2" />
-                  <div className="h-2 bg-muted rounded w-5/6 mb-2" />
-                  <div className="h-2 bg-muted rounded w-4/6" />
-                </div>
-              ))}
+          {error ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <AlertTriangle className="h-12 w-12 text-destructive/40 mb-4" />
+              <p className="text-sm text-muted-foreground mb-1">数据加载失败</p>
+              <p className="text-2xs text-muted-foreground/50 mb-4 max-w-xs">{error}</p>
+              <Button variant="outline" size="sm" onClick={() => { setError(null); setLoading(true); window.location.reload() }}>重试</Button>
             </div>
+          ) : loading ? (
+            <SkeletonGrid count={6} />
           ) : displayChunks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <BookOpen className="h-12 w-12 text-muted-foreground/20 mb-4" />
@@ -463,17 +451,17 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                     {/* Header */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-muted-foreground/40">#{chunk.chunk_index}</span>
-                        <span className="text-[10px] text-muted-foreground/30">{chunk.content.length} 字</span>
+                        <span className="text-2xs font-mono text-muted-foreground/40">#{chunk.chunk_index}</span>
+                        <span className="text-2xs text-muted-foreground/30">{chunk.content.length} 字</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         {hotspotMode && (
-                          <span className={`inline-flex items-center gap-0.5 text-[10px] font-mono ${hotspotColor(hc)}`}>
+                          <span className={`inline-flex items-center gap-0.5 text-2xs font-mono ${hotspotColor(hc)}`}>
                             <Flame className="h-2.5 w-2.5" />{hc}
                           </span>
                         )}
                         {overlapLen > 0 && (
-                          <span className="text-[9px] text-yellow-500/50 font-mono">overlap {overlapLen}</span>
+                          <span className="text-2xs text-yellow-500/50 font-mono">overlap {overlapLen}</span>
                         )}
                       </div>
                     </div>
@@ -529,16 +517,16 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                     >
                       {/* Magazine-style header */}
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <span className="text-[9px] font-mono text-muted-foreground/50 tracking-wider uppercase">
+                        <span className="text-2xs font-mono text-muted-foreground/50 tracking-wider uppercase">
                           {chunk.source}
                         </span>
                         <span className="flex items-center gap-1">
                           {hotspotMode && (
-                            <span className={`text-[9px] font-mono ${hotspotColor(hc)}`}>
+                            <span className={`text-2xs font-mono ${hotspotColor(hc)}`}>
                               <Flame className="inline h-2.5 w-2.5 mr-0.5" />{hc}
                             </span>
                           )}
-                          <span className="text-[9px] font-mono text-muted-foreground/30">
+                          <span className="text-2xs font-mono text-muted-foreground/30">
                             #{chunk.chunk_index}
                           </span>
                         </span>
@@ -549,7 +537,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
 
                       {/* Section tag */}
                       {chunk.section && (
-                        <span className="inline-block px-1.5 py-0.5 text-[9px] font-medium rounded bg-primary/8 text-primary/70 mb-2">
+                        <span className="inline-block px-1.5 py-0.5 text-2xs font-medium rounded bg-primary/8 text-primary/70 mb-2">
                           {chunk.section}
                         </span>
                       )}
@@ -560,7 +548,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                       </p>
 
                       {/* Meta footer */}
-                      <div className="mt-3 flex items-center gap-2 text-[9px] text-muted-foreground/40">
+                      <div className="mt-3 flex items-center gap-2 text-2xs text-muted-foreground/40">
                         <span>{chunk.content.length} 字</span>
                         {chunk.page && <><span>·</span><span>第 {chunk.page} 页</span></>}
                         <button
@@ -574,7 +562,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
 
                       {/* Hover indicator */}
                       <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-[9px] text-primary/60">点击查看全文 →</span>
+                        <span className="text-2xs text-primary/60">点击查看全文 →</span>
                       </div>
                     </motion.div>
                   )
@@ -587,7 +575,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
           {!loading && total > 0 && (
             <div className="mt-8 flex items-center justify-center gap-4">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground/30 font-mono">
+                <span className="text-2xs text-muted-foreground/30 font-mono">
                   共 {total} 个段落 · {stats?.source_count ?? 0} 个引用文档 · 总计 {(stats?.total_chars ?? 0) / 1000}k 字符
                 </span>
               </div>
@@ -617,16 +605,16 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
             {/* Metadata chips */}
             <div className="flex flex-wrap gap-2">
               {selectedChunk?.section && (
-                <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-primary/10 text-primary/80">
+                <span className="px-2 py-0.5 text-2xs font-medium rounded-full bg-primary/10 text-primary/80">
                   {selectedChunk.section}
                 </span>
               )}
               {selectedChunk?.page && (
-                <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-muted text-muted-foreground">
+                <span className="px-2 py-0.5 text-2xs font-medium rounded-full bg-muted text-muted-foreground">
                   第 {selectedChunk.page} 页
                 </span>
               )}
-              <span className="px-2 py-0.5 text-[10px] font-mono rounded-full bg-muted text-muted-foreground">
+              <span className="px-2 py-0.5 text-2xs font-mono rounded-full bg-muted text-muted-foreground">
                 {selectedChunk?.chunk_id.slice(0, 24)}…
               </span>
             </div>
@@ -638,7 +626,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
               {selectedChunk?.original_content || selectedChunk?.content}
             </div>
 
-            <div className="text-[10px] text-muted-foreground/40 font-mono">
+            <div className="text-2xs text-muted-foreground/40 font-mono">
               {selectedChunk?.content.length} 字符
             </div>
           </div>

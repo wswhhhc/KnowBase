@@ -31,6 +31,8 @@ vi.mock('lucide-react', () => {
     BookOpen: 'BookOpen',
     BarChart3: 'BarChart3',
     PanelRightClose: 'PanelRightClose',
+    Sun: 'Sun',
+    Moon: 'Moon',
     Pencil: 'Pencil',
     Check: 'Check',
     X: 'X',
@@ -51,6 +53,10 @@ vi.mock('@/hooks/useData', () => ({
   useWorkspaces: vi.fn(),
 }))
 
+vi.mock('@/hooks/useTheme', () => ({
+  useTheme: () => ({ theme: 'dark', toggle: vi.fn() }),
+}))
+
 // Mock api
 vi.mock('@/lib/api', () => ({
   getMessages: vi.fn().mockResolvedValue([]),
@@ -59,6 +65,7 @@ vi.mock('@/lib/api', () => ({
   clearKnowledgeBase: vi.fn(),
   deleteSource: vi.fn(),
   getKBStats: vi.fn(),
+  queryLogs: vi.fn().mockResolvedValue([]),
 }))
 
 const defaultProps = {
@@ -166,10 +173,10 @@ describe('Sidebar', () => {
     expect(screen.getByText('3')).toBeInTheDocument()
   })
 
-  it('in dashboard view, shows hint text', () => {
+  it('in dashboard view, shows summary', () => {
     render(<Sidebar {...defaultProps} activeView="dashboard" />)
 
-    expect(screen.getByText('打开指标面板查看详情')).toBeInTheDocument()
+    expect(screen.getByText('快速统计')).toBeInTheDocument()
   })
 
   it('clicking 新对话 button clears messages and navigates to chat', async () => {

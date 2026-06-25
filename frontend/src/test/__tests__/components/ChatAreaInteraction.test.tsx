@@ -18,7 +18,7 @@ vi.mock('framer-motion', () => ({
 vi.mock('lucide-react', () => {
   const icons: Record<string, string> = {
     PanelRightOpen: 'PanelRightOpen', Square: 'Square', Sparkles: 'Sparkles',
-    Search: 'Search', Globe: 'Globe', Zap: 'Zap', RotateCcw: 'RotateCcw',
+    Search: 'Search', Globe: 'Globe', Zap: 'Zap', Scale: 'Scale', FileSearch: 'FileSearch', RotateCcw: 'RotateCcw',
     Download: 'Download', ThumbsUp: 'ThumbsUp', ThumbsDown: 'ThumbsDown',
     BookOpen: 'BookOpen', BarChart3: 'BarChart3', FileDown: 'FileDown',
     Sun: 'Sun', Moon: 'Moon', Copy: 'Copy', CheckCircle: 'CheckCircle',
@@ -88,10 +88,10 @@ describe('ChatArea interactions', () => {
 
   it('renders 4 search strategy buttons', () => {
     renderChatArea()
-    expect(screen.getByText('⚡快速')).toBeInTheDocument()
-    expect(screen.getByText('⚖️标准')).toBeInTheDocument()
-    expect(screen.getByText('🔬严谨')).toBeInTheDocument()
-    expect(screen.getByText('🔍深度')).toBeInTheDocument()
+    expect(screen.getByText('快速')).toBeInTheDocument()
+    expect(screen.getByText('标准')).toBeInTheDocument()
+    expect(screen.getByText('严谨')).toBeInTheDocument()
+    expect(screen.getByText('深度')).toBeInTheDocument()
   })
 
   it('sends message when clicking send button', async () => {
@@ -170,10 +170,9 @@ describe('ChatArea interactions', () => {
 
   it('theme toggle button calls toggle', async () => {
     renderChatArea()
-    // dark mode theme renders Sun icon (click to switch to light)
-    const themeBtn = screen.getByText('Sun')
-    await userEvent.click(themeBtn)
-    expect(mockToggleTheme).toHaveBeenCalled()
+    // Theme toggle removed from ChatArea — Sidebar owns it now
+    // Verify there's no Sun/Moon in ChatArea
+    expect(screen.queryByText('Sun')).not.toBeInTheDocument()
   })
 
   it('nav pills call onNavigate', async () => {

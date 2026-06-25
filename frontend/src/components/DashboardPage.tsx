@@ -3,9 +3,14 @@ import { Button, ScrollArea } from '@/components/ui'
 import { BarChart3, PanelRightOpen, ArrowLeft, TrendingUp, Clock, CheckCircle2, XCircle, HelpCircle, AlertTriangle, Sun, Moon, Globe, ChevronDown, ChevronUp } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { QueryLogEntry } from '@/lib/api'
+
+// Extended type for runtime fields not in the auto-generated schema
+interface LogEntryExtended extends QueryLogEntry {
+  ttfb_ms?: number
+  first_token_ms?: number
+}
 import { motion } from 'framer-motion'
 import type { ViewType } from '@/App'
-import { useTheme } from '@/hooks/useTheme'
 import { Progress, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Separator } from '@/components/ui'
 
 interface DashboardPageProps {
@@ -29,7 +34,6 @@ interface AggregatedStats {
 }
 
 export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }: DashboardPageProps) {
-  const theme = useTheme()
   const [logs, setLogs] = useState<QueryLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [days, setDays] = useState(7)
@@ -76,8 +80,9 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
   }
 
   // Perf metrics from log entries
-  const ttfbValues = logs.map(l => (l as any).ttfb_ms || 0).filter(Boolean)
-  const firstTokenValues = logs.map(l => (l as any).first_token_ms || 0).filter(Boolean)
+  const typedLogs = logs as LogEntryExtended[]
+  const ttfbValues = typedLogs.map(l => l.ttfb_ms || 0).filter(Boolean)
+  const firstTokenValues = typedLogs.map(l => l.first_token_ms || 0).filter(Boolean)
   const avgTtfb = ttfbValues.length ? Math.round(ttfbValues.reduce((a, b) => a + b, 0) / ttfbValues.length) : 0
   const avgFirstToken = firstTokenValues.length ? Math.round(firstTokenValues.reduce((a, b) => a + b, 0) / firstTokenValues.length) : 0
 
@@ -113,22 +118,11 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
         </div>
 
         <div className="flex items-center gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button onClick={theme.toggle}
-                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                  {theme.theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{theme.theme === 'dark' ? '切换浅色模式' : '切换深色模式'}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           {/* Time range selector */}
           <div className="flex gap-1 rounded-md border border-border p-0.5">
           {[1, 7, 30].map((d) => (
             <button key={d} onClick={() => setDays(d)}
-              className={`px-3 py-1 text-[10px] font-medium rounded-sm transition-colors ${
+              className={`px-3 py-1 text-2xs font-medium rounded-sm transition-colors ${
                 days === d ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
               }`}>
               近{d}天
@@ -177,7 +171,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-heading text-sm text-foreground tracking-tight">小时分布</h3>
-                  <span className="text-[10px] text-muted-foreground/50 font-mono">avg {stats.avgElapsed}ms</span>
+                  <span className="text-2xs text-muted-foreground/50 font-mono">avg {stats.avgElapsed}ms</span>
                 </div>
                 <div className="flex items-end gap-1 h-40 pt-5">
                   {hourlyData.map((h) => (
@@ -185,7 +179,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <div className="flex-1 flex flex-col items-center gap-1">
-                            <span className="text-[8px] text-muted-foreground/50 font-mono h-3">
+                            <span className="text-2xs text-muted-foreground/50 font-mono h-3">
                               {h.count > 0 ? h.count : ''}
                             </span>
                             <div
@@ -201,7 +195,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
                     </TooltipProvider>
                   ))}
                 </div>
-                <div className="flex justify-between mt-2 text-[8px] text-muted-foreground/40 font-mono">
+                <div className="flex justify-between mt-2 text-2xs text-muted-foreground/40 font-mono">
                   {[0, 6, 12, 18, 23].map((h) => <span key={h}>{h}:00</span>)}
                 </div>
               </motion.div>
@@ -243,7 +237,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
                         <span className="font-mono text-foreground/70">{stats.webSearchCount} / {(stats.webSearchRate * 100).toFixed(0)}%</span>
                       </div>
                       <Progress value={stats.webSearchRate * 100} color="amber" />
-                      <p className="text-[10px] text-muted-foreground/50 mt-1">单独统计联网补充，不再和质量等级混算。</p>
+                      <p className="text-2xs text-muted-foreground/50 mt-1">单独统计联网补充，不再和质量等级混算。</p>
                     </div>
                   </div>
                 </motion.div>
@@ -280,11 +274,11 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-heading text-sm text-foreground tracking-tight">
                     查询日志
-                    <span className="text-[10px] text-muted-foreground/50 font-mono ml-2 font-normal">共 {logs.length} 条</span>
+                    <span className="text-2xs text-muted-foreground/50 font-mono ml-2 font-normal">共 {logs.length} 条</span>
                   </h3>
                   {logs.length > 15 && (
                     <button onClick={() => setShowAllLogs(!showAllLogs)}
-                      className="flex items-center gap-1 text-[10px] text-primary/60 hover:text-primary transition-colors">
+                      className="flex items-center gap-1 text-2xs text-primary/60 hover:text-primary transition-colors">
                       {showAllLogs ? <><ChevronUp className="h-3 w-3" />收起</> : <><ChevronDown className="h-3 w-3" />全部加载</>}
                     </button>
                   )}
@@ -319,7 +313,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
                             {log.retrieval_count}
                           </td>
                           <td className="py-2 text-center">
-                            <span className={`inline-flex items-center gap-1 text-[10px] ${
+                            <span className={`inline-flex items-center gap-1 text-2xs ${
                               log.quality_ok ? 'text-emerald-400' : 'text-red-400'
                             }`}>
                               {log.quality_ok ? '✓ 通过' : '✗ 失败'}
@@ -365,11 +359,11 @@ function StatCard({ icon: Icon, label, value, sub, delay = 0, color = 'primary' 
       className="stat-glow rounded-lg border border-border bg-surface/30 p-4"
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] text-muted-foreground font-medium tracking-wide uppercase">{label}</span>
+        <span className="text-2xs text-muted-foreground font-medium tracking-wide uppercase">{label}</span>
         <Icon className="h-4 w-4 text-muted-foreground/40" />
       </div>
       <div className="font-heading text-2xl text-foreground tracking-tight">{value}</div>
-      <p className="text-[10px] text-muted-foreground/50 mt-1">{sub}</p>
+      <p className="text-2xs text-muted-foreground/50 mt-1">{sub}</p>
       <div className={`absolute inset-0 rounded-lg bg-gradient-to-br ${accentMap[color]} pointer-events-none`} />
     </motion.div>
   )

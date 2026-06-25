@@ -147,3 +147,26 @@
 .progress-bar-fill {
   @apply h-full rounded-full transition-all duration-700 ease-out;
 }
+
+/* ── Mobile bottom tab safe area ── */
+@media (max-width: 767px) {
+  .pb-safe {
+    padding-bottom: 3.5rem;
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .noise-overlay::before {
+    opacity: 0 !important;
+  }
+}

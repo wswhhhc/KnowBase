@@ -29,7 +29,7 @@ function CitationText({ text, sources, onCitationClick }: CitationTextProps) {
             <sup
               key={i}
               onClick={() => firstSrc && onCitationClick?.(firstSrc)}
-              className={`inline-flex items-center justify-center min-w-[1.1em] h-3.5 px-0.5 rounded text-[10px] font-medium bg-primary/15 text-primary transition-colors ${
+              className={`inline-flex items-center justify-center min-w-[1.1em] h-3.5 px-0.5 rounded text-2xs font-medium bg-primary/15 text-primary transition-colors ${
                 onCitationClick ? 'cursor-pointer hover:bg-primary/30' : 'cursor-help hover:bg-primary/25'
               }`}
               title={indices.map((idx) => {
@@ -175,7 +175,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full cursor-help ${
+                          <span className={`inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full cursor-help ${
                             message.evidence_level === 'strong' ? 'bg-emerald-500/10 text-emerald-400' :
                             message.evidence_level === 'moderate' ? 'bg-yellow-500/10 text-yellow-400' :
                             message.evidence_level === 'weak' ? 'bg-orange-500/10 text-orange-400' :
@@ -196,13 +196,13 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                     </TooltipProvider>
                   )}
                   {message.outcome_category === 'no_docs' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 工作区中未找到</span>
+                    <span className="inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 工作区中未找到</span>
                   )}
                   {message.outcome_category === 'web_empty' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 无法回答</span>
+                    <span className="inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 无法回答</span>
                   )}
                   {message.outcome_category === 'weak_evidence' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400">● 证据不足</span>
+                    <span className="inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400">● 证据不足</span>
                   )}
 
                   <CopyButton content={message.content} />
@@ -216,19 +216,19 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                       </button>
                       {bookmarkOpen && (
                         <div className="absolute top-full right-0 mt-1 w-56 rounded-lg border border-border bg-surface shadow-xl p-2.5 z-50 max-sm:right-auto max-sm:left-0">
-                          <p className="text-[10px] font-medium text-muted-foreground mb-2">添加备注（可选）</p>
+                          <p className="text-2xs font-medium text-muted-foreground mb-2">添加备注（可选）</p>
                           <input
                             value={bookmarkNote}
                             onChange={(e) => setBookmarkNote(e.target.value)}
                             placeholder="为什么收藏这条回答？"
-                            className="w-full text-[10px] px-2 py-1 rounded border border-border bg-background outline-none placeholder:text-muted-foreground/30 mb-2"
+                            className="w-full text-2xs px-2 py-1 rounded border border-border bg-background outline-none placeholder:text-muted-foreground/30 mb-2"
                             autoFocus
                           />
                           <div className="flex gap-2">
                             <button onClick={() => setBookmarkOpen(false)}
-                              className="flex-1 text-[10px] py-1 rounded text-muted-foreground hover:text-foreground bg-muted/50 transition-colors">取消</button>
+                              className="flex-1 text-2xs py-1 rounded text-muted-foreground hover:text-foreground bg-muted/50 transition-colors">取消</button>
                             <button onClick={handleBookmarkConfirm}
-                              className="flex-1 text-[10px] py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors">保存</button>
+                              className="flex-1 text-2xs py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors">保存</button>
                           </div>
                         </div>
                       )}
@@ -248,7 +248,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                         </button>
                         {feedbackOpen && (
                           <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg border border-border bg-surface shadow-xl p-2.5 z-50">
-                            <p className="text-[10px] font-medium text-muted-foreground mb-2">请选择原因</p>
+                            <p className="text-2xs font-medium text-muted-foreground mb-2">请选择原因</p>
                             <div className="space-y-1">
                               {[
                                 { key: 'off_topic', label: '答非所问' },
@@ -269,7 +269,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                                     }
                                     setFeedbackOpen(false)
                                   }}
-                                  className={`block w-full text-left text-[11px] px-2 py-1.5 rounded transition-colors ${
+                                  className={`block w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
                                     feedbackCategory === opt.key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                                   }`}
                                 >
@@ -281,7 +281,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                               value={feedbackDetail}
                               onChange={(e) => setFeedbackDetail(e.target.value)}
                               placeholder="补充说明（可选）"
-                              className="mt-2 w-full text-[10px] px-2 py-1 rounded border border-border bg-background outline-none placeholder:text-muted-foreground/30"
+                              className="mt-2 w-full text-2xs px-2 py-1 rounded border border-border bg-background outline-none placeholder:text-muted-foreground/30"
                             />
                           </div>
                         )}
@@ -293,7 +293,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                 {/* No-answer guidance panel */}
                 {(message.outcome_category === 'no_docs' || message.outcome_category === 'web_empty' || message.outcome_category === 'weak_evidence' || message.outcome_category === 'vague_question') && (
                   <div className="mt-3 rounded-lg border border-border/60 bg-surface/30 px-3.5 py-3">
-                    <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+                    <p className="text-xs text-muted-foreground/80 leading-relaxed">
                       {message.outcome_category === 'no_docs' && '工作区中没有找到相关内容。你可以上传相关文档后再问一次。'}
                       {message.outcome_category === 'web_empty' && '联网搜索也没有找到相关信息。建议换一种问法或上传相关资料。'}
                       {message.outcome_category === 'weak_evidence' && `检索到的信息不足以支撑可靠回答。尝试更具体的问题或上传更详细的资料。${message.evidence_summary ? `（${message.evidence_summary}）` : ''}`}
@@ -301,7 +301,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                     </p>
                     {onNavigateBrowser && (message.outcome_category === 'no_docs' || message.outcome_category === 'weak_evidence') && (
                       <button onClick={onNavigateBrowser}
-                        className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-primary/70 hover:text-primary transition-colors">
+                        className="mt-2 inline-flex items-center gap-1 text-2xs font-medium text-primary/70 hover:text-primary transition-colors">
                         <Upload className="h-3 w-3" />上传文档
                       </button>
                     )}
@@ -313,19 +313,19 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       onClick={() => onSendQuestion?.(message.originalQuestion || message.content.slice(0, 60))}
-                      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                      className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                     >
                       🔄 重新回答
                     </button>
                     <button
                       onClick={() => onSendQuestion?.(`用一句话简洁回答：${message.originalQuestion || message.content.slice(0, 60)}`)}
-                      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                      className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                     >
                       📝 更简洁
                     </button>
                     <button
                       onClick={() => onSendQuestion?.(`关于上面的回答，请详细解释「${message.content.slice(0, 60)}」`)}
-                      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                      className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                     >
                       <MessageSquare className="h-3 w-3" />继续追问
                     </button>
@@ -335,7 +335,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                 {message.sources && message.sources.length > 0 && (
                   <button
                     onClick={() => setSourceOpen(!sourceOpen)}
-                    className="mt-2 inline-flex items-center gap-1 text-[11px] text-primary/70 hover:text-primary transition-colors"
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
                   >
                     📎 {sourceOpen ? '收起来源' : `${message.sources.length} 个来源`}
                   </button>
@@ -359,24 +359,24 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                         }`}>
                           <div className="flex items-start justify-between gap-2">
                             <span className="text-xs font-medium text-foreground/80 truncate flex items-center gap-1">
-                              <span className="text-[9px] text-muted-foreground/40 font-mono">#{s.index}</span>
+                              <span className="text-2xs text-muted-foreground/40 font-mono">#{s.index}</span>
                               {s.source}{s.chunk_index !== undefined ? ` #${s.chunk_index}` : ''}{s.page ? ` · p.${s.page}` : ''}
                             </span>
                             {s.score != null && (
-                              <span className={`text-[10px] flex-shrink-0 font-mono ${
+                              <span className={`text-2xs flex-shrink-0 font-mono ${
                                 s.score < 0.1 ? 'text-muted-foreground/30' : 'text-muted-foreground'
                               }`}>
                                 {s.score < 0.1 && '相关性较低 '}{s.score.toFixed(4)}
                               </span>
                             )}
                           </div>
-                          {s.url && <p className="text-[10px] text-primary/50 truncate mt-0.5">{s.url}</p>}
+                          {s.url && <p className="text-2xs text-primary/50 truncate mt-0.5">{s.url}</p>}
                           <p className="text-xs text-muted-foreground mt-1.5 line-clamp-3 leading-relaxed">{s.content}</p>
                           <div className="mt-1.5 flex items-center gap-2">
                             {onCitationClick && !isExcluded && (
                               <button
                                 onClick={() => onCitationClick?.(s)}
-                                className="inline-flex items-center gap-1 text-[9px] text-primary/50 hover:text-primary transition-colors"
+                                className="inline-flex items-center gap-1 text-2xs text-primary/50 hover:text-primary transition-colors"
                               >
                                 <ExternalLink className="h-2.5 w-2.5" />查看原文
                               </button>
@@ -384,7 +384,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                             {onSendQuestion && !isExcluded && (
                               <button
                                 onClick={() => onSendQuestion?.(`关于「${s.source}」中的内容，请详细解释`)}
-                                className="inline-flex items-center gap-1 text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                                className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                               >
                                 <MessageSquare className="h-2.5 w-2.5" />追问
                               </button>
@@ -392,7 +392,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                             {onPinToggle && (
                               <button
                                 onClick={() => onPinToggle?.(s.chunk_id || '', isPinned ? 'unpin' : 'pin')}
-                                className={`ml-auto inline-flex items-center gap-1 text-[9px] transition-colors ${
+                                className={`ml-auto inline-flex items-center gap-1 text-2xs transition-colors ${
                                   isPinned ? 'text-primary/70' : 'text-muted-foreground/30 hover:text-muted-foreground'
                                 }`}
                               >
@@ -402,7 +402,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                             {onPinToggle && (
                               <button
                                 onClick={() => onPinToggle?.(s.chunk_id || '', isExcluded ? 'unexclude' : 'exclude')}
-                                className={`inline-flex items-center gap-1 text-[9px] transition-colors ${
+                                className={`inline-flex items-center gap-1 text-2xs transition-colors ${
                                   isExcluded ? 'text-destructive/70' : 'text-muted-foreground/30 hover:text-muted-foreground'
                                 }`}
                               >
@@ -419,32 +419,32 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                 {isFirstAssistant && (
                   <div className="relative mt-2">
                     <button onClick={() => setExportOpen(!exportOpen)} disabled={exporting}
-                      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                      className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors">
                       <FileDown className="h-3 w-3" />
                       {exporting ? '导出中…' : '导出对话'}
                     </button>
                     {exportOpen && (
                       <div className="mt-1.5 rounded-lg border border-border bg-surface shadow-lg p-2.5 w-56">
                         <div className="space-y-1.5">
-                          <label className="flex items-center gap-2 text-[11px]">
+                          <label className="flex items-center gap-2 text-xs">
                             <input type="radio" name="export-fmt" checked={exportFormat === 'markdown'} onChange={() => setExportFormat('markdown')} className="accent-primary" />
                             Markdown
                           </label>
-                          <label className="flex items-center gap-2 text-[11px]">
+                          <label className="flex items-center gap-2 text-xs">
                             <input type="radio" name="export-fmt" checked={exportFormat === 'json'} onChange={() => setExportFormat('json')} className="accent-primary" />
                             JSON（含结构化数据）
                           </label>
                           <div className="border-t border-border my-1" />
-                          <label className="flex items-center gap-2 text-[11px]">
+                          <label className="flex items-center gap-2 text-xs">
                             <input type="checkbox" checked={exportSources} onChange={(e) => setExportSources(e.target.checked)} className="accent-primary" />
                             包含来源
                           </label>
-                          <label className="flex items-center gap-2 text-[11px]">
+                          <label className="flex items-center gap-2 text-xs">
                             <input type="checkbox" checked={exportDebug} onChange={(e) => setExportDebug(e.target.checked)} className="accent-primary" />
                             包含调试信息
                           </label>
                           <button onClick={handleExport}
-                            className="w-full mt-1 rounded bg-primary/10 text-primary text-[10px] font-medium py-1.5 hover:bg-primary/20 transition-colors">
+                            className="w-full mt-1 rounded bg-primary/10 text-primary text-2xs font-medium py-1.5 hover:bg-primary/20 transition-colors">
                             确认导出
                           </button>
                         </div>

@@ -2,13 +2,12 @@ import { useRef, useEffect, useState } from 'react'
 import { Button, ScrollArea, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Skeleton } from '@/components/ui'
 import { useChat } from '@/hooks/useChat'
 import type { PinnedSource } from '@/hooks/useChat'
-import { useTheme } from '@/hooks/useTheme'
 import EmptyState from './EmptyState'
 import type { Source } from '@/lib/api'
 import MessageBubble from './MessageBubble'
 import type { ViewType } from '@/App'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3, Sun, Moon, Globe } from 'lucide-react'
+import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3, Sun, Moon, Globe, Zap, Scale, FileSearch, Search } from 'lucide-react'
 
 interface ChatAreaProps {
   chat: ReturnType<typeof useChat>
@@ -20,8 +19,21 @@ interface ChatAreaProps {
   onSendQuestion?: (q: string) => void
 }
 
+const STRATEGIES = [
+  { key: 'fast', icon: Zap, label: '快速' },
+  { key: 'balanced', icon: Scale, label: '标准' },
+  { key: 'high_quality', icon: FileSearch, label: '严谨' },
+  { key: 'deep', icon: Search, label: '深度' },
+] as const
+
+const STRATEGY_DESC: Record<string, string> = {
+  fast: '快速回答：不重排，最快响应。适合简单事实性问题',
+  balanced: '标准模式：智能判断是否需要重排。适合大多数情况',
+  high_quality: '严谨模式：强制重排+质量检查。质量优先，速度次之',
+  deep: '深度检索：扩检索+综合回答。需要全面覆盖时使用',
+}
+
 export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate, isLoadingMessages, onCitationClick, onSendQuestion }: ChatAreaProps) {
-  const theme = useTheme()
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [input, setInput] = useState('')
@@ -85,32 +97,20 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-0.5 rounded-md border border-border p-0.5">
             <button onClick={() => onNavigate('chat')}
-              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded-sm bg-primary/15 text-primary">
+              className="flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-sm bg-primary/15 text-primary">
               <Sparkles className="h-3 w-3" />聊天
             </button>
             <button onClick={() => onNavigate('browser')}
-              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+              className="flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
               <BookOpen className="h-3 w-3" />工作区
             </button>
             <button onClick={() => onNavigate('dashboard')}
-              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+              className="flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
               <BarChart3 className="h-3 w-3" />指标
             </button>
           </div>
 
           <div className="h-4 w-px bg-border hidden md:block" />
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button onClick={theme.toggle}
-                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                  {theme.theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{theme.theme === 'dark' ? '切换浅色模式' : '切换深色模式'}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
 
           <div className="flex items-center gap-1 flex-wrap justify-end">
             <TooltipProvider>
@@ -127,22 +127,23 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
             </TooltipProvider>
 
             <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-              {(['fast', 'balanced', 'high_quality', 'deep'] as const).map((s) => (
-                <TooltipProvider key={s}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button onClick={() => setSearchStrategy(s)}
-                        className={`px-2 py-1 text-[10px] font-medium rounded-sm transition-colors ${
-                          searchStrategy === s ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
-                        }`}>
-                        {s === 'fast' ? '⚡快速' : s === 'balanced' ? '⚖️标准' : s === 'high_quality' ? '🔬严谨' : '🔍深度'}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>{s === 'fast' ? '快速回答：不重排，最快响应。适合简单事实性问题' : s === 'balanced' ? '标准模式：智能判断是否需要重排。适合大多数情况' : s === 'high_quality' ? '严谨模式：强制重排+质量检查。质量优先，速度次之' : '深度检索：扩检索+综合回答。需要全面覆盖时使用'}</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ))}
-            </div>
+                {STRATEGIES.map(({ key, icon: Icon, label }) => (
+                  <TooltipProvider key={key}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button onClick={() => setSearchStrategy(key)}
+                          className={`inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-sm transition-colors ${
+                            searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
+                          }`}>
+                          <Icon className="h-3 w-3" />
+                          {label}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>{STRATEGY_DESC[key]}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+              </div>
           </div>
         </div>
       </header>
@@ -234,7 +235,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
               </Button>
             )}
           </div>
-          <p className="mt-1.5 text-[10px] text-muted-foreground/30 text-center font-mono tracking-wider">
+          <p className="mt-1.5 text-2xs text-muted-foreground/30 text-center font-mono tracking-wider">
             KnowBase · RAG 问答 · 回答仅供参考
           </p>
         </div>
