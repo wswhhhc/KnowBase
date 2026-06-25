@@ -6,7 +6,7 @@ import * as api from '@/lib/api'
 import type { Source } from '@/lib/api'
 import type { ChatMessage, PinnedSource } from '@/hooks/useChat'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle, MessageSquare, ExternalLink, Upload } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle, MessageSquare, ExternalLink, Upload, Bookmark, BookmarkCheck } from 'lucide-react'
 
 interface CitationTextProps {
   text: string
@@ -90,8 +90,23 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
   const [exportFormat, setExportFormat] = useState<'markdown' | 'json'>('markdown')
   const [exportSources, setExportSources] = useState(true)
   const [exportDebug, setExportDebug] = useState(false)
+  const [bookmarked, setBookmarked] = useState(false)
 
   const isFirstAssistant = !isUser && prevMessage?.role === 'user'
+
+  const handleBookmarkToggle = async () => {
+    if (bookmarked) return
+    const convId = message.convId || threadId
+    try {
+      await api.createBookmark({
+        conversation_id: convId || '',
+        message_id: message.assistantMsgId || 0,
+        content: message.content.slice(0, 500),
+        source: message.sources?.[0]?.source || '',
+      })
+      setBookmarked(true)
+    } catch (e) { console.error('收藏失败', e) }
+  }
 
   const handleExport = async () => {
     const convId = message.convId || threadId
@@ -181,6 +196,14 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                   )}
 
                   <CopyButton content={message.content} />
+
+                  {!message.streaming && message.outcome_category === 'success' && (
+                    <button onClick={handleBookmarkToggle}
+                      className={`p-1 rounded transition-colors ${bookmarked ? 'text-amber-400' : 'text-muted-foreground/40 hover:text-amber-400'}`}
+                      title={bookmarked ? '已收藏' : '收藏此回答'}>
+                      {bookmarked ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
+                    </button>
+                  )}
 
                   {(message.sources && message.sources.length > 0) && (
                     <div className="flex items-center gap-0.5 ml-auto">

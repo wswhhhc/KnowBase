@@ -106,6 +106,37 @@ export const renameWorkspace = (id: string, name: string) =>
 export const deleteWorkspace = (id: string) =>
   req(`/workspaces/${id}`, { method: 'DELETE' })
 
+// ── Bookmarks ──
+
+export interface Bookmark {
+  id: number
+  workspace_id: string
+  conversation_id: string
+  message_id: number
+  chunk_id: string
+  note: string
+  content: string
+  source: string
+  created_at: string
+}
+
+export const getBookmarks = (workspaceId?: string) => {
+  const params = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
+  return req<Bookmark[]>(`/bookmarks${params}`)
+}
+
+export const createBookmark = (data: {
+  workspace_id?: string; conversation_id?: string; message_id?: number;
+  chunk_id?: string; note?: string; content?: string; source?: string
+}) =>
+  req<Bookmark>('/bookmarks', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+export const deleteBookmark = (id: number) =>
+  req(`/bookmarks/${id}`, { method: 'DELETE' })
+
 // ── Documents ──
 
 export const checkSource = (sourceName: string) =>

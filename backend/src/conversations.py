@@ -29,6 +29,17 @@ def init_db():
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS bookmarks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id TEXT DEFAULT '',
+            conversation_id TEXT DEFAULT '',
+            message_id INTEGER DEFAULT 0,
+            chunk_id TEXT DEFAULT '',
+            note TEXT DEFAULT '',
+            content TEXT DEFAULT '',
+            source TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS conversations (
             id TEXT PRIMARY KEY,
             thread_id TEXT NOT NULL,
@@ -353,6 +364,51 @@ def export_conversation(conv_id: str, fmt: str = "markdown", include_sources: bo
                 parts.append(f"*质量检查：{msg['quality_reason']}*\n")
         parts.append("\n---\n\n")
     return "".join(parts)
+
+
+# ── Bookmarks ──
+
+
+def create_bookmark(workspace_id: str = "", conversation_id: str = "", message_id: int = 0,
+                    chunk_id: str = "", note: str = "", content: str = "", source: str = "") -> dict:
+    """Create a bookmark."""
+    conn = _get_conn()
+    now = datetime.now(UTC).isoformat()
+    cursor = conn.execute(
+        "INSERT INTO bookmarks (workspace_id, conversation_id, message_id, chunk_id, note, content, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (workspace_id, conversation_id, message_id, chunk_id, note, content, source, now),
+    )
+    conn.commit()
+    bm_id = cursor.lastrowid
+    conn.close()
+    return {"id": bm_id, "workspace_id": workspace_id, "conversation_id": conversation_id,
+            "message_id": message_id, "chunk_id": chunk_id, "note": note, "content": content,
+            "source": source, "created_at": now}
+
+
+def list_bookmarks(workspace_id: str | None = None) -> list[dict]:
+    """Return bookmarks, optionally filtered by workspace."""
+    conn = _get_conn()
+    if workspace_id is not None:
+        rows = conn.execute(
+            "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, created_at FROM bookmarks WHERE workspace_id = ? ORDER BY created_at DESC",
+            (workspace_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, created_at FROM bookmarks ORDER BY created_at DESC"
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def delete_bookmark(bm_id: int) -> bool:
+    """Delete a bookmark by id."""
+    conn = _get_conn()
+    cursor = conn.execute("DELETE FROM bookmarks WHERE id = ?", (bm_id,))
+    conn.commit()
+    conn.close()
+    return cursor.rowcount > 0
 
 
 # ── Workspaces ──
