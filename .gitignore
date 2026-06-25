@@ -36,3 +36,4 @@ backend/.coverage
 backend/.coverage.*
 videos/
 output/
+.claude
