@@ -4,7 +4,7 @@
 
 **目标**: 验证 KnowBase 所有 REST API 端点的请求/响应正确性，包括状态码、响应体 Schema、错误处理和认证。
 
-**测试范围**: 所有 21 个公开 API 端点
+**测试范围**: 所有 27 个公开 API 端点
 
 **前置条件**:
 - FastAPI TestClient 可用
@@ -184,7 +184,27 @@ cd backend && uv run python -m unittest tests.test_api_endpoints -v
 |------|---------|-----------|--------|
 | API-MET-04 | 清除 | 200 | P2 |
 
-### 2.6 Health — `/api/health`
+### 2.6 Workspaces — `/api/workspaces`
+
+| 编号 | 测试用例 | 方法 | 预期状态码 | 优先级 |
+|------|---------|------|-----------|--------|
+| API-WS-01 | 列表 | GET | 200 | P0 |
+| API-WS-02 | 创建 | POST | 200 | P0 |
+| API-WS-03 | 更新 | PATCH | 200 | P1 |
+| API-WS-04 | 删除 | DELETE | 200 | P1 |
+| API-WS-05 | 更新不存在 | PATCH /nonexist | 404 | P1 |
+| API-WS-06 | 删除不存在 | DELETE /nonexist | 404 | P1 |
+
+### 2.7 Bookmarks — `/api/bookmarks`
+
+| 编号 | 测试用例 | 方法 | 预期状态码 | 优先级 |
+|------|---------|------|-----------|--------|
+| API-BM-01 | 列表 | GET | 200 | P0 |
+| API-BM-02 | 创建 | POST | 200 | P0 |
+| API-BM-03 | 删除 | DELETE | 200 | P1 |
+| API-BM-04 | 按工作区过滤 | GET ?workspace_id=xxx | 200 | P1 |
+
+### 2.8 Health — `/api/health`
 
 | 编号 | 测试用例 | 预期状态码 | 预期响应 | 优先级 |
 |------|---------|-----------|---------|--------|
@@ -202,7 +222,7 @@ cd backend && uv run python -m unittest tests.test_api_endpoints -v
 
 ## 4. 通过标准
 
-- 所有 21 个端点至少 1 个 happy path + 1 个 error path 测试通过
+- 所有 27 个端点至少 1 个 happy path + 1 个 error path 测试通过
 - 响应 Schema 与 Pydantic 模型定义一致
 - 无意外 500 错误
 

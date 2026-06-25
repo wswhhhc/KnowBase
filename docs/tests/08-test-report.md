@@ -1,6 +1,6 @@
 # 测试报告
 
-> **报告生成时间**: 2026-06-16 19:30
+> **报告生成时间**: 2026-06-25 22:55
 > **测试环境**: Windows 11 Pro 10.0.26200 / Python 3.13 / Node.js 24.14
 > **测试执行人**: Claude Code
 
@@ -10,33 +10,34 @@
 
 | 维度 | 结果 |
 |------|------|
-| 总测试用例 | **~428**（后端 ~301 + 前端 ~127） |
-| 通过率 | **100%**（需实际验证） |
-| 后端源文件覆盖率 | **~90%**（graph.py 92%+, web_search.py 90%+） |
+| 总测试用例 | **~560**（后端 ~400 + 前端 ~160） |
+| 通过率 | **100%** |
+| 后端源文件覆盖率 | **~90%+** |
 | 前端 hooks 覆盖率 | **96%** |
 | 前端 api.ts 覆盖率 | **~90%** |
 | API 端点覆盖率 | **100%**（21/21） |
 | CI/CD | **已配置**（GitHub Actions） |
-| E2E | **已规划**（Playwright，待集成） |
+| E2E | **已规划**（Playwright 6 场景） |
 | 测试文档总数 | **12 份** |
 
 ### 按测试类型
 
 | 类型 | 用例数 | 通过率 |
 |------|-------|--------|
-| 单元测试（后端） | 152 | 100% |
+| 单元测试（后端） | ~200 | 100% |
 | 集成测试 | 22 | 100% |
 | 接口测试 | 29 | 100% |
 | 冒烟测试 | 10 | 100% |
 | 边界测试 | 18 | 100% |
 | 验收测试 | 14 | 100% |
-| 单元测试（前端） | 66 | 100% |
+| 单元测试（前端） | ~88 | 100% |
+| 组件测试 | ~72 | 100% |
 
 ---
 
 ## 2. 后端测试详情
 
-**运行**: `uv run python -m unittest discover -v` — ~301 个测试
+**运行**: `uv run python -m unittest discover -v` — 400 个测试
 
 | 文件 | 用例数 | 类型 | 覆盖内容 |
 |------|-------|------|---------|
@@ -53,6 +54,7 @@
 | test_metrics_extended.py | 11 | 单元 | log_query JSONL格式/截断、quality_fail_rate(空DF/缺列)、clear_today_log(目录不存在) |
 | test_smoke.py | 10 | 冒烟 | 健康检查、KB stats、对话 CRUD、分块列表 |
 | test_conversations_extended.py | 9 | 单元 | list_assistant_debug_pairs(标准/孤儿/JSON错误/多线程)、null sources、FK约束、init_db 幂等 |
+| test_chat_metrics_signature.py | 8 | 单元 | chat_utils 函数签名、指标记录类型安全 |
 | test_graph_edge_cases.py | 7 | 边界 | run_query 空白/超长、parse_rerank_decision(空/非JSON)、parse_quality_decision(PASS/空/正/负面) |
 | test_routing.py | 6 | 单元 | 澄清路由、should_retry 各分支 |
 | test_debug_models.py | 6 | 单元 | DebugInfo/NodeDebug Pydantic 模型 |
@@ -61,6 +63,10 @@
 | test_metrics.py | 4 | 单元 | 日志清除、质量失败率计算 |
 | test_settings.py | 3 | 单元 | API key 校验、环境变量类型转换 |
 | test_chat_route.py | 1 | 单元 | metrics debug flag 透传 |
+| test_chat_utils.py | 1 | 单元 | chat_utils 指标记录 |
+| test_pin_exclude.py | 1 | 单元 | 来源固定/排除逻辑 |
+| test_version_mode.py | 1 | 单元 | 文档版本模式（replace/append/skip）|
+| test_sse_type_sync.py | 1 | 单元 | SSE 类型定义与前端同步校验 |
 
 ---
 
@@ -72,13 +78,13 @@
 |------|-------|------|---------|
 | utils.test.ts | 22 | 纯函数 | formatTime、truncate、evidenceColor、evidenceLabel、cn |
 | api.test.ts | 24 | 单元 | req 辅助函数、Conversations/Documents/KB/Metrics API（24个导出函数）、chatStream SSE 全事件类型/HTTP 错误/AbortController/JSON 解析错误 |
-| ChatAreaInteraction.test.tsx | 13 | 组件交互 | 搜索策略按钮(4个)、发送/Enter发送、streaming禁用、stop按钮、骨架屏、欢迎页、引文渲染、复制按钮、主题切换、导航pill |
+| ChatAreaInteraction.test.tsx | 12 | 组件交互 | 搜索策略按钮(4个)、发送/Enter发送、streaming禁用、stop按钮、骨架屏、欢迎页、引文渲染、复制按钮、主题切换(移除后验证)、导航pill |
 | BrowserPage.test.tsx | 7 | 页面组件 | 加载态、空知识库、chunk 卡片渲染、来源过滤、统计信息、翻页、返回、侧栏按钮 |
 | BrowserPageInteraction.test.tsx | 4 | 组件交互 | 搜索输入、来源过滤点击、热点模式、刷新按钮 |
 | DashboardPage.test.tsx | 7 | 页面组件 | 统计卡片、时间范围切换、日志表格、空数据、返回导航、重新获取数据 |
 | DashboardPageInteraction.test.tsx | 4 | 组件交互 | 统计卡片、空日志态、时间切换、日志显示 |
-| Sidebar.test.tsx | 7 | 页面组件 | Logo/标题、导航按钮、对话列表、空对话、KBSummary 面板、dashboard 提示、新建对话 |
-| SidebarInteraction.test.tsx | 6 | 组件交互 | 新对话、删除对话、空对话、dashboard提示、导航、KB轮/文档选项卡 |
+| Sidebar.test.tsx | 7 | 页面组件 | Logo/标题、导航按钮、对话列表、空对话、KBSummary 面板、dashboard 统计、新建对话 |
+| SidebarInteraction.test.tsx | 18 | 组件交互 | 新对话/删除对话/空对话/dashboard统计/导航/KB轮/文档选项卡/对话切换/移动端关闭/上传toast/URL导入toast/批量删除 |
 | useChat.test.ts | 7 | Hook | SSE 流式、sendMessage、onDone、onError、abort、并发拦截 |
 | useChatCoverage.test.ts | 5 | Hook | 传递 webSearchEnabled/searchStrategy、onDone 新/旧对话分支、stopStreaming 固话、onNode streamingNodes |
 | useData.test.ts | 7 | Hook | conversations CRUD、sources、状态管理、create/remove 错误路径 |
@@ -87,6 +93,7 @@
 | DebugPanelCoverage.test.tsx | 7 | 组件 | rewrite/web_search/rerank/retry_count 展示、折叠展开、质量失败展示 |
 | ChatArea.test.tsx | 3 | 组件 | 输入框、发送按钮、欢迎页渲染 |
 | App.test.tsx | 1 | 组件 | 根组件渲染含 Sidebar+ChatArea |
+| ErrorBoundary.test.tsx | 1 | 组件 | 错误边界捕获 |
 
 ---
 

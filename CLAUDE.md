@@ -62,13 +62,20 @@ KnowBase/
 ├── frontend/                   # React 19 + Vite + Tailwind
 │   └── src/
 │       ├── components/
-│       │   ├── sidebar/        # ConversationList / DocumentPanel / KBSummary
-│       │   ├── ChatArea / Sidebar / BrowserPage / DashboardPage + ui/
+│       │   ├── sidebar/        # ConversationList / DocumentPanel / KBSummary / DashboardSummary
+│       │   ├── ui/             # shadcn/ui（含 SkeletonCard/SkeletonGrid）
+│       │   ├── ChatArea.tsx    # 对话界面（含搜索策略选择器 SVG 图标）
+│       │   ├── Sidebar.tsx     # 侧栏导航（布局 + 视图切换 + 主题切换）
+│       │   ├── BrowserPage.tsx # 知识库浏览（分页懒加载 + 书签 + 错误状态）
+│       │   ├── DashboardPage.tsx # 指标面板
+│       │   ├── EmptyState.tsx  # 空状态引导
+│       │   ├── MessageBubble.tsx # 消息气泡
+│       │   └── DebugPanel.tsx  # RAG 调试面板
 │       ├── hooks/              # useChat（SSE 流式）/ useData / useTheme
 │       └── lib/                # api.ts（SSEParser + 全量 API 客户端）/ api-types.ts / utils.ts
 │   ├── data/                   # chroma_db / checkpoints.db / conversations.db / logs
 ├── docs/
-│   └── tests/                  # 8 份测试文档（单元/集成/冒烟/边界/接口/验收/缺陷/报告）
+│   └── tests/                  # 12 份测试文档
 └── scripts/                    # 一键启动脚本
 ```
 
@@ -89,10 +96,13 @@ KnowBase/
 | `GET /api/knowledge-base/stats` | 统计 |
 | `GET /api/knowledge-base/chunks` | 分页浏览 |
 | `GET /api/knowledge-base/sources` | 来源列表 |
+| `GET /api/knowledge-base/config` | KB 配置 |
+| `GET /api/knowledge-base/hotspots` | 热点追踪 |
 | `GET /api/metrics/logs` | 查询日志 |
 | `DELETE /api/metrics/logs/today` | 删除今日日志 |
 | `GET/POST/PATCH/DELETE /api/workspaces` | 工作区 CRUD |
 | `GET/POST/DELETE /api/bookmarks` | 书签 CRUD |
+| `GET /api/health` | 健康检查 |
 
 ### LangGraph 工作流
 
@@ -111,17 +121,18 @@ KnowBase/
 - `backend/config/settings.py` 是唯一配置入口，pydantic-settings 驱动。`CHROMA_API_KEY` 回退作为 `SILICONFLOW_API_KEY`。
 - LLM 和 embedding 都通过硅基流动 OpenAI-compatible API 调用。
 - Chroma 持久化在 `data/chroma_db/`；对话在 `data/conversations.db`；checkpoints 在 `data/checkpoints.db`。
-- API Key 鉴权：`deps.py` 提供 `verify_api_key` 依赖，`API_KEY` 空值时跳过（本地开发无感）。`load_preset_documents` 在 `lifespan` 中执行，不再耦合在依赖注入中。
+- API Key 鉴权：`deps.py` 提供 `verify_api_key` 依赖，`API_KEY` 空值时跳过（本地开发无感）。`load_preset_documents` 在 `lifespan` 中执行。
 - Tavily 为可选依赖，未配 Key 时不显示在 UI 中。
-- 搜索策略：`fast`（无 rerank）、`balanced`（默认、条件 rerank）、`high_quality`（必走 rerank）。
-- 前端 `api.ts` 包含 `SSEParser`（支持 CRLF/CR）和 `createChatStreamAdapter`，`api.ts` 自动带 Authorization 头，后端所有写操作 + 读操作端点均受鉴权保护。
-- 工作流逻辑已从 `graph.py` 拆分为 `graph_nodes.py`（节点函数）、`graph_routing.py`（条件路由）、`graph_utils.py`（工具函数），`graph.py` 仅保留图定义。对应测试分布在 `test_graph.py` / `test_graph_coverage.py` / `test_graph_edge_cases.py` / `test_routing.py`。
+- 搜索策略：`fast`（无 rerank）、`balanced`（默认、条件 rerank）、`high_quality`（必走 rerank）、`deep`（扩检索）。
+- 前端 `api.ts` 包含 `SSEParser`（支持 CRLF/CR）和 `createChatStreamAdapter`，自动带 Authorization 头，后端所有写操作 + 读操作端点均受鉴权保护。
+- 工作流逻辑已从 `graph.py` 拆分为 `graph_nodes.py`（节点函数）、`graph_routing.py`（条件路由）、`graph_utils.py`（工具函数），`graph.py` 仅保留图定义。
+- 前端字号系统使用 `text-2xs`（10px）、`text-xs`（12px）、`text-sm`（14px）标准 token，禁用任意宽高值（`text-[Xpx]`）。
 
 ### 测试策略
 
-**后端**：Python unittest（28 文件，400 用例）。LLM mock 用 `FakeLLM`/`FakeResponse` + `unittest.mock.patch`，Chroma mock 用 patch 替换，SQLite 用 `tempfile.TemporaryDirectory` 隔离。含 SSE 手写类型漂移检测（test_sse_type_sync）、ChatRoute SSE 集成测试（7 种事件类型）、工作区/书签/路由分类测试。
+**后端**：Python unittest（28 文件，400 用例）。LLM mock 用 `FakeLLM`/`FakeResponse` + `unittest.mock.patch`，Chroma mock 用 patch 替换，SQLite 用 `tempfile.TemporaryDirectory` 隔离。含 SSE 手写类型漂移检测（test_sse_type_sync）、ChatRoute SSE 集成测试（7 种事件类型）、工作区/书签/路由分类/版本模式测试。
 
-**前端**：vitest + @testing-library/react（18 文件，159 用例）。SSE 用 `ReadableStream` 模拟（含 CRLF 回归测试），mock 数据在 `src/test/mocks/data.ts`。覆盖 hooks、组件渲染、交互、API 客户端。含 Sidebar 交互测试（上传/URL 导入 toast 反馈）。
+**前端**：vitest + @testing-library/react（18 文件，160 用例）。SSE 用 `ReadableStream` 模拟（含 CRLF 回归测试），mock 数据在 `src/test/mocks/data.ts`。覆盖 hooks、组件渲染、交互、API 客户端。含 Sidebar 交互测试（上传/URL 导入 toast 反馈）、ChatArea 策略按钮主题切换。
 
 ```bash
 # 后端全部

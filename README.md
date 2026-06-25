@@ -9,16 +9,16 @@
 - URL 一键导入网页内容
 - **工作区系统** — 多工作区管理，每个工作区独立对话和书签
 - **书签收藏** — 知识库浏览时收藏片段，跨工作区管理
-- **API Key 鉴权** — 写操作端点（上传/删除/清空/对话 CRUD/聊天）受 Bearer Token 保护，前端 `api.ts` 自动带 Authorization 头。空 `API_KEY` 时跳过鉴权，本地开发无感
+- **API Key 鉴权** — 写操作端点受 Bearer Token 保护，前端自动带 Authorization 头。空 `API_KEY` 时跳过鉴权，本地开发无感
 - SSE 流式输出回答，边生成边展示，支持引用编号 `[1]` 标记来源
-- **引用编号系统** — LLM 回答用 `[1]`、`[2]` 编号标注来源，前端渲染为交互式引用标签（hover 显示来源详情）
-- **RAG Debug 面板：** 每条消息可展开查看检索链路详情（召回文档、分数、精排、质量检查）
+- **引用编号系统** — LLM 回答用 `[1]`、`[2]` 编号标注来源，前端渲染为交互式引用标签
+- **RAG Debug 面板** — 每条消息可展开查看检索链路详情（召回文档、分数、精排、质量检查）
 - 查询改写 → 候选集混合检索 → 条件式 LLM 精排 → 生成回答 → 分层质量检查
 - 联网搜索兜底（可选 Tavily）
-- 检索策略：fast / balanced / high_quality
-- **自适应向量召回：** 根据文档总数动态调整召回候选数（30~100）
+- 检索策略：fast / balanced / high_quality / deep
+- **自适应向量召回** — 根据文档总数动态调整召回候选数（30~100）
 - 邻居 chunk 上下文补全 + 标题追踪
-- **热点追踪：** 知识库浏览页按被检索次数高亮显示热门片段
+- **热点追踪** — 知识库浏览页按被检索次数高亮显示热门片段
 - **消息反馈** — ThumbsUp/ThumbsDown 持结构化原因选择
 - **来源固定与排除** — 来源卡片支持固定和排除，跨消息状态保持
 - **重答与简洁模式** — 回答底部「重新回答」「更简洁」「继续追问」
@@ -28,10 +28,12 @@
 - **无答案兜底** — 四种失败场景显示明确指导 + 快捷操作
 - **证据可信度解释** — 强/中/弱标签带 tooltip 解释证据构成
 - 知识库内容浏览（杂志藏书阁风格网格，支持分页 + 懒加载）
-- **对话标题 LLM 自动生成：** 根据问题语义自动生成标题
+- **对话标题 LLM 自动生成** — 根据问题语义自动生成标题
 - 指标面板（编辑式数据看板，耗时分布/质量通过率/查询日志）
-- **移动端适配** — 抽屉式侧栏 + 响应式头部
+- **移动端适配** — 抽屉式侧栏 + 底部导航栏 + 响应式头部
 - **SSE 节流** — 高频 token 更新时合并渲染
+- **骨架屏复用** — 统一的 SkeletonCard/SkeletonGrid 组件
+- **prefers-reduced-motion 支持** — 无障碍动画控制
 - 浅色/深色模式切换
 - 离线 RAG 评估脚本
 
@@ -78,19 +80,19 @@ KnowBase/
 │   │   ├── api/                # REST API 路由层
 │   │   │   ├── main.py         # 应用入口 + CORS + lifespan（预设文档加载）
 │   │   │   ├── deps.py         # 依赖注入（lru_cache 单例 KnowledgeBase）
-│   │   │   ├── models.py       # Pydantic 模型（Field(default_factory=...)）
+│   │   │   ├── models.py       # Pydantic 模型
 │   │   │   └── routes/
-│   │   │       ├── chat.py           # SSE 流式聊天（抽离 _accumulate_node_debug / _persist_and_record）
+│   │   │       ├── chat.py           # SSE 流式聊天
 │   │   │       ├── conversations.py  # 对话 CRUD
 │   │   │       ├── documents.py      # 文档上传/URL导入
 │   │   │       ├── knowledge_base.py # 知识库浏览
 │   │   │       ├── metrics.py        # 查询日志
-│   │   │       ├── workspaces.py     # 工作区 CRUD ✨
-│   │   │       └── bookmarks.py      # 书签 CRUD ✨
+│   │   │       ├── workspaces.py     # 工作区 CRUD
+│   │   │       └── bookmarks.py      # 书签 CRUD
 │   │   ├── graph.py            # LangGraph 图定义
-│   │   ├── graph_nodes.py      # 工作流节点函数 ✨
-│   │   ├── graph_routing.py    # 条件路由函数 ✨
-│   │   ├── graph_utils.py      # 工作流工具函数 ✨
+│   │   ├── graph_nodes.py      # 工作流节点函数
+│   │   ├── graph_routing.py    # 条件路由函数
+│   │   ├── graph_utils.py      # 工作流工具函数
 │   │   ├── graph_state.py      # 工作流状态/Pydantic 模型
 │   │   ├── knowledge_base.py   # 门面类，内拆 IngestionService / Retriever / HotspotTracker
 │   │   ├── kb_models.py        # 检索结果/FusionScore/helper
@@ -104,12 +106,15 @@ KnowBase/
 ├── frontend/                   # React + Vite + Tailwind 前端
 │   └── src/
 │       ├── components/
-│       │   ├── sidebar/        # ConversationList / DocumentPanel / KBSummary
-│       │   ├── ui/             # shadcn/ui 组件
-│       │   ├── ChatArea.tsx    # 对话界面
-│       │   ├── Sidebar.tsx     # 侧栏导航（布局 + 视图切换）
+│       │   ├── sidebar/        # ConversationList / DocumentPanel / KBSummary / DashboardSummary
+│       │   ├── ui/             # shadcn/ui 组件（含 SkeletonCard/SkeletonGrid）
+│       │   ├── ChatArea.tsx    # 对话界面（含搜索策略选择器）
+│       │   ├── Sidebar.tsx     # 侧栏导航（布局 + 视图切换 + 主题切换）
 │       │   ├── BrowserPage.tsx # 知识库浏览（含分页懒加载 + 书签）
-│       │   └── DashboardPage.tsx # 指标面板
+│       │   ├── DashboardPage.tsx # 指标面板
+│       │   ├── EmptyState.tsx  # 空状态引导
+│       │   ├── MessageBubble.tsx # 消息气泡（引用/反馈/来源）
+│       │   └── DebugPanel.tsx  # RAG 调试面板
 │       ├── hooks/
 │       │   ├── useChat.ts      # SSE 流式聊天 hook（来源状态管理 + 重答）
 │       │   ├── useData.ts      # 数据管理 hook
@@ -119,7 +124,7 @@ KnowBase/
 │           ├── api-types.ts    # 类型定义
 │           └── utils.ts        # 工具函数
 ├── docs/
-│   └── tests/                  # 测试文档：单元/集成/冒烟/P2边缘/接口/验收/缺陷/报告
+│   └── tests/                  # 12 份测试文档
 └── scripts/                    # 一键启动脚本
 ```
 
@@ -153,10 +158,13 @@ KnowBase/
 | `GET /api/knowledge-base/stats` | 统计 |
 | `GET /api/knowledge-base/chunks` | 分页浏览 |
 | `GET /api/knowledge-base/sources` | 来源列表 |
+| `GET /api/knowledge-base/config` | KB 配置 |
+| `GET /api/knowledge-base/hotspots` | 热点追踪 |
 | `GET /api/metrics/logs` | 查询日志 |
 | `DELETE /api/metrics/logs/today` | 删除今日日志 |
-| `GET/POST/PATCH/DELETE /api/workspaces` | 工作区 CRUD ✨ |
-| `GET/POST/DELETE /api/bookmarks` | 书签 CRUD ✨ |
+| `GET/POST/PATCH/DELETE /api/workspaces` | 工作区 CRUD |
+| `GET/POST/DELETE /api/bookmarks` | 书签 CRUD |
+| `GET /api/health` | 健康检查 |
 
 ## 测试
 
@@ -168,18 +176,18 @@ cd backend
 uv run python -m unittest discover -v
 
 # 测试分类
-uv run python -m unittest tests.test_api_endpoints -v       # 接口测试
-uv run python -m unittest tests.test_edge_cases -v          # 边界测试
-uv run python -m unittest tests.test_integration_graph_kb -v  # 集成测试
-uv run python -m unittest tests.test_smoke -v               # 冒烟测试
+uv run python -m unittest tests.test_api_endpoints -v       # 接口测试（29用例）
+uv run python -m unittest tests.test_edge_cases -v          # 边界测试（18用例）
+uv run python -m unittest tests.test_integration_graph_kb -v  # 集成测试（22用例）
+uv run python -m unittest tests.test_smoke -v               # 冒烟测试（10用例）
 uv run python -m unittest tests.test_graph -v               # 工作流测试
-uv run python -m unittest tests.test_knowledge_base -v      # 知识库测试
+uv run python -m unittest tests.test_knowledge_base -v      # 知识库测试（65用例）
 uv run python -m unittest tests.test_conversations -v       # 对话管理测试
 uv run python -m unittest tests.test_chat_route -v          # 聊天路由集成测试
 uv run python -m unittest tests.test_routing -v             # 路由分类测试
 ```
 
-### 前端测试（vitest，18 文件，159 用例）
+### 前端测试（vitest，18 文件，160 用例）
 ```bash
 cd frontend
 npm test               # 运行一次
@@ -197,10 +205,14 @@ npm run test:coverage  # 覆盖率
 | [02-integration-test.md](docs/tests/02-integration-test.md) | 跨模块集成测试 |
 | [03-smoke-test.md](docs/tests/03-smoke-test.md) | 核心功能冒烟测试 |
 | [04-edge-test.md](docs/tests/04-edge-test.md) | P2 边界/异常测试 |
-| [05-api-test.md](docs/tests/05-api-test.md) | 21 个 API 端点全覆盖 |
+| [05-api-test.md](docs/tests/05-api-test.md) | API 端点全覆盖 |
 | [06-acceptance-test.md](docs/tests/06-acceptance-test.md) | 14 个 E2E 用户场景 |
 | [07-defect-report.md](docs/tests/07-defect-report.md) | 缺陷报告模板 |
 | [08-test-report.md](docs/tests/08-test-report.md) | 测试报告模板 |
+| [09-performance-test.md](docs/tests/09-performance-test.md) | 性能/负载测试 |
+| [10-security-test.md](docs/tests/10-security-test.md) | 安全测试 |
+| [11-e2e-test.md](docs/tests/11-e2e-test.md) | Playwright E2E 测试 |
+| [12-ci-test.md](docs/tests/12-ci-test.md) | CI 配置 |
 
 ### 离线评估
 
