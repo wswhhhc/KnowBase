@@ -22,10 +22,18 @@ def init_db():
     """Create tables if they don't exist."""
     conn = _get_conn()
     conn.executescript("""
+        CREATE TABLE IF NOT EXISTS workspaces (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL DEFAULT '默认工作区',
+            description TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS conversations (
             id TEXT PRIMARY KEY,
             thread_id TEXT NOT NULL,
             title TEXT NOT NULL DEFAULT '新对话',
+            workspace_id TEXT DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -43,7 +51,11 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id);
     """)
-    # 兼容旧库：为已有 messages 表添加 debug_info 列
+    # 兼容旧库：为已有 conversations 表添加 workspace_id 列
+    try:
+        conn.execute("ALTER TABLE conversations ADD COLUMN workspace_id TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
     try:
         conn.execute("ALTER TABLE messages ADD COLUMN debug_info TEXT DEFAULT '{}'")
     except sqlite3.OperationalError:
@@ -60,38 +72,44 @@ def init_db():
     conn.close()
 
 
-def create_conversation(title: str = "新对话", thread_id: str | None = None) -> dict:
+def create_conversation(title: str = "新对话", thread_id: str | None = None, workspace_id: str = "") -> dict:
     """Create a new conversation, return its dict."""
     conn = _get_conn()
     conv_id = str(uuid4())
     actual_thread_id = thread_id or conv_id
     now = datetime.now(UTC).isoformat()
     conn.execute(
-        "INSERT INTO conversations (id, thread_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (conv_id, actual_thread_id, title, now, now),
+        "INSERT INTO conversations (id, thread_id, title, workspace_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (conv_id, actual_thread_id, title, workspace_id, now, now),
     )
     conn.commit()
     conn.close()
-    return {"id": conv_id, "thread_id": actual_thread_id, "title": title, "created_at": now, "updated_at": now}
+    return {"id": conv_id, "thread_id": actual_thread_id, "title": title, "workspace_id": workspace_id, "created_at": now, "updated_at": now}
 
 
 def get_conversation_by_thread(thread_id: str) -> dict | None:
     """Return the conversation that owns this thread_id, or None."""
     conn = _get_conn()
     row = conn.execute(
-        "SELECT id, thread_id, title, created_at, updated_at FROM conversations WHERE thread_id = ?",
+        "SELECT id, thread_id, title, workspace_id, created_at, updated_at FROM conversations WHERE thread_id = ?",
         (thread_id,),
     ).fetchone()
     conn.close()
     return dict(row) if row else None
 
 
-def list_conversations() -> list[dict]:
-    """Return all conversations ordered by update time desc."""
+def list_conversations(workspace_id: str | None = None) -> list[dict]:
+    """Return conversations ordered by update time desc, optionally filtered by workspace."""
     conn = _get_conn()
-    rows = conn.execute(
-        "SELECT id, thread_id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC"
-    ).fetchall()
+    if workspace_id:
+        rows = conn.execute(
+            "SELECT id, thread_id, title, workspace_id, created_at, updated_at FROM conversations WHERE workspace_id = ? ORDER BY updated_at DESC",
+            (workspace_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, thread_id, title, workspace_id, created_at, updated_at FROM conversations ORDER BY updated_at DESC"
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -100,7 +118,7 @@ def get_conversation(conv_id: str) -> dict | None:
     """Get a single conversation by id."""
     conn = _get_conn()
     row = conn.execute(
-        "SELECT id, thread_id, title, created_at, updated_at FROM conversations WHERE id = ?", (conv_id,)
+        "SELECT id, thread_id, title, workspace_id, created_at, updated_at FROM conversations WHERE id = ?", (conv_id,)
     ).fetchone()
     conn.close()
     return dict(row) if row else None
@@ -264,3 +282,61 @@ def export_conversation(conv_id: str) -> str:
             parts.append(f"*质量检查：{msg['quality_reason']}*\n")
         parts.append("\n---\n\n")
     return "".join(parts)
+
+
+# ── Workspaces ──
+
+
+def create_workspace(name: str = "新工作区", description: str = "") -> dict:
+    """Create a new workspace."""
+    conn = _get_conn()
+    ws_id = str(uuid4())
+    now = datetime.now(UTC).isoformat()
+    conn.execute(
+        "INSERT INTO workspaces (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        (ws_id, name, description, now, now),
+    )
+    conn.commit()
+    conn.close()
+    return {"id": ws_id, "name": name, "description": description, "created_at": now, "updated_at": now}
+
+
+def list_workspaces() -> list[dict]:
+    """Return all workspaces."""
+    conn = _get_conn()
+    rows = conn.execute("SELECT id, name, description, created_at, updated_at FROM workspaces ORDER BY created_at").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_workspace(ws_id: str, name: str | None = None, description: str | None = None) -> bool:
+    """Update a workspace name and/or description."""
+    conn = _get_conn()
+    now = datetime.now(UTC).isoformat()
+    updates = []
+    params = []
+    if name is not None:
+        updates.append("name = ?")
+        params.append(name)
+    if description is not None:
+        updates.append("description = ?")
+        params.append(description)
+    if not updates:
+        conn.close()
+        return False
+    updates.append("updated_at = ?")
+    params.append(now)
+    params.append(ws_id)
+    cursor = conn.execute(f"UPDATE workspaces SET {', '.join(updates)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+    return cursor.rowcount > 0
+
+
+def delete_workspace(ws_id: str) -> bool:
+    """Delete a workspace (does not delete its conversations)."""
+    conn = _get_conn()
+    cursor = conn.execute("DELETE FROM workspaces WHERE id = ?", (ws_id,))
+    conn.commit()
+    conn.close()
+    return cursor.rowcount > 0

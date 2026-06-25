@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import * as api from '@/lib/api'
-import type { Conversation, DocSource } from '@/lib/api'
+import type { Conversation, DocSource, Workspace } from '@/lib/api'
 
-export function useConversations() {
+export function useConversations(workspaceId?: string) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const refresh = async () => {
     try {
-      const list = await api.getConversations()
+      const list = await api.getConversations(workspaceId)
       setConversations(list)
       return list
     } catch (e) {
@@ -20,10 +20,10 @@ export function useConversations() {
     }
   }
 
-  useEffect(() => { refresh() }, [])
+  useEffect(() => { refresh() }, [workspaceId])
 
   const create = async () => {
-    const conv = await api.createConversation()
+    const conv = await api.createConversation('新对话', workspaceId)
     await refresh()
     setActiveId(conv.id)
     return conv
@@ -41,6 +41,51 @@ export function useConversations() {
   }
 
   return { conversations, activeId, setActiveId, create, remove, rename, refresh, loading }
+}
+
+export function useWorkspaces() {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+
+  const refresh = async () => {
+    try {
+      const list = await api.getWorkspaces()
+      setWorkspaces(list)
+      // Auto-select first workspace if none selected
+      if (list.length > 0 && !activeWorkspaceId) {
+        setActiveWorkspaceId(list[0].id)
+      }
+      return list
+    } catch (e) {
+      console.error('加载工作区列表失败:', e)
+      return []
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  const create = async (name?: string) => {
+    const ws = await api.createWorkspace(name)
+    await refresh()
+    setActiveWorkspaceId(ws.id)
+    return ws
+  }
+
+  const remove = async (id: string) => {
+    await api.deleteWorkspace(id)
+    if (activeWorkspaceId === id) setActiveWorkspaceId('')
+    await refresh()
+  }
+
+  const rename = async (id: string, name: string) => {
+    await api.renameWorkspace(id, name)
+    await refresh()
+  }
+
+  return { workspaces, activeWorkspaceId, setActiveWorkspaceId, create, remove, rename, refresh, loading }
 }
 
 export function useSources() {

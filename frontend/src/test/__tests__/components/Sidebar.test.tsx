@@ -2,7 +2,7 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Sidebar from '@/components/Sidebar'
-import { useConversations, useSources } from '@/hooks/useData'
+import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
 import * as api from '@/lib/api'
 import { mockConversations, mockSources, mockKBStats } from '@/test/mocks/data'
 
@@ -48,6 +48,7 @@ vi.mock('lucide-react', () => {
 vi.mock('@/hooks/useData', () => ({
   useConversations: vi.fn(),
   useSources: vi.fn(),
+  useWorkspaces: vi.fn(),
 }))
 
 // Mock api
@@ -86,6 +87,17 @@ describe('Sidebar', () => {
       remove: vi.fn(),
       rename: vi.fn(),
       refresh: vi.fn().mockResolvedValue(mockConversations),
+      loading: false,
+    })
+
+    vi.mocked(useWorkspaces).mockReturnValue({
+      workspaces: [{ id: 'ws-1', name: '默认工作区', description: '', created_at: '', updated_at: '' }],
+      activeWorkspaceId: 'ws-1',
+      setActiveWorkspaceId: vi.fn(),
+      create: vi.fn(),
+      remove: vi.fn(),
+      rename: vi.fn(),
+      refresh: vi.fn(),
       loading: false,
     })
 

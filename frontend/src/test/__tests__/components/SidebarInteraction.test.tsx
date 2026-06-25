@@ -2,7 +2,7 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Sidebar from '@/components/Sidebar'
-import { useConversations, useSources } from '@/hooks/useData'
+import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
 import * as api from '@/lib/api'
 import { mockConversations, mockMessages, mockSources, mockKBStats } from '@/test/mocks/data'
 
@@ -41,6 +41,7 @@ vi.mock('lucide-react', () => {
 vi.mock('@/hooks/useData', () => ({
   useConversations: vi.fn(),
   useSources: vi.fn(),
+  useWorkspaces: vi.fn(),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -65,6 +66,18 @@ const defaultProps = {
 describe('Sidebar interactions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+
+    vi.mocked(useWorkspaces).mockReturnValue({
+      workspaces: [{ id: 'ws-1', name: '默认工作区', description: '', created_at: '', updated_at: '' }],
+      activeWorkspaceId: 'ws-1',
+      setActiveWorkspaceId: vi.fn(),
+      create: vi.fn(),
+      remove: vi.fn(),
+      rename: vi.fn(),
+      refresh: vi.fn(),
+      loading: false,
+    })
+
     vi.mocked(useConversations).mockReturnValue({
       conversations: mockConversations,
       activeId: 'conv-1',
@@ -110,9 +123,11 @@ describe('Sidebar interactions', () => {
 
     render(<Sidebar {...defaultProps} chat={{ ...defaultProps.chat, clearMessages }} />)
     const trashButtons = screen.getAllByText('Trash2')
-    await userEvent.click(trashButtons[0])
+    await userEvent.click(trashButtons[1])
     expect(remove).toHaveBeenCalled()
-    expect(clearMessages).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(clearMessages).toHaveBeenCalled()
+    })
   })
 
   it('shows 暂无对话 when empty', () => {

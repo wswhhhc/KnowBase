@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.routes import chat, conversations, documents, knowledge_base, metrics
+from src.api.routes import chat, conversations, documents, knowledge_base, metrics, workspaces
 from src.conversations import init_db
 from src.api.deps import get_knowledge_base
 from config.settings import _is_configured_api_key, settings
@@ -40,6 +40,7 @@ app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(conversations.router, prefix="/api/conversations", tags=["conversations"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 app.include_router(knowledge_base.router, prefix="/api/knowledge-base", tags=["knowledge-base"])
+app.include_router(workspaces.router, prefix="/api/workspaces", tags=["workspaces"])
 app.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])
 
 

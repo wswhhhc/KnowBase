@@ -37,13 +37,26 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 
 // ── Conversations ──
 
-export const getConversations = () => req<Conversation[]>('/conversations')
+export interface Workspace {
+  id: string
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+}
 
-export const createConversation = (title = '新对话') =>
-  req<Conversation>('/conversations', {
+export const getConversations = (workspaceId?: string) => {
+  const params = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
+  return req<Conversation[]>(`/conversations${params}`)
+}
+
+export const createConversation = (title = '新对话', workspaceId?: string) => {
+  const params = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
+  return req<Conversation>(`/conversations${params}`, {
     method: 'POST',
     body: JSON.stringify({ title }),
   })
+}
 
 export const deleteConversation = (id: string) =>
   req(`/conversations/${id}`, { method: 'DELETE' })
@@ -71,6 +84,25 @@ export const updateFeedback = (convId: string, msgId: number, feedback: string, 
 
 export const exportConversation = (convId: string) =>
   req<{ markdown: string }>(`/conversations/${convId}/export`)
+
+// ── Workspaces ──
+
+export const getWorkspaces = () => req<Workspace[]>('/workspaces')
+
+export const createWorkspace = (name = '新工作区', description = '') =>
+  req<Workspace>('/workspaces', {
+    method: 'POST',
+    body: JSON.stringify({ name, description }),
+  })
+
+export const renameWorkspace = (id: string, name: string) =>
+  req<Workspace>(`/workspaces/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  })
+
+export const deleteWorkspace = (id: string) =>
+  req(`/workspaces/${id}`, { method: 'DELETE' })
 
 // ── Documents ──
 

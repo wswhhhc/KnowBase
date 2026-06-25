@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, ScrollArea } from '@/components/ui'
 import {
   MessageSquare, FileText,
-  PanelRightClose, BookOpen, BarChart3,
+  PanelRightClose, BookOpen, BarChart3, Plus, Trash2,
 } from 'lucide-react'
 import * as api from '@/lib/api'
-import { useConversations, useSources } from '@/hooks/useData'
+import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
 import ConversationList from '@/components/sidebar/ConversationList'
 import DocumentPanel from '@/components/sidebar/DocumentPanel'
 import KBSummary from '@/components/sidebar/KBSummary'
@@ -35,12 +35,13 @@ const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[]
 ]
 
 export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages }: SidebarProps) {
-  const convs = useConversations()
+  const wss = useWorkspaces()
+  const convs = useConversations(wss.activeWorkspaceId || undefined)
   const srcs = useSources()
   const [tab, setTab] = useState<'conversations' | 'documents'>('conversations')
   const prevKey = useRef(convRefreshKey)
 
-  // 新对话创建后刷新侧栏列表
+  // Refresh conversation list when workspace changes or new conv created
   useEffect(() => {
     if (convRefreshKey !== prevKey.current) {
       prevKey.current = convRefreshKey
@@ -109,6 +110,42 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         <Button variant="ghost" size="sm" onClick={onClose}>
           <PanelRightClose className="h-4 w-4" />
         </Button>
+      </div>
+
+      {/* Workspace selector */}
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex items-center gap-1">
+          <select
+            value={wss.activeWorkspaceId}
+            onChange={(e) => wss.setActiveWorkspaceId(e.target.value)}
+            className="flex-1 text-xs bg-transparent border border-border rounded-md px-2 py-1.5 text-foreground outline-none focus:border-primary/50"
+          >
+            {wss.workspaces.map((ws) => (
+              <option key={ws.id} value={ws.id}>{ws.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={async () => {
+              const name = prompt('新工作区名称：')
+              if (name?.trim()) await wss.create(name.trim())
+            }}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            title="创建工作区"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+          {wss.activeWorkspaceId && (
+            <button
+              onClick={async () => {
+                await wss.remove(wss.activeWorkspaceId)
+              }}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="删除工作区"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Nav */}

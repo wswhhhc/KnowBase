@@ -2,26 +2,27 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.api.deps import verify_api_key
 from src.api.models import ConversationCreate, ConversationOut, ExportOut, MessageFeedback, MessageOut
 from src.conversations import (
     create_conversation, list_conversations, get_conversation, update_title,
     delete_conversation, delete_conversations, get_messages, update_feedback, export_conversation,
+    create_workspace, list_workspaces, update_workspace, delete_workspace,
 )
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 @router.get("")
-async def list_all() -> list[ConversationOut]:
-    return [ConversationOut(**c) for c in list_conversations()]
+async def list_all(workspace_id: str | None = Query(None)) -> list[ConversationOut]:
+    return [ConversationOut(**c) for c in list_conversations(workspace_id=workspace_id)]
 
 
 @router.post("")
-async def create(body: ConversationCreate = ConversationCreate()) -> ConversationOut:
-    return ConversationOut(**create_conversation(body.title))
+async def create(body: ConversationCreate = ConversationCreate(), workspace_id: str | None = Query(None)) -> ConversationOut:
+    return ConversationOut(**create_conversation(body.title, workspace_id=workspace_id or ""))
 
 
 @router.get("/{conv_id}")
