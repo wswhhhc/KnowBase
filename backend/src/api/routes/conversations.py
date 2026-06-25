@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.api.deps import verify_api_key
 from src.api.models import ConversationCreate, ConversationOut, ExportOut, MessageFeedback, MessageOut
