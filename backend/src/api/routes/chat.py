@@ -237,9 +237,26 @@ async def chat_stream(
                 excluded_chunk_ids=body.excluded_chunk_ids,
             )
 
+            first_chunk_time = 0
+            first_token_time = 0
+            _ttfb_set = False
+
             for mode, data in events:
+                # TTFB = time from request start until first event of any type arrives
+                if not _ttfb_set:
+                    first_chunk_time = int((time.monotonic() - t0) * 1000)
+                    _ttfb_set = True
+
                 if mode == "updates":
+                    # First non-token data counts as first_token too
+                    if first_token_time == 0 and not _ttfb_set:
+                        first_token_time = first_chunk_time
+
                     for node_name, update in data.items():
+                        # first_token from graph update (first meaningful response data)
+                        if first_token_time == 0:
+                            first_token_time = int((time.monotonic() - t0) * 1000)
+
                         node_label = NODE_LABELS.get(node_name, node_name)
                         is_new = node_label not in seen_nodes
                         if is_new:
@@ -261,7 +278,6 @@ async def chat_stream(
                             if update.get("outcome_category"):
                                 final_outcome_category = update["outcome_category"]
 
-                            # ---- Debug info accumulation ----
                             now = time.monotonic()
                             elapsed_ms = int((now - _node_t0) * 1000)
                             _node_t0 = now
@@ -278,30 +294,16 @@ async def chat_stream(
                         and chunk.content
                         and metadata.get("langgraph_node") == "generate_answer"
                     ):
+                        if first_token_time == 0:
+                            first_token_time = int((time.monotonic() - t0) * 1000)
                         accumulated_answer += chunk.content
                         yield {"event": "token", "data": json.dumps({"text": chunk.content})}
 
             answer = accumulated_answer.strip() or "抱歉，我无法回答这个问题。"
             elapsed = int((time.monotonic() - t0) * 1000)
 
-            # Compute TTFB: time until first chunk of data returned from run_query
-            # first_token_ms: time until first token event
-            ttfb = 0
-            first_token = 0
-            fetch_start = t0
-            _iterated = False
-            for mode, data in events:
-                if not _iterated:
-                    ttfb = int((time.monotonic() - fetch_start) * 1000)
-                    _iterated = True
-                if mode == "messages":
-                    chunk, metadata = data
-                    if isinstance(chunk, AIMessageChunk) and chunk.content:
-                        first_token = int((time.monotonic() - fetch_start) * 1000)
-                        break
-                elif mode == "updates":
-                    first_token = int((time.monotonic() - fetch_start) * 1000)
-                    break
+            ttfb = first_chunk_time
+            first_token = first_token_time
 
             debug_info = DebugInfo(
                 nodes=[NodeDebug(**nd) for nd in debug_state.nodes],
