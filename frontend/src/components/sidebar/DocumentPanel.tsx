@@ -15,14 +15,24 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
   const [urlInput, setUrlInput] = useState('')
   const [uploading, setUploading] = useState(false)
   const [suggested, setSuggested] = useState<string[] | null>(null)
+  const [versionPrompted, setVersionPrompted] = useState<{ res: any; file: File; sourceName: string } | null>(null)
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
     setSuggested(null)
+    setVersionPrompted(null)
     try {
       const res: any = await api.uploadDocument(file)
+      if (res.existing_version && !res.message?.includes('无变化')) {
+        // Source exists — prompt user for version action
+        setVersionPrompted({ res, file, sourceName: file.name })
+        setUploading(false)
+        // Still refresh to show existing sources
+        await onRefresh()
+        return
+      }
       if (await onRefresh()) {
         toast.success('文档已上传', { description: file.name })
         if (res.suggested_questions?.length) {
@@ -34,6 +44,28 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
     }
     setUploading(false)
     e.target.value = ''
+  }
+
+  const handleVersionAction = async (action: 'replace' | 'append' | 'skip') => {
+    if (!versionPrompted) return
+    const { res: _res, file } = versionPrompted
+    setUploading(true)
+    setVersionPrompted(null)
+    try {
+      const res2: any = await api.uploadDocument(file, action)
+      await onRefresh()
+      if (action === 'skip') {
+        toast.info('已跳过，未重复导入')
+      } else {
+        toast.success(action === 'replace' ? '已替换为新版本' : '已追加新版本')
+      }
+      if (res2.suggested_questions?.length) {
+        setSuggested(res2.suggested_questions)
+      }
+    } catch (err) {
+      toast.error('上传失败', { description: String(err) })
+    }
+    setUploading(false)
   }
 
   const handleIngestUrl = async () => {
@@ -84,6 +116,28 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
             <div className="h-full rounded-full bg-primary animate-pulse" style={{ width: '60%' }} />
           </div>
         )}
+
+        {/* Version mode selector */}
+        {versionPrompted && (
+          <div className="mt-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
+            <p className="text-[10px] font-medium text-primary/80 mb-2 tracking-wide">该文档已存在，请选择操作方式</p>
+            <div className="space-y-1">
+              <button onClick={() => handleVersionAction('replace')}
+                className="block w-full text-left text-[11px] px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">
+                替换为新版本（删除旧内容后重新导入）
+              </button>
+              <button onClick={() => handleVersionAction('append')}
+                className="block w-full text-left text-[11px] px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">
+                保留两者（新旧版本共存）
+              </button>
+              <button onClick={() => handleVersionAction('skip')}
+                className="block w-full text-left text-[11px] px-2 py-1.5 rounded hover:bg-muted/50 text-muted-foreground transition-colors">
+                取消，不重复导入
+              </button>
+            </div>
+          </div>
+        )}
+
         {suggested && suggested.length > 0 && (
           <div className="mt-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
             <p className="text-[10px] font-medium text-primary/80 mb-2 tracking-wide">试试问这些问题</p>

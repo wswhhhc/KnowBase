@@ -344,21 +344,43 @@ class IngestionService:
             total += self.ingest_file(str(file_path), source_name=file_path.name)
         return total
 
-    def ingest_file(self, file_path: str, source_name: str | None = None) -> int:
-        """Ingest a file and return the number of new chunks."""
+    def ingest_file(self, file_path: str, source_name: str | None = None, version_mode: str = "replace") -> int:
+        """Ingest a file and return the number of new chunks.
+
+        Args:
+            file_path: Path to the file to ingest.
+            source_name: Source identifier (defaults to filename).
+            version_mode: One of "replace" (remove old chunks for this source first),
+                          "append" (keep old chunks, add new ones),
+                          "skip" (only add if source doesn't exist yet).
+        """
         docs = load_document(file_path, source_name=source_name)
         new_count = self._process_documents(docs)
         if source_name:
-            self._replace_old_chunks(source_name, docs)
+            src = source_name
+            if version_mode == "replace":
+                self._replace_old_chunks(src, docs)
+            elif version_mode == "skip":
+                # For skip, if any existing chunks for this source, undo the add
+                existing = [d for d in self._all_docs if normalize_source(d.metadata.get("source", "")) == normalize_source(src)]
+                if existing:
+                    # Remove the newly added chunks
+                    new_ids = [d.metadata["chunk_id"] for d in self._prepare_splits(docs) if d.metadata.get("chunk_id")]
+                    self._all_docs[:] = [d for d in self._all_docs if d.metadata.get("chunk_id", "") not in new_ids]
+                    self._rebuild_all()
+                    return 0
+            else:  # append — default call _replace_old_chunks keeps old behavior
+                self._replace_old_chunks(src, docs)
         return new_count
 
-    def ingest_url(self, url: str) -> int:
+    def ingest_url(self, url: str, version_mode: str = "replace") -> int:
         """Fetch a public URL and ingest its content."""
         from src.loaders import load_url
 
         docs = load_url(url)
         new_count = self._process_documents(docs)
-        self._replace_old_chunks(url, docs)
+        if version_mode == "replace":
+            self._replace_old_chunks(url, docs)
         return new_count
 
     def add_document(self, file_path: str) -> int:
@@ -637,13 +659,13 @@ class KnowledgeBase:
         with self._write_lock:
             return self.ingestion.load_preset_documents()
 
-    def ingest_file(self, file_path: str, source_name: str | None = None) -> int:
+    def ingest_file(self, file_path: str, source_name: str | None = None, version_mode: str = "replace") -> int:
         with self._write_lock:
-            return self.ingestion.ingest_file(file_path, source_name=source_name)
+            return self.ingestion.ingest_file(file_path, source_name=source_name, version_mode=version_mode)
 
-    def ingest_url(self, url: str) -> int:
+    def ingest_url(self, url: str, version_mode: str = "replace") -> int:
         with self._write_lock:
-            return self.ingestion.ingest_url(url)
+            return self.ingestion.ingest_url(url, version_mode=version_mode)
 
     def add_document(self, file_path: str) -> int:
         with self._write_lock:

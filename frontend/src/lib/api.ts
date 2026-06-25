@@ -108,11 +108,12 @@ export const deleteWorkspace = (id: string) =>
 
 export const getSources = () => req<DocSource[]>('/documents/sources')
 
-export const uploadDocument = async (file: File) => {
+export const uploadDocument = async (file: File, versionMode?: string) => {
   const form = new FormData()
   form.append('file', file)
+  const params = versionMode ? `?version_mode=${versionMode}` : ''
   const headers: Record<string, string> = authHeaders()
-  const res = await fetch(`${BASE}/documents/upload`, { method: 'POST', body: form, headers })
+  const res = await fetch(`${BASE}/documents/upload${params}`, { method: 'POST', body: form, headers })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }

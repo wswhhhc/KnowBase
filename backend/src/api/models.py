@@ -63,6 +63,8 @@ class IngestResponse(BaseModel):
     total_docs: int
     message: str
     suggested_questions: list[str] = Field(default_factory=list)
+    existing_version: bool = False
+    version_count: int = 0
 
 
 class URLIngestRequest(BaseModel):

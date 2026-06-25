@@ -253,6 +253,7 @@ describe('Sidebar interactions', () => {
     vi.mocked(useSources).mockReturnValue({
       sources: mockSources, sourceError: null, refresh,
     })
+    vi.mocked(api.uploadDocument).mockResolvedValue({ chunk_count: 5, existing_version: false })
     refresh.mockResolvedValue(true)
     render(<Sidebar {...defaultProps} />)
     await userEvent.click(screen.getByText('文档'))
@@ -269,6 +270,7 @@ describe('Sidebar interactions', () => {
     vi.mocked(useSources).mockReturnValue({
       sources: mockSources, sourceError: null, refresh,
     })
+    vi.mocked(api.uploadDocument).mockResolvedValue({ chunk_count: 5, existing_version: false })
     refresh.mockResolvedValue(false)
     render(<Sidebar {...defaultProps} />)
     await userEvent.click(screen.getByText('文档'))

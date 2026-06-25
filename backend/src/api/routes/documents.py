@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 
 from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import IngestResponse, URLIngestRequest, SourceOut
 from src.chat_utils import generate_suggested_questions
+from src.kb_models import normalize_source
 from src.knowledge_base import KnowledgeBase
 from src.utils import save_uploaded_file
 
@@ -21,16 +22,33 @@ async def list_sources(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...), kb: KnowledgeBase = Depends(get_knowledge_base)) -> IngestResponse:
+async def upload_file(
+    file: UploadFile = File(...),
+    version_mode: str = Query("replace", regex="^(replace|append|skip)$"),
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+) -> IngestResponse:
     try:
         file_path, source_name = save_uploaded_file(file)
-        chunk_count = kb.ingest_file(str(file_path), source_name=source_name)
+        # Check if source already exists
+        existing_count = 0
+        existing = False
+        for s, c in kb.source_counts():
+            if normalize_source(s) == normalize_source(source_name):
+                existing = True
+                existing_count = c
+                break
+
+        chunk_count = kb.ingest_file(str(file_path), source_name=source_name, version_mode=version_mode)
         docs_text = " ".join(d.page_content for d in kb.all_docs if d.metadata.get("source", "").startswith(source_name.rsplit(".", 1)[0]))
         suggested = generate_suggested_questions(docs_text) if chunk_count > 0 else []
+
+        msg = f"已添加 {chunk_count} 个新片段" if chunk_count else "文件内容无变化，未新增片段"
         return IngestResponse(
             chunk_count=chunk_count, total_docs=kb.document_count,
-            message=f"已添加 {chunk_count} 个新片段" if chunk_count else "文件内容无变化，未新增片段",
+            message=msg,
             suggested_questions=suggested,
+            existing_version=existing,
+            version_count=existing_count,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
