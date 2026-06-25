@@ -92,7 +92,7 @@ describe('ChatArea', () => {
   it('renders the welcome message when no messages', () => {
     render(<ChatArea {...defaultProps} />)
 
-    expect(screen.getByText('知识库问答助手')).toBeInTheDocument()
+    expect(screen.getByText('工作区问答助手')).toBeInTheDocument()
     expect(screen.getByText(/上传文档或导入网页/)).toBeInTheDocument()
   })
 })

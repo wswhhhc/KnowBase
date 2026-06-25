@@ -90,7 +90,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
             </button>
             <button onClick={() => onNavigate('browser')}
               className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-              <BookOpen className="h-3 w-3" />浏览
+              <BookOpen className="h-3 w-3" />工作区
             </button>
             <button onClick={() => onNavigate('dashboard')}
               className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">

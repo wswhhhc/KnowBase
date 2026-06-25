@@ -140,7 +140,7 @@ describe('ChatArea interactions', () => {
 
   it('renders welcome message when no messages', () => {
     renderChatArea()
-    expect(screen.getByText('知识库问答助手')).toBeInTheDocument()
+    expect(screen.getByText('工作区问答助手')).toBeInTheDocument()
   })
 
   it('renders messages with citations', () => {
@@ -177,7 +177,7 @@ describe('ChatArea interactions', () => {
   it('nav pills call onNavigate', async () => {
     renderChatArea()
     // Browse nav pill
-    const browseBtn = screen.getByText('浏览')
+    const browseBtn = screen.getByText('工作区')
     await userEvent.click(browseBtn)
     expect(mockOnNavigate).toHaveBeenCalledWith('browser')
   })

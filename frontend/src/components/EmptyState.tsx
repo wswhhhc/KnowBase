@@ -18,9 +18,9 @@ export default function EmptyState() {
         <div className="mb-6">
           <span className="font-heading text-[140px] leading-none gradient-text select-none">K</span>
         </div>
-        <h2 className="font-heading text-3xl text-foreground mb-2 tracking-tight">知识库问答助手</h2>
+        <h2 className="font-heading text-3xl text-foreground mb-2 tracking-tight">工作区问答助手</h2>
         <p className="text-sm text-muted-foreground mb-10 max-w-md mx-auto">
-          上传文档或导入网页，让 AI 基于你的知识库回答问题
+          上传文档或导入网页，让 AI 基于你的工作区回答问题
         </p>
       </motion.div>
 
