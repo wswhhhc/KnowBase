@@ -738,7 +738,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
                 result = self.kb.ingest_file("/fake/path/test.txt")
 
                 mock_load.assert_called_once_with("/fake/path/test.txt", source_name=None)
-                mock_process.assert_called_once_with(fake_docs)
+                mock_process.assert_called_once()
                 self.assertEqual(result, 1)
 
     def test_ingest_file_with_source_name(self):

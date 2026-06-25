@@ -189,7 +189,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
           {sources.map((s) => (
             <div key={s.source} className="group flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-foreground/70 hover:bg-muted transition-colors">
               <span className="truncate flex-1">{s.source}</span>
-              <span className="text-[10px] text-muted-foreground mr-2 font-mono">{s.count}</span>
+              <span className="text-[10px] text-muted-foreground mr-2 font-mono">{s.count} 片段</span>
               <button
                 onClick={() => handleDeleteSource(s.source)}
                 className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"

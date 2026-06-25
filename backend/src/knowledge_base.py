@@ -264,8 +264,14 @@ class IngestionService:
         return [token.strip().lower() for token in jieba.lcut(text) if token.strip()]
 
     @staticmethod
-    def _prepare_splits(docs: list[Document]) -> list[Document]:
-        """Split documents and attach stable chunk metadata."""
+    def _prepare_splits(docs: list[Document], version_mode: str = "replace", version_label: str = "") -> list[Document]:
+        """Split documents and attach stable chunk metadata.
+
+        Args:
+            docs: Documents to split.
+            version_mode: "replace" or "append". Append mode sets version metadata.
+            version_label: Explicit version label (e.g. "v2"). Auto-generated if empty.
+        """
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=CHUNK_SIZE,
             chunk_overlap=CHUNK_OVERLAP,
@@ -288,17 +294,20 @@ class IngestionService:
                 current_heading[source] = first_line.lstrip("#").strip()
 
             source_type = split.metadata.get("source_type") or infer_source_type(split.metadata.get("source", ""))
-            split.metadata.update(
-                {
-                    "source": source,
-                    "source_type": source_type,
-                    "chunk_index": chunk_index,
-                    "content_hash": content_hash,
-                    "chunk_id": _chunk_id(source, chunk_index, content_hash),
-                    "section": current_heading.get(source, ""),
-                    "ingested_at": split.metadata.get("ingested_at", ingested_at),
-                }
-            )
+            meta = {
+                "source": source,
+                "source_type": source_type,
+                "chunk_index": chunk_index,
+                "content_hash": content_hash,
+                "chunk_id": _chunk_id(source, chunk_index, content_hash),
+                "section": current_heading.get(source, ""),
+                "ingested_at": split.metadata.get("ingested_at", ingested_at),
+            }
+            if version_mode == "append":
+                vl = version_label or f"v{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+                meta["version"] = vl
+                meta["version_ingested_at"] = ingested_at
+            split.metadata.update(meta)
 
         if ENABLE_CONTEXTUAL_RETRIEVAL:
             for split in splits:
@@ -314,10 +323,10 @@ class IngestionService:
 
         return splits
 
-    def _process_documents(self, docs: list[Document]) -> int:
+    def _process_documents(self, docs: list[Document], version_mode: str = "replace", version_label: str = "") -> int:
         """Split documents, store new chunks in Chroma, and extend BM25 incrementally."""
         self._ensure_loaded()
-        splits = self._prepare_splits(docs)
+        splits = self._prepare_splits(docs, version_mode=version_mode, version_label=version_label)
         new_splits = [
             doc
             for doc in splits
@@ -345,15 +354,7 @@ class IngestionService:
         return total
 
     def ingest_file(self, file_path: str, source_name: str | None = None, version_mode: str = "replace") -> int:
-        """Ingest a file and return the number of new chunks.
-
-        Args:
-            file_path: Path to the file to ingest.
-            source_name: Source identifier (defaults to filename).
-            version_mode: One of "replace" (remove old chunks for this source first),
-                          "append" (keep old chunks, add new ones),
-                          "skip" (only add if source doesn't exist yet).
-        """
+        """Ingest a file and return the number of new chunks."""
         docs = load_document(file_path, source_name=source_name)
         if source_name and version_mode == "skip":
             src_norm = normalize_source(source_name)
@@ -367,7 +368,21 @@ class IngestionService:
         if source_name and version_mode == "replace":
             self._replace_old_chunks(source_name, docs)
 
-        new_count = self._process_documents(docs)
+        vl = ""
+        if version_mode == "append":
+            existing_versions = set()
+            src_norm = normalize_source(source_name or "")
+            for d in self._all_docs:
+                if normalize_source(d.metadata.get("source", "")) == src_norm:
+                    v = d.metadata.get("version", "")
+                    if v:
+                        existing_versions.add(v)
+            next_v = 1
+            while f"v{next_v}" in existing_versions:
+                next_v += 1
+            vl = f"v{next_v}"
+
+        new_count = self._process_documents(docs, version_mode=version_mode, version_label=vl)
         return new_count
 
     def ingest_url(self, url: str, version_mode: str = "replace") -> int:
@@ -523,28 +538,39 @@ class Retriever:
     def source_counts(self) -> list[Tuple[str, int]]:
         """Return chunk counts by source file."""
         self._ingestion._ensure_loaded()
-        counts = Counter(
-            normalize_source(doc.metadata.get("source", "未知来源"))
-            for doc in self._all_docs
-        )
+        counts: Counter[str] = Counter()
+        for doc in self._all_docs:
+            src = normalize_source(doc.metadata.get("source", "未知来源"))
+            version = doc.metadata.get("version", "")
+            key = f"{src} ({version})" if version else src
+            counts[key] += 1
         return sorted(counts.items())
 
     def delete_source(self, source_name: str) -> int:
-        """Delete all chunks belonging to a source file.
+        """Delete all chunks belonging to a source file (and version if specified).
 
+        Supports ``"doc.txt"`` (all versions) or ``"doc.txt (v2)"`` (single version).
         Returns the number of chunks removed.
         """
         self._ingestion._ensure_loaded()
+        import re as _re
+        version_filter = None
+        m = _re.match(r"^(.+?)\s+\(v(\d+)\)$", source_name)
+        if m:
+            source_name = m.group(1).strip()
+            version_filter = f"v{m.group(2)}"
         source_name = normalize_source(source_name)
         before = sum(
             1
             for doc in self._all_docs
             if normalize_source(doc.metadata.get("source", "")) == source_name
+            and (version_filter is None or doc.metadata.get("version") == version_filter)
         )
         target_docs = [
             doc
             for doc in self._all_docs
             if normalize_source(doc.metadata.get("source", "")) == source_name
+            and (version_filter is None or doc.metadata.get("version") == version_filter)
         ]
         vector_ids = [
             IngestionService._vector_store_id(doc)
