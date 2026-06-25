@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from src.api.deps import verify_api_key
 from src.conversations import (
@@ -38,8 +38,8 @@ router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 @router.get("")
-async def list_all(workspace_id: str = "") -> list[BookmarkOut]:
-    return [BookmarkOut(**b) for b in list_bookmarks(workspace_id=workspace_id or None)]
+async def list_all(workspace_id: str | None = Query(None)) -> list[BookmarkOut]:
+    return [BookmarkOut(**b) for b in list_bookmarks(workspace_id=workspace_id)]
 
 
 @router.post("")

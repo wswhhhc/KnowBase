@@ -445,7 +445,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                         {chunk.page && <><span>·</span><span>第 {chunk.page} 页</span></>}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleChunkBookmark(chunk) }}
-                          className={`ml-auto ${bookmarkedChunks.has(chunk.chunk_id) ? 'text-amber-400' : 'text-muted-foreground/30 hover:text-amber-400'} transition-colors`}
+                          className={`ml-auto ${bookmarkedChunks.has(chunk.chunk_id) ? 'text-amber-400' : 'text-muted-foreground/20 hover:text-amber-400'} transition-colors`}
                           title={bookmarkedChunks.has(chunk.chunk_id) ? '已收藏' : '收藏此片段'}
                         >
                           {bookmarkedChunks.has(chunk.chunk_id) ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}

@@ -121,7 +121,7 @@ export interface Bookmark {
 }
 
 export const getBookmarks = (workspaceId?: string) => {
-  const params = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
+  const params = workspaceId !== undefined ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
   return req<Bookmark[]>(`/bookmarks${params}`)
 }
 

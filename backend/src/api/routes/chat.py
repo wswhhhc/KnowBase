@@ -137,6 +137,7 @@ def _persist_and_record(
     elapsed: int,
     pinned_chunk_ids: list[str] | None = None,
     excluded_chunk_ids: list[str] | None = None,
+    workspace_id: str = "",
 ) -> tuple[str, int]:
     """Persist conversation and metrics, returning (conv_id, assistant_msg_id)."""
     assistant_msg_id = 0
@@ -146,7 +147,7 @@ def _persist_and_record(
             conv_id = existing["id"]
         else:
             title = generate_title(question)
-            conv = create_conversation(title, thread_id=thread_id)
+            conv = create_conversation(title, thread_id=thread_id, workspace_id=workspace_id)
             conv_id = conv["id"]
         debug_dict = debug_info.model_dump()
         debug_dict["evidence_level"] = final_evidence_level
@@ -311,6 +312,7 @@ async def chat_stream(
                 elapsed=elapsed,
                 pinned_chunk_ids=body.pinned_chunk_ids,
                 excluded_chunk_ids=body.excluded_chunk_ids,
+                workspace_id=body.workspace_id,
             )
 
             yield {"event": "debug", "data": json.dumps(debug_info.model_dump())}

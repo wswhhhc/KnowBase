@@ -12,6 +12,7 @@ class ChatRequest(BaseModel):
     search_strategy: str = "balanced"
     pinned_chunk_ids: list[str] = Field(default_factory=list)
     excluded_chunk_ids: list[str] = Field(default_factory=list)
+    workspace_id: str = ""
 
 
 class ChatSource(BaseModel):
