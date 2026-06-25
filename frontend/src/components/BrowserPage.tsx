@@ -38,6 +38,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [bookmarkedChunks, setBookmarkedChunks] = useState<Set<string>>(new Set())
+  const [browserWsId, setBrowserWsId] = useState('')
   const pageSize = 50
 
   const handleChunkBookmark = async (chunk: KBChunk) => {
@@ -47,6 +48,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
         chunk_id: chunk.chunk_id,
         content: chunk.content.slice(0, 500),
         source: chunk.source,
+        workspace_id: browserWsId || undefined,
       })
       setBookmarkedChunks((prev) => new Set(prev).add(chunk.chunk_id))
     } catch (e) { toast.error('收藏失败', { description: String(e) }) }
@@ -386,6 +388,16 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                     {/* Decorative index bar */}
                     <div className="mt-2 h-0.5 w-full rounded-full bg-muted/30">
                       <div className="h-full rounded-full bg-primary/20" style={{ width: `${(chunk.content.length / (kbConfig?.chunk_size || 1000)) * 100}%` }} />
+                    </div>
+                    {/* Bookmark for slice view */}
+                    <div className="mt-1.5 flex items-center justify-end">
+                      <button
+                        onClick={() => handleChunkBookmark(chunk)}
+                        className={`${bookmarkedChunks.has(chunk.chunk_id) ? 'text-amber-400' : 'text-muted-foreground/20 hover:text-amber-400'} transition-colors`}
+                        title={bookmarkedChunks.has(chunk.chunk_id) ? '已收藏' : '收藏此片段'}
+                      >
+                        {bookmarkedChunks.has(chunk.chunk_id) ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
+                      </button>
                     </div>
                   </motion.div>
                 )

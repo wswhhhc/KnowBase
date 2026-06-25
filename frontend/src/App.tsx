@@ -34,6 +34,12 @@ function App() {
     setTimeout(() => chat.sendMessage(q, false, 'balanced'), 100)
   }, [chat])
 
+  // Sync workspaceId to chat hook
+  const syncWsId = useCallback((wsId: string) => {
+    setActiveWsId(wsId)
+    chat.setWorkspaceId(wsId)
+  }, [chat])
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background noise-overlay">
       <div
@@ -49,7 +55,7 @@ function App() {
           convRefreshKey={convRefreshKey}
           activeThreadId={activeThreadId}
           onLoadingMessages={setIsLoadingMessages}
-          onWorkspaceChange={setActiveWsId}
+          onWorkspaceChange={syncWsId}
         />
       </div>
 

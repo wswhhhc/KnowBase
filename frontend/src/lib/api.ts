@@ -294,6 +294,7 @@ export function chatStream(
   callbacks: ChatStreamCallbacks,
   pinnedChunkIds?: string[],
   excludedChunkIds?: string[],
+  workspaceId?: string,
 ): AbortController {
   const controller = new AbortController()
 
@@ -307,6 +308,7 @@ export function chatStream(
       search_strategy: searchStrategy,
       pinned_chunk_ids: pinnedChunkIds || [],
       excluded_chunk_ids: excludedChunkIds || [],
+      workspace_id: workspaceId || '',
     }),
     signal: controller.signal,
   })

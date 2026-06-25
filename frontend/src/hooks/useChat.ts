@@ -32,8 +32,8 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingNodes, setStreamingNodes] = useState<string[]>([])
-  // Per-conversation pinned sources: keyed by thread_id
   const [pinnedByConv, setPinnedByConv] = useState<Record<string, PinnedSource[]>>({})
+  const [workspaceId, setWorkspaceId] = useState('')
   const abortRef = useRef<AbortController | null>(null)
   const threadIdRef = useRef<string | null>(null)
 
@@ -181,6 +181,7 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
         callbacks,
         pinnedChunkIds,
         excludedChunkIds,
+        workspaceId,
       )
     },
     [isStreaming, pinnedByConv],
@@ -239,6 +240,8 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
     streamingNodes,
     pinnedSources: currentPinned,
     setPinnedSources: setCurrentPinned,
+    workspaceId,
+    setWorkspaceId,
     sendMessage,
     stopStreaming,
     clearMessages,
