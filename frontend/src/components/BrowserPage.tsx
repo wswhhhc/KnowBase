@@ -15,9 +15,10 @@ interface BrowserPageProps {
   onNavigate: (v: ViewType) => void
   highlightChunkId?: string | null
   onHighlightConsumed?: () => void
+  workspaceId?: string
 }
 
-export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, highlightChunkId, onHighlightConsumed }: BrowserPageProps) {
+export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, highlightChunkId, onHighlightConsumed, workspaceId }: BrowserPageProps) {
   const theme = useTheme()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [stats, setStats] = useState<KBStats | null>(null)
@@ -38,7 +39,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [bookmarkedChunks, setBookmarkedChunks] = useState<Set<string>>(new Set())
-  const [browserWsId, setBrowserWsId] = useState('')
+  const browserWsId = workspaceId || ''
   const pageSize = 50
 
   const handleChunkBookmark = async (chunk: KBChunk) => {

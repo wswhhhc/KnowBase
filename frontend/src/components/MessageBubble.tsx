@@ -76,9 +76,10 @@ interface MessageBubbleProps {
   onNavigateBrowser?: () => void
   pinnedSources?: PinnedSource[]
   onPinToggle?: (chunkId: string, action: 'pin' | 'unpin' | 'exclude' | 'unexclude') => void
+  workspaceId?: string
 }
 
-export default function MessageBubble({ message, prevMessage, threadId, onCitationClick, onSendQuestion, onNavigateBrowser, pinnedSources, onPinToggle }: MessageBubbleProps) {
+export default function MessageBubble({ message, prevMessage, threadId, onCitationClick, onSendQuestion, onNavigateBrowser, pinnedSources, onPinToggle, workspaceId }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const [sourceOpen, setSourceOpen] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -105,6 +106,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
     const convId = message.convId || threadId
     try {
       await api.createBookmark({
+        workspace_id: workspaceId || undefined,
         conversation_id: convId || '',
         message_id: message.assistantMsgId || 0,
         content: message.content.slice(0, 500),

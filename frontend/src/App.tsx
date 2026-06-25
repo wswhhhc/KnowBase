@@ -78,6 +78,7 @@ function App() {
             onNavigate={setActiveView}
             highlightChunkId={highlightChunkId}
             onHighlightConsumed={() => setHighlightChunkId(null)}
+            workspaceId={activeWsId}
           />
         )}
         {activeView === 'dashboard' && (

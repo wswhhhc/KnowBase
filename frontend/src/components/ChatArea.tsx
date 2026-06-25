@@ -174,6 +174,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                         ),
                       )
                     }}
+                    workspaceId={chat.workspaceId}
                   />
                 </motion.div>
               ))}
