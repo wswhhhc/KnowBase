@@ -18,7 +18,14 @@
 - 邻居 chunk 上下文补全 + 标题追踪
 - **热点追踪：** 知识库浏览页按被检索次数高亮显示热门片段
 - **深度阅读模式：** 切换知识库浏览为内容优先的深度阅读视图
-- **消息反馈** — ThumbsUp/ThumbsDown 调用后端 feedback 接口持久化存储
+- **消息反馈** — ThumbsUp/ThumbsDown 持结构化原因选择
+- **来源固定与排除** — 来源卡片支持固定和排除，跨消息状态保持
+- **重答与简洁模式** — 回答底部「重新回答」「更简洁」「继续追问」
+- **引用直达原文** — 点击 `[1]` 跳转知识库页高亮对应片段
+- **上传后建议问题** — 文档导入后 AI 生成可点击的示例问题
+- **首次使用引导** — 空状态显示三步路径（上传→提问→查看来源）
+- **无答案兜底** — 四种失败场景显示明确指导 + 快捷操作
+- **证据可信度解释** — 强/中/弱标签带 tooltip 解释证据构成
 - 知识库内容浏览（杂志藏书阁风格网格，支持分页）
 - **对话标题 LLM 自动生成：** 根据问题语义自动生成标题
 - 指标面板（编辑式数据看板，耗时分布/质量通过率/查询日志）
@@ -90,7 +97,7 @@ KnowBase/
 │   │   ├── metrics.py          # JSONL 日志
 │   │   ├── chat_utils.py       # 聊天路由辅助（标题生成/指标/NODE_LABELS）
 │   │   └── utils.py            # 工具函数（含流式上传）
-│   └── tests/                  # 22 个测试文件
+│   └── tests/                  # 22 个测试文件，377 个用例
 ├── frontend/                   # React + Vite + Tailwind 前端
 │   └── src/
 │       ├── components/
@@ -101,7 +108,7 @@ KnowBase/
 │       │   ├── BrowserPage.tsx # 知识库浏览
 │       │   └── DashboardPage.tsx # 指标面板
 │       ├── hooks/
-│       │   ├── useChat.ts      # SSE 流式聊天 hook（_finalizeStream 统一收尾）
+│       │   ├── useChat.ts      # SSE 流式聊天 hook（来源状态管理 + 重答）
 │       │   ├── useData.ts      # 数据管理 hook
 │       │   └── useTheme.ts     # 主题切换 hook
 │       └── lib/
@@ -127,7 +134,7 @@ KnowBase/
 
 ## 测试
 
-### 后端测试（Python unittest，368 个用例）
+### 后端测试（Python unittest，377 个用例）
 ```bash
 cd backend
 
@@ -144,7 +151,7 @@ uv run python -m unittest tests.test_knowledge_base -v    # 知识库测试
 uv run python -m unittest tests.test_conversations -v     # 对话管理测试
 ```
 
-### 前端测试（vitest，147 个用例）
+### 前端测试（vitest，149 个用例）
 ```bash
 cd frontend
 npm test               # 运行一次

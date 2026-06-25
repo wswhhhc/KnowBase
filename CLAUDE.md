@@ -55,7 +55,7 @@ KnowBase/
 │   │   ├── metrics.py          # 查询 JSONL 日志
 │   │   ├── chat_utils.py       # 节点标签/指标记录/标题生成
 │   │   └── utils.py            # 文件上传校验 + 唯一临时文件名
-│   └── tests/                  # 22 个测试文件，368 个用例
+│   └── tests/                  # 22 个测试文件，377 个用例
 ├── frontend/                   # React 19 + Vite + Tailwind
 │   └── src/
 │       ├── components/
@@ -112,9 +112,9 @@ KnowBase/
 
 ### 测试策略
 
-**后端**：Python unittest（368 个用例）。LLM mock 用 `FakeLLM`/`FakeResponse` + `unittest.mock.patch`，Chroma mock 用 patch 替换，SQLite 用 `tempfile.TemporaryDirectory` 隔离。`KnowledgeBase` 已重构为门面类 + IngestionService / Retriever / HotspotTracker，测试兼容性通过属性转发和实例方法委托保持。测试文件散列在 `tests/` 下，覆盖 graph、knowledge_base、conversations、api endpoints、loaders、utils、metrics、web_search、settings、edge cases 等模块。
+**后端**：Python unittest（377 个用例）。LLM mock 用 `FakeLLM`/`FakeResponse` + `unittest.mock.patch`，Chroma mock 用 patch 替换，SQLite 用 `tempfile.TemporaryDirectory` 隔离。含 SSE 手写类型漂移检测（test_sse_type_sync）、ChatRoute SSE 集成测试（7 种事件类型）。
 
-**前端**：vitest + @testing-library/react（147 个用例）。SSE 用 `ReadableStream` 模拟（含 CRLF 回归测试），mock 数据在 `src/test/mocks/data.ts`。覆盖 hooks、组件渲染、交互、API 客户端。
+**前端**：vitest + @testing-library/react（149 个用例）。SSE 用 `ReadableStream` 模拟（含 CRLF 回归测试），mock 数据在 `src/test/mocks/data.ts`。覆盖 hooks、组件渲染、交互、API 客户端。
 
 ```bash
 # 后端全部
