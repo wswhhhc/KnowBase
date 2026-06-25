@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
+import threading
 import weakref
 from functools import partial
 from typing import Generator, Iterable
@@ -39,18 +40,22 @@ logger = logging.getLogger(__name__)
 
 _GRAPH_CACHE: dict[int, tuple[weakref.ref, object]] = {}
 _CHECKPOINTER: SqliteSaver | None = None
+_CHECKPOINTER_LOCK = threading.Lock()
 
 
 def _init_checkpointer():
     global _CHECKPOINTER
     if _CHECKPOINTER is not None:
         return _CHECKPOINTER
-    db_dir = os.path.dirname(CHECKPOINT_DB_PATH)
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
-    conn = sqlite3.connect(CHECKPOINT_DB_PATH, check_same_thread=False)
-    _CHECKPOINTER = SqliteSaver(conn)
-    return _CHECKPOINTER
+    with _CHECKPOINTER_LOCK:
+        if _CHECKPOINTER is not None:
+            return _CHECKPOINTER
+        db_dir = os.path.dirname(CHECKPOINT_DB_PATH)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+        conn = sqlite3.connect(CHECKPOINT_DB_PATH, check_same_thread=False)
+        _CHECKPOINTER = SqliteSaver(conn)
+        return _CHECKPOINTER
 
 
 def build_graph(knowledge_base: KnowledgeBase):
