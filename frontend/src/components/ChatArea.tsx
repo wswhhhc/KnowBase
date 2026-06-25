@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { Button, ScrollArea, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Skeleton } from '@/components/ui'
 import { useChat } from '@/hooks/useChat'
+import type { PinnedSource } from '@/hooks/useChat'
 import { useTheme } from '@/hooks/useTheme'
 import EmptyState from './EmptyState'
 import type { Source } from '@/lib/api'
@@ -163,6 +164,16 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                     onCitationClick={onCitationClick}
                     onSendQuestion={onSendQuestion}
                     onNavigateBrowser={() => onNavigate('browser')}
+                    pinnedSources={chat.pinnedSources}
+                    onPinToggle={(chunkId, action) => {
+                      chat.setPinnedSources((prev: PinnedSource[]) =>
+                        prev.map((ps) =>
+                          ps.chunk_id === chunkId
+                            ? { ...ps, pinned: action === 'pin', excluded: action === 'exclude' }
+                            : ps,
+                        ),
+                      )
+                    }}
                   />
                 </motion.div>
               ))}

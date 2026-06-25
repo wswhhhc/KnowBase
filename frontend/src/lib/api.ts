@@ -63,10 +63,10 @@ export const renameConversation = (id: string, title: string) =>
 export const getMessages = (convId: string) =>
   req<Message[]>(`/conversations/${convId}/messages`)
 
-export const updateFeedback = (convId: string, msgId: number, feedback: string) =>
+export const updateFeedback = (convId: string, msgId: number, feedback: string, category?: string, detail?: string) =>
   req(`/conversations/${convId}/messages/${msgId}/feedback`, {
     method: 'POST',
-    body: JSON.stringify({ feedback }),
+    body: JSON.stringify({ feedback, category, detail }),
   })
 
 export const exportConversation = (convId: string) =>

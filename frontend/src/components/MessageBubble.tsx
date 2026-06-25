@@ -4,7 +4,7 @@ import { evidenceLabel } from '@/lib/utils'
 import DebugPanel from './DebugPanel'
 import * as api from '@/lib/api'
 import type { Source } from '@/lib/api'
-import type { ChatMessage } from '@/hooks/useChat'
+import type { ChatMessage, PinnedSource } from '@/hooks/useChat'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle, MessageSquare, ExternalLink, Upload } from 'lucide-react'
 
@@ -74,12 +74,17 @@ interface MessageBubbleProps {
   onCitationClick?: (source: Source) => void
   onSendQuestion?: (q: string) => void
   onNavigateBrowser?: () => void
+  pinnedSources?: PinnedSource[]
+  onPinToggle?: (chunkId: string, action: 'pin' | 'unpin' | 'exclude' | 'unexclude') => void
 }
 
-export default function MessageBubble({ message, prevMessage, threadId, onCitationClick, onSendQuestion, onNavigateBrowser }: MessageBubbleProps) {
+export default function MessageBubble({ message, prevMessage, threadId, onCitationClick, onSendQuestion, onNavigateBrowser, pinnedSources, onPinToggle }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const [sourceOpen, setSourceOpen] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackCategory, setFeedbackCategory] = useState<string | null>(null)
+  const [feedbackDetail, setFeedbackDetail] = useState('')
   const [exporting, setExporting] = useState(false)
 
   const isFirstAssistant = !isUser && prevMessage?.role === 'user'
@@ -175,15 +180,51 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                         className={`p-1 rounded transition-colors ${feedback === 'helpful' ? 'text-emerald-400' : 'text-muted-foreground/40 hover:text-emerald-400'}`}>
                         <ThumbsUp className="h-3 w-3" />
                       </button>
-                      <button onClick={async () => {
-                        setFeedback('unhelpful')
-                        if (message.convId && message.assistantMsgId) {
-                          try { await api.updateFeedback(message.convId, message.assistantMsgId, 'unhelpful') } catch (e) { console.error('反馈提交失败', e) }
-                        }
-                      }}
-                        className={`p-1 rounded transition-colors ${feedback === 'unhelpful' ? 'text-red-400' : 'text-muted-foreground/40 hover:text-red-400'}`}>
-                        <ThumbsDown className="h-3 w-3" />
-                      </button>
+                      <div className="relative">
+                        <button onClick={() => setFeedbackOpen(!feedbackOpen)}
+                          className={`p-1 rounded transition-colors ${feedback === 'unhelpful' ? 'text-red-400' : 'text-muted-foreground/40 hover:text-red-400'}`}>
+                          <ThumbsDown className="h-3 w-3" />
+                        </button>
+                        {feedbackOpen && (
+                          <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg border border-border bg-surface shadow-xl p-2.5 z-50">
+                            <p className="text-[10px] font-medium text-muted-foreground mb-2">请选择原因</p>
+                            <div className="space-y-1">
+                              {[
+                                { key: 'off_topic', label: '答非所问' },
+                                { key: 'insufficient_evidence', label: '证据不足' },
+                                { key: 'too_long', label: '回答太长' },
+                                { key: 'factual_error', label: '事实错误' },
+                                { key: 'other', label: '其他' },
+                              ].map((opt) => (
+                                <button
+                                  key={opt.key}
+                                  onClick={async () => {
+                                    setFeedbackCategory(opt.key)
+                                    setFeedback('unhelpful')
+                                    if (message.convId && message.assistantMsgId) {
+                                      try {
+                                        await api.updateFeedback(message.convId, message.assistantMsgId, 'unhelpful', opt.key, feedbackDetail || undefined)
+                                      } catch (e) { console.error('反馈提交失败', e) }
+                                    }
+                                    setFeedbackOpen(false)
+                                  }}
+                                  className={`block w-full text-left text-[11px] px-2 py-1.5 rounded transition-colors ${
+                                    feedbackCategory === opt.key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                            <input
+                              value={feedbackDetail}
+                              onChange={(e) => setFeedbackDetail(e.target.value)}
+                              placeholder="补充说明（可选）"
+                              className="mt-2 w-full text-[10px] px-2 py-1 rounded border border-border bg-background outline-none placeholder:text-muted-foreground/30"
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -206,14 +247,28 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                   </div>
                 )}
 
-                {/* Follow-up button for the whole answer */}
+                {/* Reroll / concise / follow-up */}
                 {message.outcome_category === 'success' && !message.streaming && message.content && (
-                  <button
-                    onClick={() => onSendQuestion?.(`关于上面的回答，请详细解释「${message.content.slice(0, 60)}」`)}
-                    className="mt-2 inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                  >
-                    <MessageSquare className="h-3 w-3" />继续追问
-                  </button>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      onClick={() => onSendQuestion?.(message.originalQuestion || message.content.slice(0, 60))}
+                      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                    >
+                      🔄 重新回答
+                    </button>
+                    <button
+                      onClick={() => onSendQuestion?.(`用一句话简洁回答：${message.originalQuestion || message.content.slice(0, 60)}`)}
+                      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                    >
+                      📝 更简洁
+                    </button>
+                    <button
+                      onClick={() => onSendQuestion?.(`关于上面的回答，请详细解释「${message.content.slice(0, 60)}」`)}
+                      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                    >
+                      <MessageSquare className="h-3 w-3" />继续追问
+                    </button>
+                  </div>
                 )}
 
                 {message.sources && message.sources.length > 0 && (
@@ -233,18 +288,31 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                       exit={{ opacity: 0, height: 0 }}
                       className="mt-2 space-y-2 overflow-hidden"
                     >
-                      {message.sources.map((s, i) => (
-                        <div key={i} className="source-card rounded-lg border border-border bg-surface/50 px-3.5 py-2.5">
+                      {[...message.sources].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((s, i) => {
+                        const ps = pinnedSources?.find((p) => p.chunk_id === s.chunk_id)
+                        const isExcluded = ps?.excluded
+                        const isPinned = ps?.pinned
+                        return (
+                        <div key={i} className={`source-card rounded-lg border px-3.5 py-2.5 transition-all ${
+                          isExcluded ? 'border-destructive/20 bg-destructive/5 opacity-50' : isPinned ? 'border-primary/30 bg-primary/5' : 'border-border bg-surface/50'
+                        }`}>
                           <div className="flex items-start justify-between gap-2">
-                            <span className="text-xs font-medium text-foreground/80 truncate">
+                            <span className="text-xs font-medium text-foreground/80 truncate flex items-center gap-1">
+                              <span className="text-[9px] text-muted-foreground/40 font-mono">#{s.index}</span>
                               {s.source}{s.chunk_index !== undefined ? ` #${s.chunk_index}` : ''}{s.page ? ` · p.${s.page}` : ''}
                             </span>
-                            {s.score != null && <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono">{s.score.toFixed(3)}</span>}
+                            {s.score != null && (
+                              <span className={`text-[10px] flex-shrink-0 font-mono ${
+                                s.score < 0.1 ? 'text-muted-foreground/30' : 'text-muted-foreground'
+                              }`}>
+                                {s.score < 0.1 && '相关性较低 '}{s.score.toFixed(4)}
+                              </span>
+                            )}
                           </div>
                           {s.url && <p className="text-[10px] text-primary/50 truncate mt-0.5">{s.url}</p>}
                           <p className="text-xs text-muted-foreground mt-1.5 line-clamp-3 leading-relaxed">{s.content}</p>
                           <div className="mt-1.5 flex items-center gap-2">
-                            {onCitationClick && (
+                            {onCitationClick && !isExcluded && (
                               <button
                                 onClick={() => onCitationClick?.(s)}
                                 className="inline-flex items-center gap-1 text-[9px] text-primary/50 hover:text-primary transition-colors"
@@ -252,7 +320,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                                 <ExternalLink className="h-2.5 w-2.5" />查看原文
                               </button>
                             )}
-                            {onSendQuestion && (
+                            {onSendQuestion && !isExcluded && (
                               <button
                                 onClick={() => onSendQuestion?.(`关于「${s.source}」中的内容，请详细解释`)}
                                 className="inline-flex items-center gap-1 text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
@@ -260,9 +328,29 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                                 <MessageSquare className="h-2.5 w-2.5" />追问
                               </button>
                             )}
+                            {onPinToggle && (
+                              <button
+                                onClick={() => onPinToggle?.(s.chunk_id || '', isPinned ? 'unpin' : 'pin')}
+                                className={`ml-auto inline-flex items-center gap-1 text-[9px] transition-colors ${
+                                  isPinned ? 'text-primary/70' : 'text-muted-foreground/30 hover:text-muted-foreground'
+                                }`}
+                              >
+                                📌 {isPinned ? '已固定' : '固定'}
+                              </button>
+                            )}
+                            {onPinToggle && (
+                              <button
+                                onClick={() => onPinToggle?.(s.chunk_id || '', isExcluded ? 'unexclude' : 'exclude')}
+                                className={`inline-flex items-center gap-1 text-[9px] transition-colors ${
+                                  isExcluded ? 'text-destructive/70' : 'text-muted-foreground/30 hover:text-muted-foreground'
+                                }`}
+                              >
+                                ✕ {isExcluded ? '已排除' : '排除'}
+                              </button>
+                            )}
                           </div>
                         </div>
-                      ))}
+                      )})}
                     </motion.div>
                   )}
                 </AnimatePresence>

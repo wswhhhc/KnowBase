@@ -52,6 +52,8 @@ function createChat(overrides?: any) {
     stopStreaming: mockStopStreaming,
     clearMessages: mockClearMessages,
     loadMessages: mockLoadMessages,
+    pinnedSources: [] as any[],
+    setPinnedSources: vi.fn(),
     threadId: null,
     ...overrides,
   }

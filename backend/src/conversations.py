@@ -48,6 +48,14 @@ def init_db():
         conn.execute("ALTER TABLE messages ADD COLUMN debug_info TEXT DEFAULT '{}'")
     except sqlite3.OperationalError:
         pass  # 列已存在
+    try:
+        conn.execute("ALTER TABLE messages ADD COLUMN feedback_category TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE messages ADD COLUMN feedback_detail TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -221,7 +229,7 @@ def list_assistant_debug_pairs() -> list[dict]:
     return pairs
 
 
-def update_feedback(msg_row_id: int, feedback: str, conv_id: str | None = None) -> bool:
+def update_feedback(msg_row_id: int, feedback: str, conv_id: str | None = None, category: str | None = None, detail: str | None = None) -> bool:
     """Update feedback for a message. Optionally verify it belongs to the given conversation."""
     conn = _get_conn()
     if conv_id:
@@ -231,7 +239,10 @@ def update_feedback(msg_row_id: int, feedback: str, conv_id: str | None = None) 
         if not row:
             conn.close()
             return False
-    cursor = conn.execute("UPDATE messages SET feedback = ? WHERE id = ?", (feedback, msg_row_id))
+    cursor = conn.execute(
+        "UPDATE messages SET feedback = ?, feedback_category = ?, feedback_detail = ? WHERE id = ?",
+        (feedback, category, detail, msg_row_id),
+    )
     conn.commit()
     conn.close()
     return cursor.rowcount > 0

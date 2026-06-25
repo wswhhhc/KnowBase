@@ -64,6 +64,8 @@ describe('ChatArea', () => {
       stopStreaming: vi.fn(),
       clearMessages: vi.fn(),
       loadMessages: vi.fn(),
+      pinnedSources: [] as any[],
+      setPinnedSources: vi.fn(),
       threadId: null,
     },
     onOpenSidebar: vi.fn(),

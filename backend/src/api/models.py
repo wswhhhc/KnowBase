@@ -48,6 +48,8 @@ class MessageOut(BaseModel):
 
 class MessageFeedback(BaseModel):
     feedback: str
+    category: str | None = None
+    detail: str | None = None
 
 
 class ExportOut(BaseModel):

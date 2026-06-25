@@ -65,7 +65,7 @@ async def list_messages(conv_id: str) -> list[MessageOut]:
 
 @router.post("/{conv_id}/messages/{msg_id}/feedback")
 async def feedback(conv_id: str, msg_id: int, body: MessageFeedback):
-    if not update_feedback(msg_id, body.feedback, conv_id=conv_id):
+    if not update_feedback(msg_id, body.feedback, conv_id=conv_id, category=body.category, detail=body.detail):
         raise HTTPException(404, "消息不存在")
     return {"ok": True}
 

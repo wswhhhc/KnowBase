@@ -16,12 +16,27 @@ export interface ChatMessage {
   convId?: string
   /** Message row ID from backend, set on SSE done */
   assistantMsgId?: number
+  /** The original question text that produced this answer (for reroll) */
+  originalQuestion?: string
+  /** Feedback category restored from backend */
+  feedbackCategory?: string
+}
+
+export interface PinnedSource {
+  chunk_id: string
+  source: string
+  content: string
+  pinned: boolean
+  excluded: boolean
+  score: number
+  index: number
 }
 
 export function useChat(onNewConversation?: (threadId: string) => void) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingNodes, setStreamingNodes] = useState<string[]>([])
+  const [pinnedSources, setPinnedSources] = useState<PinnedSource[]>([])
   const abortRef = useRef<AbortController | null>(null)
   const threadIdRef = useRef<string | null>(null)
 
@@ -31,7 +46,7 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
   }, [])
 
   const sendMessage = useCallback(
-    (question: string, webSearchEnabled: boolean, searchStrategy: string) => {
+    (question: string, webSearchEnabled: boolean, searchStrategy: string, extraSources?: Source[]) => {
       if (isStreaming) return
 
       setIsStreaming(true)
@@ -47,6 +62,7 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
         role: 'assistant',
         content: '',
         streaming: true,
+        originalQuestion: question,
       }
 
       setMessages((prev) => [...prev, userMsg, assistantMsg])
@@ -106,6 +122,22 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
                 : m,
             ),
           )
+          // Merge new sources into pinnedSources
+          setPinnedSources((prev) => {
+            const prevIds = new Set(prev.map((ps) => ps.chunk_id))
+            const newEntries: PinnedSource[] = (data.sources || [])
+              .filter((s: any) => s.chunk_id && !prevIds.has(s.chunk_id))
+              .map((s: any) => ({
+                chunk_id: s.chunk_id,
+                source: s.source || '',
+                content: s.content || '',
+                pinned: false,
+                excluded: false,
+                score: s.score ?? 0,
+                index: s.index ?? 0,
+              }))
+            return newEntries.length > 0 ? [...prev, ...newEntries] : prev
+          })
           _finalizeStream()
           if (isNew) onNewConversation?.(data.thread_id)
         },
@@ -145,12 +177,32 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
     abortRef.current?.abort()
     abortRef.current = null
     setMessages([])
+    setPinnedSources([])
     _finalizeStream()
     threadIdRef.current = null
   }, [_finalizeStream])
 
   const loadMessages = useCallback((msgs: ChatMessage[], threadId?: string) => {
     setMessages(msgs)
+    // Restore pinned sources from loaded messages
+    const allSources = msgs.flatMap((m) => m.sources || [])
+    const seen = new Set<string>()
+    const restored: PinnedSource[] = []
+    for (const s of allSources) {
+      if (s.chunk_id && !seen.has(s.chunk_id)) {
+        seen.add(s.chunk_id)
+        restored.push({
+          chunk_id: s.chunk_id,
+          source: s.source || '',
+          content: s.content || '',
+          pinned: false,
+          excluded: false,
+          score: s.score ?? 0,
+          index: s.index ?? 0,
+        })
+      }
+    }
+    setPinnedSources(restored)
     threadIdRef.current = threadId || null
   }, [])
 
@@ -158,6 +210,8 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
     messages,
     isStreaming,
     streamingNodes,
+    pinnedSources,
+    setPinnedSources,
     sendMessage,
     stopStreaming,
     clearMessages,
