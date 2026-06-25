@@ -47,7 +47,7 @@ KnowBase/
 │   │   ├── api/                # FastAPI 路由层（main / deps / models / routes/*）
 │   │   ├── graph.py            # LangGraph 工作流（图定义 + 全部节点）
 │   │   ├── graph_state.py      # GraphState TypedDict + Pydantic 决策模型
-│   │   ├── knowledge_base.py   # Chroma 向量库 + jieba BM25 + RRF 融合
+│   │   ├── knowledge_base.py   # 门面类，拆分 IngestionService / Retriever / HotspotTracker
 │   │   ├── kb_models.py        # 检索结果数据类和 helper
 │   │   ├── conversations.py    # 对话 CRUD（SQLite 持久化）
 │   │   ├── loaders.py          # 多格式文档加载器（txt/md/pdf/docx/html + URL）
@@ -58,9 +58,11 @@ KnowBase/
 │   └── tests/                  # 22 个测试文件，368 个用例
 ├── frontend/                   # React 19 + Vite + Tailwind
 │   └── src/
-│       ├── components/         # ChatArea / Sidebar / BrowserPage / DashboardPage + ui/
+│       ├── components/
+│       │   ├── sidebar/        # ConversationList / DocumentPanel / KBSummary
+│       │   ├── ChatArea / Sidebar / BrowserPage / DashboardPage + ui/
 │       ├── hooks/              # useChat（SSE 流式）/ useData / useTheme
-│       └── lib/                # api.ts（全量 API 客户端）/ utils.ts
+│       └── lib/                # api.ts（SSEParser + 全量 API 客户端）/ utils.ts
 ├── config/                     # 共享配置（pydantic-settings）
 ├── data/                       # chroma_db / checkpoints.db / conversations.db / logs
 └── docs/
@@ -100,20 +102,20 @@ KnowBase/
 
 ### 关键约定
 
-- 包管理用 `uv`，不用 pip。`.env` 放在 `backend/.env`。
+- 包管理用 `uv`，不用 pip。`.env` 放在 `backend/.env`。启动靠 `uv run`，无需手动 `sys.path.insert`。
 - `backend/config/settings.py` 是唯一配置入口，pydantic-settings 驱动。`CHROMA_API_KEY` 回退作为 `SILICONFLOW_API_KEY`。
 - LLM 和 embedding 都通过硅基流动 OpenAI-compatible API 调用。
 - Chroma 持久化在 `data/chroma_db/`；对话在 `data/conversations.db`；checkpoints 在 `data/checkpoints.db`。
-- API Key 鉴权：`deps.py` 提供 `verify_api_key` 依赖，`API_KEY` 空值时跳过（本地开发无感）。
+- API Key 鉴权：`deps.py` 提供 `verify_api_key` 依赖，`API_KEY` 空值时跳过（本地开发无感）。`load_preset_documents` 在 `lifespan` 中执行，不再耦合在依赖注入中。
 - Tavily 为可选依赖，未配 Key 时不显示在 UI 中。
 - 搜索策略：`fast`（无 rerank）、`balanced`（默认、条件 rerank）、`high_quality`（必走 rerank）。
-- 前端 `api.ts` 自动带 Authorization 头，后端所有写操作 + 读操作端点均受鉴权保护。
+- 前端 `api.ts` 包含 `SSEParser`（支持 CRLF/CR）和 `createChatStreamAdapter`，`api.ts` 自动带 Authorization 头，后端所有写操作 + 读操作端点均受鉴权保护。
 
 ### 测试策略
 
-**后端**：Python unittest（368 个用例）。LLM mock 用 `FakeLLM`/`FakeResponse` + `unittest.mock.patch`，Chroma mock 用 patch 替换，SQLite 用 `tempfile.TemporaryDirectory` 隔离。测试文件散列在 `tests/` 下，覆盖 graph、knowledge_base、conversations、api endpoints、loaders、utils、metrics、web_search、settings、edge cases 等模块。
+**后端**：Python unittest（368 个用例）。LLM mock 用 `FakeLLM`/`FakeResponse` + `unittest.mock.patch`，Chroma mock 用 patch 替换，SQLite 用 `tempfile.TemporaryDirectory` 隔离。`KnowledgeBase` 已重构为门面类 + IngestionService / Retriever / HotspotTracker，测试兼容性通过属性转发和实例方法委托保持。测试文件散列在 `tests/` 下，覆盖 graph、knowledge_base、conversations、api endpoints、loaders、utils、metrics、web_search、settings、edge cases 等模块。
 
-**前端**：vitest + @testing-library/react（147 个用例）。SSE 用 `ReadableStream` 模拟，mock 数据在 `src/test/mocks/data.ts`。覆盖 hooks、组件渲染、交互、API 客户端。
+**前端**：vitest + @testing-library/react（147 个用例）。SSE 用 `ReadableStream` 模拟（含 CRLF 回归测试），mock 数据在 `src/test/mocks/data.ts`。覆盖 hooks、组件渲染、交互、API 客户端。
 
 ```bash
 # 后端全部

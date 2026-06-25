@@ -71,18 +71,18 @@ KnowBase/
 │   │   └── settings.py         # pydantic-settings 配置
 │   ├── src/
 │   │   ├── api/                # REST API 路由层
-│   │   │   ├── main.py         # 应用入口 + CORS
-│   │   │   ├── deps.py         # 依赖注入（含 API Key 鉴权）
-│   │   │   ├── models.py       # Pydantic 模型
+│   │   │   ├── main.py         # 应用入口 + CORS + lifespan（预设文档加载）
+│   │   │   ├── deps.py         # 依赖注入（lru_cache 单例 KnowledgeBase）
+│   │   │   ├── models.py       # Pydantic 模型（Field(default_factory=...)）
 │   │   │   └── routes/
-│   │   │       ├── chat.py           # SSE 流式聊天
+│   │   │       ├── chat.py           # SSE 流式聊天（抽离 _accumulate_node_debug / _persist_and_record）
 │   │   │       ├── conversations.py  # 对话 CRUD
 │   │   │       ├── documents.py      # 文档上传/URL导入
 │   │   │       ├── knowledge_base.py # 知识库浏览
 │   │   │       └── metrics.py        # 查询日志
 │   │   ├── graph.py            # LangGraph 工作流
 │   │   ├── graph_state.py      # 工作流状态/Pydantic 模型
-│   │   ├── knowledge_base.py   # Chroma + BM25 核心
+│   │   ├── knowledge_base.py   # 门面类，内拆 IngestionService / Retriever / HotspotTracker
 │   │   ├── kb_models.py        # 检索结果/FusionScore/helper
 │   │   ├── conversations.py    # 对话管理模块
 │   │   ├── loaders.py          # 文档加载器
@@ -94,17 +94,18 @@ KnowBase/
 ├── frontend/                   # React + Vite + Tailwind 前端
 │   └── src/
 │       ├── components/
+│       │   ├── sidebar/        # ConversationList / DocumentPanel / KBSummary
 │       │   ├── ui/             # shadcn/ui 组件
 │       │   ├── ChatArea.tsx    # 对话界面
-│       │   ├── Sidebar.tsx     # 侧栏导航
+│       │   ├── Sidebar.tsx     # 侧栏导航（布局 + 视图切换）
 │       │   ├── BrowserPage.tsx # 知识库浏览
 │       │   └── DashboardPage.tsx # 指标面板
 │       ├── hooks/
-│       │   ├── useChat.ts      # SSE 流式聊天 hook
+│       │   ├── useChat.ts      # SSE 流式聊天 hook（_finalizeStream 统一收尾）
 │       │   ├── useData.ts      # 数据管理 hook
 │       │   └── useTheme.ts     # 主题切换 hook
 │       └── lib/
-│           ├── api.ts          # API 客户端
+│           ├── api.ts          # API 客户端 + SSEParser + createChatStreamAdapter
 │           └── utils.ts        # 工具函数
 ├── docs/
 │   └── tests/                  # 测试文档：单元/集成/冒烟/P2边缘/接口/验收/缺陷/报告
