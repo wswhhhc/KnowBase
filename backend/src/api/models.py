@@ -128,3 +128,26 @@ class DebugInfo(BaseModel):
     retry_count: int = 0
     used_web_search: bool = False
     web_results_count: int = 0
+
+
+class SourceOut(BaseModel):
+    """Document source summary returned by GET /api/documents/sources."""
+
+    source: str
+    count: int
+
+
+class HotspotEntry(BaseModel):
+    """Hot chunk entry returned by GET /api/knowledge-base/hotspots."""
+
+    chunk_id: str
+    source: str
+    hits: int
+    content_preview: str
+
+
+class KBConfig(BaseModel):
+    """Knowledge base configuration returned by GET /api/knowledge-base/config."""
+
+    chunk_size: int
+    chunk_overlap: int

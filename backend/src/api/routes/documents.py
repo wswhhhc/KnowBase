@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from src.api.deps import get_knowledge_base, verify_api_key
-from src.api.models import IngestResponse, URLIngestRequest
+from src.api.models import IngestResponse, URLIngestRequest, SourceOut
 from src.knowledge_base import KnowledgeBase
 from src.utils import save_uploaded_file
 
@@ -15,8 +15,8 @@ router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 @router.get("/sources")
-async def list_sources(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[dict]:
-    return [{"source": s, "count": c} for s, c in kb.source_counts()]
+async def list_sources(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[SourceOut]:
+    return [SourceOut(source=s, count=c) for s, c in kb.source_counts()]
 
 
 @router.post("/upload")

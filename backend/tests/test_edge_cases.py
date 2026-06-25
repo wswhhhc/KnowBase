@@ -28,7 +28,11 @@ class FakeKnowledgeBase:
         self.doc_by_id: dict = {}
 
     def _ensure_loaded(self):
-        if not self._loaded:
+        pass  # no-op; all_docs is populated in __init__ below
+
+    def ensure_all_docs_populated(self):
+        """Backwards compat — populate docs on first stats/chunks call."""
+        if not self.all_docs:
             self.all_docs = [
                 Document(
                     page_content="chunk A",
@@ -56,9 +60,9 @@ class FakeKnowledgeBase:
                 ),
             ]
             self.doc_by_id = {d.metadata["chunk_id"]: d for d in self.all_docs}
-            self._loaded = True
 
     def source_counts(self):
+        self.ensure_all_docs_populated()
         return [("doc.txt", 2), ("other.txt", 1)]
 
     @property
@@ -159,6 +163,7 @@ class APIEdgeCaseTests(unittest.TestCase):
 
     def test_pagination_skip_zero(self):
         fake = FakeKnowledgeBase()
+        fake.ensure_all_docs_populated()
         app.dependency_overrides[get_knowledge_base] = lambda: fake
         client = TestClient(app)
         try:
@@ -172,6 +177,7 @@ class APIEdgeCaseTests(unittest.TestCase):
 
     def test_pagination_skip_beyond_total(self):
         fake = FakeKnowledgeBase()
+        fake.ensure_all_docs_populated()
         app.dependency_overrides[get_knowledge_base] = lambda: fake
         client = TestClient(app)
         try:
@@ -185,6 +191,7 @@ class APIEdgeCaseTests(unittest.TestCase):
 
     def test_pagination_partial_last_page(self):
         fake = FakeKnowledgeBase()
+        fake.ensure_all_docs_populated()
         app.dependency_overrides[get_knowledge_base] = lambda: fake
         client = TestClient(app)
         try:

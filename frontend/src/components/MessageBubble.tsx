@@ -183,7 +183,7 @@ export default function MessageBubble({ message, prevMessage, threadId }: Messag
                             <span className="text-xs font-medium text-foreground/80 truncate">
                               {s.source}{s.chunk_index !== undefined ? ` #${s.chunk_index}` : ''}{s.page ? ` · p.${s.page}` : ''}
                             </span>
-                            {s.score !== undefined && <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono">{s.score.toFixed(3)}</span>}
+                            {s.score != null && <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono">{s.score.toFixed(3)}</span>}
                           </div>
                           {s.url && <p className="text-[10px] text-primary/50 truncate mt-0.5">{s.url}</p>}
                           <p className="text-xs text-muted-foreground mt-1.5 line-clamp-3 leading-relaxed">{s.content}</p>

@@ -43,6 +43,7 @@ from src.kb_models import (
     document_chunk_id as _document_chunk_id,
 )
 from src.loaders import load_document
+from src.api.models import HotspotEntry
 
 
 def rrf_fuse(
@@ -628,57 +629,27 @@ class KnowledgeBase:
         return self.ingestion.load_preset_documents()
 
     def ingest_file(self, file_path: str, source_name: str | None = None) -> int:
-        """Ingest a file and sync facade state, returning the number of new chunks."""
-        docs = load_document(file_path, source_name=source_name)
-        new_count = self._process_documents(docs)
-        if source_name:
-            self._replace_old_chunks(source_name, docs)
-        self.all_docs[:] = self.ingestion._all_docs[:]
-        self.doc_by_id.update(self.ingestion._doc_by_id)
-        self.existing_chunk_ids.update(self.ingestion._existing_chunk_ids)
-        return new_count
+        return self.ingestion.ingest_file(file_path, source_name=source_name)
 
     def ingest_url(self, url: str) -> int:
-        """Fetch a public URL and ingest its content."""
-        from src.loaders import load_url
-
-        docs = load_url(url)
-        new_count = self._process_documents(docs)
-        self._replace_old_chunks(url, docs)
-        self.all_docs[:] = self.ingestion._all_docs[:]
-        self.doc_by_id.update(self.ingestion._doc_by_id)
-        self.existing_chunk_ids.update(self.ingestion._existing_chunk_ids)
-        return new_count
+        return self.ingestion.ingest_url(url)
 
     def add_document(self, file_path: str) -> int:
-        result = self.ingestion.add_document(file_path)
-        self.all_docs[:] = self.ingestion._all_docs[:]
-        self.doc_by_id.update(self.ingestion._doc_by_id)
-        self.existing_chunk_ids.update(self.ingestion._existing_chunk_ids)
-        return result
+        return self.ingestion.add_document(file_path)
 
     def delete_source(self, source_name: str) -> int:
         return self.retriever.delete_source(source_name)
 
     def clear(self):
-        """Clear all persisted and in-memory knowledge base state."""
         self.vector_store.delete_collection()
         self.vector_store = self._init_vector_store()
         self.retriever.vector_store = self.vector_store
         self.ingestion.vector_store = self.vector_store
-        self.all_docs.clear()
-        self.doc_by_id.clear()
-        self.existing_chunk_ids.clear()
-        self._bm25_corpus_list.clear()
-        self._bm25_ref[0] = None
-        self._loaded = False
-        self.hit_counter.clear()
-        self._hotspot_dirty = True
-        self._save_hotspots()
+        self.retriever.clear()
 
     def get_hotspots(self, top_n: int = 50) -> List[dict]:
-        self._ensure_loaded()
-        return self.hotspots.get_hotspots(top_n, self.doc_by_id)
+        raw = self.hotspots.get_hotspots(top_n, self.doc_by_id)
+        return [HotspotEntry(**entry) for entry in raw]
 
     @property
     def document_count(self) -> int:
@@ -686,104 +657,3 @@ class KnowledgeBase:
 
     def source_counts(self) -> List[Tuple[str, int]]:
         return self.retriever.source_counts()
-
-    # -- Static method delegates for test compatibility --
-    @staticmethod
-    def _tokenize(text: str) -> List[str]:
-        return IngestionService._tokenize(text)
-
-    @staticmethod
-    def _prepare_splits(docs: List[Document]) -> List[Document]:
-        return IngestionService._prepare_splits(docs)
-
-    @staticmethod
-    def _documents_from_chroma_result(result: dict) -> List[Document]:
-        return IngestionService._documents_from_chroma_result(result)
-
-    @staticmethod
-    def _vector_store_id(doc: Document) -> str:
-        return IngestionService._vector_store_id(doc)
-
-    # -- Instance method delegates for test compatibility --
-    def _rebuild_all(self):
-        self.ingestion._all_docs[:] = self.all_docs[:]
-        self.ingestion._rebuild_all()
-
-    def _ensure_loaded(self):
-        self.ingestion._ensure_loaded()
-        self.all_docs[:] = self.ingestion._all_docs[:]
-        self.doc_by_id.update(self.ingestion._doc_by_id)
-        self.existing_chunk_ids.update(self.ingestion._existing_chunk_ids)
-
-    def _extend_bm25(self, new_docs: List[Document]) -> None:
-        self.ingestion._all_docs[:] = self.all_docs[:]
-        self.ingestion._extend_bm25(new_docs)
-
-    def _load_hotspots(self):
-        self.hotspots._load_hotspots()
-
-    def _save_hotspots(self):
-        self.hotspots._save_hotspots()
-
-    def _process_documents(self, docs: List[Document]) -> int:
-        result = self.ingestion._process_documents(docs)
-        # Sync facade's shared list references after ingestion mutated them
-        self.all_docs[:] = self.ingestion._all_docs[:]
-        self.doc_by_id.update(self.ingestion._doc_by_id)
-        self.existing_chunk_ids.update(self.ingestion._existing_chunk_ids)
-        return result
-
-    def _replace_old_chunks(self, source_name: str, new_docs: list[Document]) -> None:
-        self.ingestion._replace_old_chunks(source_name, new_docs)
-        self.all_docs[:] = self.ingestion._all_docs[:]
-        self.doc_by_id.update(self.ingestion._doc_by_id)
-        self.existing_chunk_ids.update(self.ingestion._existing_chunk_ids)
-
-    # -- Property forwarding for test compatibility --
-    @property
-    def _loaded(self) -> bool:
-        return self.ingestion._loaded
-
-    @_loaded.setter
-    def _loaded(self, value: bool):
-        self.ingestion._loaded = value
-
-    @property
-    def bm25_index(self):
-        return self._bm25_ref[0]
-
-    @bm25_index.setter
-    def bm25_index(self, value):
-        self._bm25_ref[0] = value
-
-    @property
-    def _bm25_corpus(self) -> List[List[str]]:
-        return self._bm25_corpus_list
-
-    @_bm25_corpus.setter
-    def _bm25_corpus(self, value: List[List[str]]):
-        self._bm25_corpus_list[:] = value
-
-    @property
-    def hit_counter(self) -> dict[str, int]:
-        return self.hotspots.hit_counter
-
-    @hit_counter.setter
-    def hit_counter(self, value: dict[str, int]):
-        self.hotspots.hit_counter = value
-
-    @property
-    def _hotspot_path(self) -> Path:
-        return self.hotspots._hotspot_path
-
-    @_hotspot_path.setter
-    def _hotspot_path(self, value: Path):
-        self.hotspots._hotspot_path = value
-
-    @property
-    def _hotspot_dirty(self) -> bool:
-        return self.hotspots._hotspot_dirty
-
-    @_hotspot_dirty.setter
-    def _hotspot_dirty(self, value: bool):
-        self.hotspots._hotspot_dirty = value

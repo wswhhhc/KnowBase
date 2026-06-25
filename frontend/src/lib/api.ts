@@ -1,108 +1,19 @@
-export interface Source {
-  index: number
-  source: string
-  chunk_index?: number
-  page?: number
-  score?: number
-  content: string
-  url?: string
-}
+import type {
+  Source, Conversation, ApiMessage, KBStats, QueryLogEntry,
+  DebugNodeInfo, DebugInfo, DocSource, HotspotEntry, KBConfig, IngestResponse,
+} from './api-types.generated'
 
-export interface Conversation {
-  id: string
-  thread_id: string
-  title: string
-  created_at: string
-  updated_at: string
-}
+export type { Source, Conversation, KBStats, QueryLogEntry, DebugNodeInfo, DebugInfo, DocSource, HotspotEntry, KBConfig, IngestResponse }
+import type { KBChunk } from './api-types.generated'
+export type { KBChunk }
 
-export interface Message {
-  id: number
+export interface Message extends ApiMessage {
   role: 'user' | 'assistant'
-  content: string
-  sources: Source[]
-  quality_reason: string
-  debug_info?: Record<string, unknown>
-  feedback?: string | null
-  created_at: string
-}
-
-export interface DocSource {
-  source: string
-  count: number
-}
-
-export interface KBStats {
-  chunk_count: number
-  source_count: number
-  total_chars: number
-}
-
-export interface KBChunk {
-  source: string
-  chunk_index: number
-  chunk_id: string
-  page: number | null
-  content: string
-  original_content: string | null
-  section: string | null
 }
 
 export interface KBChunkResponse {
   items: KBChunk[]
   total: number
-}
-
-export interface HotspotEntry {
-  chunk_id: string
-  source: string
-  hits: number
-  content_preview: string
-}
-
-export interface KBConfig {
-  chunk_size: number
-  chunk_overlap: number
-}
-
-export interface QueryLogEntry {
-  timestamp: string
-  thread_id: string
-  question: string
-  elapsed_ms: number
-  retrieval_count: number
-  quality_ok: boolean
-  quality_reason: string
-  used_web_search: boolean | null
-  used_rerank: boolean | null
-  question_type: string
-  retry_count: number
-  source_count: number
-  answer_preview: string
-  error: string
-}
-
-export interface DebugNodeInfo {
-  name: string
-  label: string
-  elapsed_ms: number
-  summary: string
-}
-
-export interface DebugInfo {
-  nodes: DebugNodeInfo[]
-  rewritten_question: string
-  retrieval_k: number
-  candidates_before: number
-  candidates_after: number
-  after_rerank: number
-  used_rerank: boolean
-  used_rewrite: boolean
-  quality_passed: boolean
-  quality_reason: string
-  retry_count: number
-  used_web_search: boolean
-  web_results_count: number
 }
 
 const BASE = '/api'

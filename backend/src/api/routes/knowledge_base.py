@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from src.api.deps import get_knowledge_base, verify_api_key
-from src.api.models import KBChunk, KBStats
+from src.api.models import KBChunk, KBStats, HotspotEntry, KBConfig
 from src.kb_models import normalize_source
 from src.knowledge_base import KnowledgeBase
 from config.settings import CHUNK_SIZE, CHUNK_OVERLAP
@@ -15,10 +15,10 @@ router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 @router.get("/stats")
 async def stats(kb: KnowledgeBase = Depends(get_knowledge_base)) -> KBStats:
-    kb._ensure_loaded()
+    sources = kb.source_counts()
     return KBStats(
-        chunk_count=kb.document_count,
-        source_count=len(kb.source_counts()),
+        chunk_count=sum(c for _, c in sources),
+        source_count=len(sources),
         total_chars=sum(len(d.page_content) for d in kb.all_docs),
     )
 
@@ -29,7 +29,6 @@ async def chunks(
     skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> dict:
-    kb._ensure_loaded()
     docs = kb.all_docs
     if source:
         docs = [d for d in docs if d.metadata.get("source", "") == normalize_source(source)]
@@ -61,11 +60,10 @@ async def list_source_names(kb: KnowledgeBase = Depends(get_knowledge_base)) -> 
 
 
 @router.get("/config")
-async def kb_config() -> dict:
-    return {"chunk_size": CHUNK_SIZE, "chunk_overlap": CHUNK_OVERLAP}
+async def kb_config() -> KBConfig:
+    return KBConfig(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
 
 
 @router.get("/hotspots")
-async def hotspots(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[dict]:
-    kb._ensure_loaded()
+async def hotspots(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[HotspotEntry]:
     return kb.get_hotspots()

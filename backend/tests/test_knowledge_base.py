@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch, call
 from langchain_core.documents import Document
 
 from src.knowledge_base import (
+    IngestionService,
     KnowledgeBase,
     rrf_fuse,
 )
@@ -37,9 +38,9 @@ class NeighborChunksTests(unittest.TestCase):
         }
         mock_chroma.return_value = self.mock_chroma_instance
         self.kb = KnowledgeBase()
-        self.kb._loaded = True
+        self.kb.ingestion._loaded = True
 
-        self.kb.all_docs = [
+        self.kb.all_docs[:] = [
             Document(
                 page_content="chunk0",
                 metadata={"source": "doc.txt", "chunk_id": "doc.txt:0:aaa", "chunk_index": 0},
@@ -57,7 +58,7 @@ class NeighborChunksTests(unittest.TestCase):
                 metadata={"source": "other.txt", "chunk_id": "other.txt:0:ddd", "chunk_index": 0},
             ),
         ]
-        self.kb._rebuild_all()
+        self.kb.ingestion._rebuild_all()
 
     def test_get_neighbor_chunks_returns_adjacent_chunks_with_default_window(self):
         neighbors = self.kb.get_neighbor_chunks("doc.txt:1:bbb", window=1)
@@ -111,19 +112,19 @@ class ClearTests(unittest.TestCase):
         self.kb = KnowledgeBase()
 
     def test_clear_resets_all_state(self):
-        self.kb._loaded = True
-        self.kb.all_docs = [Document(page_content="test", metadata={"chunk_id": "x:0:y", "source": "x"})]
-        self.kb._rebuild_all()
-        self.kb.hit_counter = {"x:0:y": 5}
+        self.kb.ingestion._loaded = True
+        self.kb.all_docs[:] = [Document(page_content="test", metadata={"chunk_id": "x:0:y", "source": "x"})]
+        self.kb.ingestion._rebuild_all()
+        self.kb.hotspots.hit_counter = {"x:0:y": 5}
 
         self.kb.clear()
 
-        self.assertFalse(self.kb._loaded)
+        self.assertFalse(self.kb.ingestion._loaded)
         self.assertEqual(self.kb.all_docs, [])
         self.assertEqual(self.kb.doc_by_id, {})
         self.assertEqual(len(self.kb.existing_chunk_ids), 0)
-        self.assertIsNone(self.kb.bm25_index)
-        self.assertEqual(self.kb.hit_counter, {})
+        self.assertIsNone(self.kb.ingestion._bm25_index[0])
+        self.assertEqual(self.kb.hotspots.hit_counter, {})
 
     def test_clear_after_no_load_is_safe(self):
         """Calling clear when KB was never loaded should not raise."""
@@ -251,7 +252,7 @@ class LegacyChromaMigrationTests(unittest.TestCase):
             "ids": ["legacy-row-id"],
         }
 
-        docs = KnowledgeBase._documents_from_chroma_result(result)
+        docs = IngestionService._documents_from_chroma_result(result)
 
         self.assertEqual(len(docs), 1)
         self.assertEqual(docs[0].metadata["source"], "https://foo.com/docs/index.html")
@@ -268,7 +269,7 @@ class LegacyChromaMigrationTests(unittest.TestCase):
             "ids": ["legacy-row-id"],
         }
 
-        docs = KnowledgeBase._documents_from_chroma_result(result)
+        docs = IngestionService._documents_from_chroma_result(result)
 
         self.assertEqual(len(docs), 1)
         migrated = docs[0].metadata
@@ -312,10 +313,10 @@ class NormalizeSourceTests(unittest.TestCase):
 # ---- NEW TEST CLASSES BELOW ----
 
 class TokenizeTests(unittest.TestCase):
-    """Test KnowledgeBase._tokenize static method."""
+    """Test IngestionService._tokenize static method."""
 
     def test_chinese_text_returns_segmented_tokens(self):
-        tokens = KnowledgeBase._tokenize("我爱北京天安门")
+        tokens = IngestionService._tokenize("我爱北京天安门")
         self.assertGreater(len(tokens), 2)
         for t in tokens:
             self.assertIsInstance(t, str)
@@ -323,17 +324,17 @@ class TokenizeTests(unittest.TestCase):
             self.assertEqual(t, t.lower())
 
     def test_mixed_chinese_english(self):
-        tokens = KnowledgeBase._tokenize("Hello世界测试")
+        tokens = IngestionService._tokenize("Hello世界测试")
         self.assertTrue(any("hello" in t for t in tokens))
         self.assertTrue(any("世界" in t for t in tokens))
         self.assertTrue(any("测试" in t for t in tokens))
 
     def test_empty_string_returns_empty_list(self):
-        tokens = KnowledgeBase._tokenize("")
+        tokens = IngestionService._tokenize("")
         self.assertEqual(tokens, [])
 
     def test_only_whitespace_returns_empty_list(self):
-        tokens = KnowledgeBase._tokenize("   \n\t  ")
+        tokens = IngestionService._tokenize("   \n\t  ")
         self.assertEqual(tokens, [])
 
 
@@ -357,11 +358,11 @@ class InferSourceTypeTests(unittest.TestCase):
 
 
 class PrepareSplitsTests(unittest.TestCase):
-    """Test KnowledgeBase._prepare_splits static method."""
+    """Test IngestionService._prepare_splits static method."""
 
     def test_normal_split_produces_chunk_id_metadata(self):
         docs = [Document(page_content="这是一个测试文档。" * 200, metadata={"source": "test.txt"})]
-        splits = KnowledgeBase._prepare_splits(docs)
+        splits = IngestionService._prepare_splits(docs)
         self.assertGreater(len(splits), 0)
         for split in splits:
             self.assertIn("chunk_id", split.metadata)
@@ -374,7 +375,7 @@ class PrepareSplitsTests(unittest.TestCase):
     def test_heading_detection_sets_section_metadata(self):
         content = "# 一级标题\n\n第一段内容\n\n## 二级标题\n\n第二段内容"
         docs = [Document(page_content=content, metadata={"source": "heading_test.txt"})]
-        splits = KnowledgeBase._prepare_splits(docs)
+        splits = IngestionService._prepare_splits(docs)
         sections = [s.metadata.get("section", "") for s in splits]
         self.assertTrue(any(sections))
 
@@ -382,19 +383,19 @@ class PrepareSplitsTests(unittest.TestCase):
         """ENABLE_CONTEXTUAL_RETRIEVAL is True by default in config, so
         _prepare_splits should prepend context prefix."""
         docs = [Document(page_content="小明去公园玩。" * 200, metadata={"source": "story.txt"})]
-        splits = KnowledgeBase._prepare_splits(docs)
+        splits = IngestionService._prepare_splits(docs)
         for split in splits:
             self.assertIn("本段属于文档", split.page_content)
             # The original content should be preserved in metadata
             self.assertIn("original_content", split.metadata)
 
     def test_empty_docs_returns_empty(self):
-        splits = KnowledgeBase._prepare_splits([])
+        splits = IngestionService._prepare_splits([])
         self.assertEqual(splits, [])
 
     def test_multiple_splits_from_same_source_get_increasing_chunk_index(self):
         docs = [Document(page_content="测试内容。" * 500, metadata={"source": "same_source.txt"})]
-        splits = KnowledgeBase._prepare_splits(docs)
+        splits = IngestionService._prepare_splits(docs)
         indices = [s.metadata["chunk_index"] for s in splits]
         self.assertEqual(indices, sorted(indices))
         self.assertEqual(len(indices), len(set(indices)))
@@ -420,8 +421,8 @@ class _BaseKBMockTest(unittest.TestCase):
         }
         mock_chroma.return_value = self.mock_chroma_instance
         self.kb = KnowledgeBase()
-        self.kb._loaded = True
-        self.kb.all_docs = [
+        self.kb.ingestion._loaded = True
+        self.kb.all_docs[:] = [
             Document(
                 page_content="existing chunk content",
                 metadata={
@@ -433,9 +434,9 @@ class _BaseKBMockTest(unittest.TestCase):
                 },
             ),
         ]
-        self.kb._rebuild_all()
+        self.kb.ingestion._rebuild_all()
         # Reset hit_counter after _rebuild_all
-        self.kb.hit_counter = {}
+        self.kb.hotspots.hit_counter = {}
 
 
 class ProcessDocumentsTests(_BaseKBMockTest):
@@ -445,7 +446,7 @@ class ProcessDocumentsTests(_BaseKBMockTest):
         new_docs = [
             Document(page_content="全新的文档内容" * 100, metadata={"source": "new_file.txt"}),
         ]
-        count = self.kb._process_documents(new_docs)
+        count = self.kb.ingestion._process_documents(new_docs)
         self.assertGreater(count, 0)
         self.assertEqual(count, len(self.kb.all_docs) - 1)  # minus the existing doc
 
@@ -454,25 +455,25 @@ class ProcessDocumentsTests(_BaseKBMockTest):
         docs = [
             Document(page_content="第一次添加" * 50, metadata={"source": "dup_test.txt"}),
         ]
-        count1 = self.kb._process_documents(docs)
+        count1 = self.kb.ingestion._process_documents(docs)
         self.assertGreater(count1, 0)
 
         # Process the exact same docs again
-        count2 = self.kb._process_documents(docs)
+        count2 = self.kb.ingestion._process_documents(docs)
         self.assertEqual(count2, 0)
 
     def test_first_ingestion_calls_ensure_loaded(self):
         """_process_documents calls _ensure_loaded before adding new docs."""
-        self.kb._loaded = False
-        self.kb.all_docs = []
-        self.kb._rebuild_all()
+        self.kb.ingestion._loaded = False
+        self.kb.all_docs.clear()
+        self.kb.ingestion._rebuild_all()
 
         docs = [
             Document(page_content="首次添加" * 50, metadata={"source": "first_test.txt"}),
         ]
-        count = self.kb._process_documents(docs)
+        count = self.kb.ingestion._process_documents(docs)
         self.assertGreater(count, 0)
-        self.assertTrue(self.kb._loaded)
+        self.assertTrue(self.kb.ingestion._loaded)
 
 
 class HybridSearchTests(_BaseKBMockTest):
@@ -512,13 +513,14 @@ class HybridSearchTests(_BaseKBMockTest):
             if doc.metadata["chunk_id"] not in self.kb.doc_by_id:
                 self.kb.all_docs.append(doc)
                 self.kb.doc_by_id[doc.metadata["chunk_id"]] = doc
-        self.kb.existing_chunk_ids = set(self.kb.doc_by_id)
+        self.kb.existing_chunk_ids.clear()
+        self.kb.existing_chunk_ids.update(self.kb.doc_by_id)
 
         self.kb.vector_store.similarity_search_with_score.return_value = self.mock_vector_results
 
     def test_vector_only_search_when_bm25_is_none(self):
         """When bm25_index is None, results come only from vector_store."""
-        self.kb.bm25_index = None
+        self.kb.ingestion._bm25_index[0] = None
         results = self.kb.hybrid_search("人工智能")
         self.assertGreater(len(results), 0)
         # The score_threshold is None by default, so no filtering
@@ -528,10 +530,10 @@ class HybridSearchTests(_BaseKBMockTest):
 
     def test_search_with_empty_kb_returns_empty(self):
         """When KB has no documents, search returns empty."""
-        self.kb.all_docs = []
-        self.kb.doc_by_id = {}
-        self.kb.existing_chunk_ids = set()
-        self.kb.bm25_index = None
+        self.kb.all_docs.clear()
+        self.kb.doc_by_id.clear()
+        self.kb.existing_chunk_ids.clear()
+        self.kb.ingestion._bm25_index[0] = None
         self.kb.vector_store.similarity_search_with_score.return_value = []
         results = self.kb.hybrid_search("anything")
         self.assertEqual(results, [])
@@ -545,9 +547,9 @@ class HybridSearchTests(_BaseKBMockTest):
 
     def test_search_calls_ensure_loaded(self):
         """Verify hybrid_search triggers _ensure_loaded."""
-        self.kb._loaded = False
+        self.kb.ingestion._loaded = False
         results = self.kb.hybrid_search("测试查询")
-        self.assertTrue(self.kb._loaded)
+        self.assertTrue(self.kb.ingestion._loaded)
 
     def test_score_threshold_filters_results(self):
         """score_threshold should remove results below the threshold."""
@@ -593,26 +595,27 @@ class GetHotspotsTests(_BaseKBMockTest):
         for doc in extra_docs:
             self.kb.all_docs.append(doc)
             self.kb.doc_by_id[doc.metadata["chunk_id"]] = doc
-        self.kb.existing_chunk_ids = set(self.kb.doc_by_id)
+        self.kb.existing_chunk_ids.clear()
+        self.kb.existing_chunk_ids.update(self.kb.doc_by_id)
 
     def test_with_hits_returns_sorted_by_hit_count(self):
-        self.kb.hit_counter = {
+        self.kb.hotspots.hit_counter = {
             "popular.txt:1:hot2": 10,
             "popular.txt:0:hot1": 5,
             "existing.txt:0:abc123": 1,
         }
         hotspots = self.kb.get_hotspots(top_n=50)
         self.assertGreater(len(hotspots), 0)
-        hit_counts = [h["hits"] for h in hotspots]
+        hit_counts = [h.hits for h in hotspots]
         self.assertEqual(hit_counts, sorted(hit_counts, reverse=True))
 
     def test_empty_hit_counter_returns_empty_list(self):
-        self.kb.hit_counter = {}
+        self.kb.hotspots.hit_counter = {}
         hotspots = self.kb.get_hotspots()
         self.assertEqual(hotspots, [])
 
     def test_top_n_limits_results(self):
-        self.kb.hit_counter = {
+        self.kb.hotspots.hit_counter = {
             "popular.txt:0:hot1": 5,
             "popular.txt:1:hot2": 3,
             "existing.txt:0:abc123": 1,
@@ -621,20 +624,22 @@ class GetHotspotsTests(_BaseKBMockTest):
         self.assertEqual(len(hotspots), 2)
 
     def test_hit_for_chunk_not_in_doc_by_id_returns_empty_source_preview(self):
-        self.kb.hit_counter = {
+        self.kb.hotspots.hit_counter = {
             "nonexistent:0:ghost": 99,
         }
         hotspots = self.kb.get_hotspots()
         self.assertEqual(len(hotspots), 1)
-        self.assertEqual(hotspots[0]["source"], "")
-        self.assertEqual(hotspots[0]["content_preview"], "")
+        self.assertEqual(hotspots[0].source, "")
+        self.assertEqual(hotspots[0].content_preview, "")
 
-    def test_get_hotspots_calls_ensure_loaded(self):
-        self.kb._loaded = False
+    def test_get_hotspots_works_after_explicit_ensure_loaded(self):
+        self.kb.ingestion._loaded = False
         # Fake some hit_counter entries
-        self.kb.hit_counter = {"popular.txt:0:hot1": 3}
-        _ = self.kb.get_hotspots()
-        self.assertTrue(self.kb._loaded)
+        self.kb.hotspots.hit_counter = {"popular.txt:0:hot1": 3}
+        self.kb.ingestion._ensure_loaded()
+        hotspots = self.kb.get_hotspots()
+        self.assertGreater(len(hotspots), 0)
+        self.assertTrue(self.kb.ingestion._loaded)
 
 
 class LoadSaveHotspotsTests(_BaseKBMockTest):
@@ -653,10 +658,10 @@ class LoadSaveHotspotsTests(_BaseKBMockTest):
         self.tmp_path.unlink(missing_ok=True)
 
     def test_save_writes_to_file(self):
-        self.kb._hotspot_path = self.tmp_path
-        self.kb.hit_counter = {"chunk_a:0:id1": 5, "chunk_b:0:id2": 3}
-        self.kb._hotspot_dirty = True
-        self.kb._save_hotspots()
+        self.kb.hotspots._hotspot_path = self.tmp_path
+        self.kb.hotspots.hit_counter = {"chunk_a:0:id1": 5, "chunk_b:0:id2": 3}
+        self.kb.hotspots._hotspot_dirty = True
+        self.kb.hotspots._save_hotspots()
 
         with open(self.tmp_path, encoding="utf-8") as f:
             data = json.load(f)
@@ -667,20 +672,20 @@ class LoadSaveHotspotsTests(_BaseKBMockTest):
         with open(self.tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
 
-        self.kb._hotspot_path = self.tmp_path
-        self.kb.hit_counter = {}
-        self.kb._load_hotspots()
-        self.assertEqual(self.kb.hit_counter, data)
+        self.kb.hotspots._hotspot_path = self.tmp_path
+        self.kb.hotspots.hit_counter = {}
+        self.kb.hotspots._load_hotspots()
+        self.assertEqual(self.kb.hotspots.hit_counter, data)
 
     def test_file_not_exists_leaves_counter_unchanged(self):
         # When the file doesn't exist, _load_hotspots does not modify hit_counter
         nonexistent = Path(tempfile.gettempdir()) / "_knowbase_test_nonexistent" / "hotspots.json"
         self.assertFalse(nonexistent.exists())
-        self.kb._hotspot_path = nonexistent
-        self.kb.hit_counter = {"old": 1}
-        self.kb._load_hotspots()
+        self.kb.hotspots._hotspot_path = nonexistent
+        self.kb.hotspots.hit_counter = {"old": 1}
+        self.kb.hotspots._load_hotspots()
         # hit_counter unchanged because file doesn't exist and try/except catches nothing
-        self.assertEqual(self.kb.hit_counter, {"old": 1})
+        self.assertEqual(self.kb.hotspots.hit_counter, {"old": 1})
 
 
 class ExtendBM25Tests(_BaseKBMockTest):
@@ -689,36 +694,36 @@ class ExtendBM25Tests(_BaseKBMockTest):
     def setUp(self):
         super().setUp()
         # Start with clean BM25
-        self.kb._bm25_corpus = []
-        self.kb.bm25_index = None
+        self.kb.ingestion._bm25_corpus.clear()
+        self.kb.ingestion._bm25_index[0] = None
 
     def test_adding_docs_rebuilds_bm25_index(self):
         docs = [
             Document(page_content="测试内容A", metadata={"source": "test.txt", "chunk_id": "test.txt:0:a"}),
             Document(page_content="测试内容B", metadata={"source": "test.txt", "chunk_id": "test.txt:1:b"}),
         ]
-        self.kb._extend_bm25(docs)
-        self.assertIsNotNone(self.kb.bm25_index)
-        self.assertEqual(len(self.kb._bm25_corpus), 2)
+        self.kb.ingestion._extend_bm25(docs)
+        self.assertIsNotNone(self.kb.ingestion._bm25_index[0])
+        self.assertEqual(len(self.kb.ingestion._bm25_corpus), 2)
 
     def test_adding_to_empty_corpus_sets_bm25_to_none_if_still_empty(self):
         # _extend_bm25 with empty list should not build index from empty corpus
-        self.kb._extend_bm25([])
-        self.assertIsNone(self.kb.bm25_index)
-        self.assertEqual(self.kb._bm25_corpus, [])
+        self.kb.ingestion._extend_bm25([])
+        self.assertIsNone(self.kb.ingestion._bm25_index[0])
+        self.assertEqual(self.kb.ingestion._bm25_corpus, [])
 
     def test_extend_preserves_existing_corpus(self):
         initial = [
             Document(page_content="原文", metadata={"source": "a.txt", "chunk_id": "a.txt:0:0"}),
         ]
-        self.kb._extend_bm25(initial)
-        original_len = len(self.kb._bm25_corpus)
+        self.kb.ingestion._extend_bm25(initial)
+        original_len = len(self.kb.ingestion._bm25_corpus)
 
         more = [
             Document(page_content="新增内容", metadata={"source": "b.txt", "chunk_id": "b.txt:0:1"}),
         ]
-        self.kb._extend_bm25(more)
-        self.assertEqual(len(self.kb._bm25_corpus), original_len + 1)
+        self.kb.ingestion._extend_bm25(more)
+        self.assertEqual(len(self.kb.ingestion._bm25_corpus), original_len + 1)
 
 
 class KnowledgeBaseIngestTests(_BaseKBMockTest):
@@ -729,7 +734,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
             Document(page_content="test", metadata={"source": "test.txt"}),
         ]
         with patch("src.knowledge_base.load_document", return_value=fake_docs) as mock_load:
-            with patch.object(self.kb, "_process_documents", return_value=1) as mock_process:
+            with patch.object(self.kb.ingestion, "_process_documents", return_value=1) as mock_process:
                 result = self.kb.ingest_file("/fake/path/test.txt")
 
                 mock_load.assert_called_once_with("/fake/path/test.txt", source_name=None)
@@ -741,7 +746,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
             Document(page_content="test", metadata={"source": "custom.txt"}),
         ]
         with patch("src.knowledge_base.load_document", return_value=fake_docs) as mock_load:
-            with patch.object(self.kb, "_process_documents", return_value=2) as mock_process:
+            with patch.object(self.kb.ingestion, "_process_documents", return_value=2) as mock_process:
                 result = self.kb.ingest_file("/fake/path/doc.pdf", source_name="my_doc.pdf")
 
                 mock_load.assert_called_once_with("/fake/path/doc.pdf", source_name="my_doc.pdf")
@@ -761,7 +766,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
                 },
             ),
         )
-        self.kb._rebuild_all()
+        self.kb.ingestion._rebuild_all()
         self.kb.vector_store.delete.reset_mock()
 
         fake_docs = [
@@ -793,7 +798,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
                 },
             ),
         )
-        self.kb._rebuild_all()
+        self.kb.ingestion._rebuild_all()
 
         self.kb.vector_store.delete.reset_mock()
 
@@ -824,22 +829,23 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
             },
         )
         self.kb.all_docs.append(stale)
-        self.kb._rebuild_all()
+        self.kb.ingestion._rebuild_all()
         self.kb.vector_store.delete.reset_mock()
 
         fresh_docs = [
             Document(page_content="new content" * 100, metadata={"source": "https://foo.com/docs/index.html"}),
         ]
 
-        self.kb._replace_old_chunks("https://foo.com/docs/index.html", fresh_docs)
+        self.kb.ingestion._replace_old_chunks("https://foo.com/docs/index.html", fresh_docs)
 
         self.kb.vector_store.delete.assert_called_once_with(ids=["uuid-1234"])
 
     def test_process_documents_dedups_against_loaded_canonical_chunk_ids(self):
-        self.kb._loaded = False
-        self.kb.all_docs = []
-        self.kb.doc_by_id = {}
-        self.kb.existing_chunk_ids = {"legacy-uuid-row-id"}
+        self.kb.ingestion._loaded = False
+        self.kb.all_docs.clear()
+        self.kb.doc_by_id.clear()
+        self.kb.existing_chunk_ids.clear()
+        self.kb.existing_chunk_ids.update(["legacy-uuid-row-id"])
         self.kb.vector_store.get.return_value = {
             "ids": ["legacy-uuid-row-id"],
             "documents": ["same content" * 100],
@@ -855,7 +861,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
             Document(page_content="same content" * 100, metadata={"source": "same.txt"}),
         ]
 
-        count = self.kb._process_documents(docs)
+        count = self.kb.ingestion._process_documents(docs)
 
         self.assertEqual(count, 0)
         self.kb.vector_store.add_documents.assert_not_called()
@@ -865,15 +871,15 @@ class KBEnsureLoadedTests(_BaseKBMockTest):
     """Test _ensure_loaded."""
 
     def test_already_loaded_returns_immediately(self):
-        self.kb._loaded = True
+        self.kb.ingestion._loaded = True
         self.kb.vector_store.get.reset_mock()
-        self.kb._ensure_loaded()
+        self.kb.ingestion._ensure_loaded()
         self.kb.vector_store.get.assert_not_called()
 
     def test_not_loaded_calls_vector_store_get_and_rebuilds(self):
-        self.kb._loaded = False
-        self.kb.all_docs = []
-        self.kb.doc_by_id = {}
+        self.kb.ingestion._loaded = False
+        self.kb.all_docs.clear()
+        self.kb.doc_by_id.clear()
 
         mock_result = {
             "ids": ["doc.txt:0:aaa", "doc.txt:1:bbb"],
@@ -885,12 +891,12 @@ class KBEnsureLoadedTests(_BaseKBMockTest):
         }
         self.kb.vector_store.get.return_value = mock_result
 
-        self.kb._ensure_loaded()
+        self.kb.ingestion._ensure_loaded()
 
-        self.assertTrue(self.kb._loaded)
+        self.assertTrue(self.kb.ingestion._loaded)
         self.assertEqual(len(self.kb.all_docs), 2)
         self.assertEqual(len(self.kb.doc_by_id), 2)
-        self.assertIsNotNone(self.kb.bm25_index)
+        self.assertIsNotNone(self.kb.ingestion._bm25_index[0])
 
 
 if __name__ == "__main__":
