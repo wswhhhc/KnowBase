@@ -213,7 +213,10 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     try {
       const [s, srcs, cfg] = await Promise.all([api.getKBStats(), api.getKBSourceNames(), api.getKBConfig()])
       setStats(s); setSources(srcs); setKbConfig(cfg)
-      await loadChunks(selectedSource, searchQuery, page, pageSize)
+      setPage(0)
+      allChunksRef.current = []
+      setChunks([])
+      await loadChunks(selectedSource, searchQuery, 0, pageSize, false)
     } catch (e) { toast.error('刷新失败', { description: String(e) }) }
   }
 
