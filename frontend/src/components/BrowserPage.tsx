@@ -41,6 +41,20 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   const [bookmarkedChunks, setBookmarkedChunks] = useState<Set<string>>(new Set())
   const browserWsId = workspaceId || ''
   const pageSize = 50
+  const allChunksRef = useRef<KBChunk[]>([])
+  const [hasMore, setHasMore] = useState(true)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const observerRef = useRef<IntersectionObserver | null>(null)
+
+  // Replace chunks setter with accumulation
+  const setChunksAccumulate = (items: KBChunk[], append: boolean) => {
+    if (append) {
+      allChunksRef.current = [...allChunksRef.current, ...items]
+    } else {
+      allChunksRef.current = items
+    }
+    setChunks([...allChunksRef.current])
+  }
 
   const handleChunkBookmark = async (chunk: KBChunk) => {
     if (bookmarkedChunks.has(chunk.chunk_id)) return
@@ -55,10 +69,11 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     } catch (e) { toast.error('收藏失败', { description: String(e) }) }
   }
 
-  const loadChunks = async (src: string, q: string, p: number, ps: number) => {
+  const loadChunks = async (src: string, q: string, p: number, ps: number, append = false) => {
     const res = await api.getKBChunks(src, q, p * ps, ps)
-    setChunks(res.items)
+    setChunksAccumulate(res.items, append)
     setTotal(res.total)
+    setHasMore((p + 1) * ps < res.total)
     return res
   }
 
@@ -108,10 +123,26 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     setLoading(true)
     setPage(newPage)
     try {
-      await loadChunks(selectedSource, searchQuery, newPage, pageSize)
+      await loadChunks(selectedSource, searchQuery, newPage, pageSize, true)
     } catch (e) { toast.error('翻页失败', { description: String(e) }) }
     setLoading(false)
   }
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    if (observerRef.current) observerRef.current.disconnect()
+    if (!sentinelRef.current || !hasMore || loading) return
+    observerRef.current = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasMore && !loading) {
+          handlePageChange(page + 1)
+        }
+      },
+      { rootMargin: '200px' },
+    )
+    observerRef.current.observe(sentinelRef.current)
+    return () => observerRef.current?.disconnect()
+  }, [hasMore, loading, page])
 
   const toggleHotspotMode = async () => {
     const next = !hotspotMode
@@ -479,32 +510,16 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
           {/* Bottom stats & pagination */}
           {!loading && total > 0 && (
             <div className="mt-8 flex items-center justify-center gap-4">
-              {total > pageSize && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handlePageChange(page - 1)}
-                    disabled={page === 0}
-                    className="px-3 py-1 text-[11px] font-medium rounded-md bg-muted/50 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    上一页
-                  </button>
-                  <span className="text-[10px] text-muted-foreground/50 font-mono">
-                    {page + 1} / {Math.ceil(total / pageSize)}
-                  </span>
-                  <button
-                    onClick={() => handlePageChange(page + 1)}
-                    disabled={(page + 1) * pageSize >= total}
-                    className="px-3 py-1 text-[11px] font-medium rounded-md bg-muted/50 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    下一页
-                  </button>
-                </div>
-              )}
-              <span className="text-[10px] text-muted-foreground/30 font-mono">
-                共 {total} 个段落 · {stats?.source_count ?? 0} 个引用文档 · 总计 {(stats?.total_chars ?? 0) / 1000}k 字符
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground/30 font-mono">
+                  共 {total} 个段落 · {stats?.source_count ?? 0} 个引用文档 · 总计 {(stats?.total_chars ?? 0) / 1000}k 字符
+                </span>
+              </div>
             </div>
           )}
+
+          {/* Infinite scroll sentinel */}
+          {hasMore && !loading && <div ref={sentinelRef} className="h-4" />}
         </div>
       </ScrollArea>
 

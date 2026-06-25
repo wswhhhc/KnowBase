@@ -39,6 +39,11 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
   const rafRef = useRef<number | null>(null)
   const maxVisibleMessages = 100
 
+  // Actually enforce the limit in the return value
+  const visibleMessages = messages.length > maxVisibleMessages
+    ? messages.slice(-maxVisibleMessages)
+    : messages
+
   // Helper: get pinnedSources for current thread
   const currentPinned = threadIdRef.current ? pinnedByConv[threadIdRef.current] ?? [] : []
 
@@ -241,7 +246,7 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
   }, [])
 
   return {
-    messages,
+    messages: visibleMessages,
     isStreaming,
     streamingNodes,
     pinnedSources: currentPinned,
