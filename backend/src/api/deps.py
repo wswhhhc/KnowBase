@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.knowledge_base import KnowledgeBase
-from config.settings import _is_configured_api_key, settings
+from config.settings import settings
 
 _security = HTTPBearer(auto_error=False)
 
@@ -26,14 +26,11 @@ def verify_api_key(credentials: HTTPAuthorizationCredentials | None = Depends(_s
 
 @lru_cache(maxsize=1)
 def get_knowledge_base() -> KnowledgeBase:
+    """Return the singleton KnowledgeBase (initialized on first call)."""
     try:
-        kb = KnowledgeBase()
+        return KnowledgeBase()
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
-
-    if _is_configured_api_key(settings.siliconflow_api_key):
-        kb.load_preset_documents()
-    return kb

@@ -2,24 +2,27 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-BACKEND = Path(__file__).resolve().parent.parent.parent
-if str(BACKEND) not in sys.path:
-    sys.path.insert(0, str(BACKEND))
-
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import chat, conversations, documents, knowledge_base, metrics
 from src.conversations import init_db
+from src.api.deps import get_knowledge_base
+from config.settings import _is_configured_api_key, settings
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    if _is_configured_api_key(settings.siliconflow_api_key):
+        try:
+            kb = get_knowledge_base()
+            kb.load_preset_documents()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("预设文档加载失败（app 仍可正常启动）: %s", exc)
     yield
 
 

@@ -6,16 +6,17 @@ import * as api from '@/lib/api'
 import type { KBStats, KBChunk, KBConfig, HotspotEntry } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ViewType } from '@/App'
+import { useTheme } from '@/hooks/useTheme'
 import { Separator, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 
 interface BrowserPageProps {
   onOpenSidebar: () => void
   sidebarOpen: boolean
   onNavigate: (v: ViewType) => void
-  theme: { theme: 'dark' | 'light'; toggle: () => void }
 }
 
-export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, theme }: BrowserPageProps) {
+export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate }: BrowserPageProps) {
+  const theme = useTheme()
   const [stats, setStats] = useState<KBStats | null>(null)
   const [chunks, setChunks] = useState<KBChunk[]>([])
   const [sources, setSources] = useState<string[]>([])

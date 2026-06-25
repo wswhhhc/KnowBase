@@ -38,9 +38,9 @@ class MessageOut(BaseModel):
     id: int
     role: str
     content: str
-    sources: list[ChatSource] = []
+    sources: list[ChatSource] = Field(default_factory=list)
     quality_reason: str = ""
-    debug_info: dict = {}
+    debug_info: dict = Field(default_factory=dict)
     feedback: str | None = None
     created_at: str
 
@@ -115,7 +115,7 @@ class NodeDebug(BaseModel):
 class DebugInfo(BaseModel):
     """整条消息的调试信息，通过 SSE debug 事件下发。"""
 
-    nodes: list[NodeDebug] = []
+    nodes: list[NodeDebug] = Field(default_factory=list)
     rewritten_question: str = ""
     retrieval_k: int = 0
     candidates_before: int = 0

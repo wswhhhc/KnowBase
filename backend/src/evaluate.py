@@ -18,10 +18,6 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
-# Ensure project root is on sys.path
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-
 from config.settings import ROOT_DIR, require_siliconflow_api_key, SILICONFLOW_BASE_URL, LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate

@@ -1,7 +1,6 @@
 import { Toaster } from 'sonner'
 import { useState } from 'react'
 import { useChat } from '@/hooks/useChat'
-import { useTheme } from '@/hooks/useTheme'
 import Sidebar from '@/components/Sidebar'
 import ChatArea from '@/components/ChatArea'
 import BrowserPage from '@/components/BrowserPage'
@@ -19,7 +18,6 @@ function App() {
     setActiveThreadId(threadId)
     setConvRefreshKey((k) => k + 1)
   })
-  const theme = useTheme()
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background noise-overlay">
@@ -46,7 +44,6 @@ function App() {
             onOpenSidebar={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
             onNavigate={setActiveView}
-            theme={theme}
             isLoadingMessages={isLoadingMessages}
           />
         )}
@@ -55,7 +52,6 @@ function App() {
             onOpenSidebar={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
             onNavigate={setActiveView}
-            theme={theme}
           />
         )}
         {activeView === 'dashboard' && (
@@ -63,7 +59,6 @@ function App() {
             onOpenSidebar={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
             onNavigate={setActiveView}
-            theme={theme}
           />
         )}
       </main>

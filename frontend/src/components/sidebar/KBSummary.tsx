@@ -1,0 +1,31 @@
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import * as api from '@/lib/api'
+
+export default function KBSummary() {
+  const [stats, setStats] = useState<{ chunk_count: number; source_count: number } | null>(null)
+  useEffect(() => {
+    api.getKBStats().then(setStats).catch((e: unknown) => toast.error('加载知识库统计失败', { description: String(e) }))
+  }, [])
+  return (
+    <div className="px-3 py-4">
+      <p className="text-xs text-muted-foreground/50 tracking-wide uppercase px-1 mb-2">知识库</p>
+      <div className="rounded-lg border border-border bg-surface/30 p-3 space-y-1.5">
+        {stats ? (
+          <>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">片段</span>
+              <span className="font-mono text-foreground/70">{stats.chunk_count}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">来源</span>
+              <span className="font-mono text-foreground/70">{stats.source_count}</span>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground/50">加载中…</p>
+        )}
+      </div>
+    </div>
+  )
+}

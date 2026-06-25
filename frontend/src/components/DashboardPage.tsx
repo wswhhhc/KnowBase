@@ -5,13 +5,13 @@ import * as api from '@/lib/api'
 import type { QueryLogEntry } from '@/lib/api'
 import { motion } from 'framer-motion'
 import type { ViewType } from '@/App'
+import { useTheme } from '@/hooks/useTheme'
 import { Progress, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Separator } from '@/components/ui'
 
 interface DashboardPageProps {
   onOpenSidebar: () => void
   sidebarOpen: boolean
   onNavigate: (v: ViewType) => void
-  theme: { theme: 'dark' | 'light'; toggle: () => void }
 }
 
 interface AggregatedStats {
@@ -28,7 +28,8 @@ interface AggregatedStats {
   last24h: number
 }
 
-export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate, theme }: DashboardPageProps) {
+export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }: DashboardPageProps) {
+  const theme = useTheme()
   const [logs, setLogs] = useState<QueryLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [days, setDays] = useState(7)

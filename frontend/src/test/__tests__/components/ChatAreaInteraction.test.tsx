@@ -38,6 +38,11 @@ const mockToggleTheme = vi.fn()
 const mockOnNavigate = vi.fn()
 const mockOnOpenSidebar = vi.fn()
 
+// Mock useTheme before any imports that might use it
+vi.mock('@/hooks/useTheme', () => ({
+  useTheme: () => ({ theme: 'dark', toggle: mockToggleTheme }),
+}))
+
 function createChat(overrides?: any) {
   return {
     messages: [] as any[],
@@ -60,7 +65,6 @@ function renderChatArea(chatOverrides?: any, propsOverrides?: any) {
       onOpenSidebar={mockOnOpenSidebar}
       sidebarOpen={true}
       onNavigate={mockOnNavigate}
-      theme={{ theme: 'dark' as const, toggle: mockToggleTheme }}
       isLoadingMessages={false}
       {...propsOverrides}
     />
@@ -124,7 +128,6 @@ describe('ChatArea interactions', () => {
         onOpenSidebar={mockOnOpenSidebar}
         sidebarOpen={true}
         onNavigate={mockOnNavigate}
-        theme={{ theme: 'dark' as const, toggle: mockToggleTheme }}
         isLoadingMessages={true}
       />)
     // Skeleton elements have a class or role — look for multiple skeleton divs

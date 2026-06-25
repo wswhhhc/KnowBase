@@ -89,6 +89,7 @@ describe('Sidebar', () => {
 
     vi.mocked(useSources).mockReturnValue({
       sources: mockSources,
+      sourceError: null,
       refresh: vi.fn(),
     })
 

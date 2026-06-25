@@ -212,6 +212,91 @@ export const queryLogs = (days: number = 7, limit: number = 500) =>
 
 // ── Chat SSE ──
 
+class SSEParser {
+  private buffer = ''
+  private currentEvent = 'message'
+  private currentData: string[] = []
+
+  /**
+   * Feed raw text chunks into the parser. Returns an array of parsed events.
+   * Each event has { event: string, data: string }.
+   */
+  feed(chunk: string): Array<{ event: string; data: string }> {
+    // Normalize CRLF / bare CR to LF so SSE events parse correctly
+    // regardless of the server's line-ending convention.
+    this.buffer += chunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    const events: Array<{ event: string; data: string }> = []
+    const lines = this.buffer.split('\n')
+    this.buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        this.currentEvent = line.slice(7).trim()
+      } else if (line.startsWith('data: ')) {
+        this.currentData.push(line.slice(6))
+      } else if (line === '') {
+        // Empty line = event delimiter (SSE spec: CR / LF / CRLF blank line)
+        if (this.currentData.length > 0) {
+          events.push({
+            event: this.currentEvent,
+            data: this.currentData.join('\n'),
+          })
+        }
+        this.currentEvent = 'message'
+        this.currentData = []
+      }
+      // Ignore comments (lines starting with :) and other lines
+    }
+    return events
+  }
+
+  /**
+   * Flush remaining buffered data. Call after the stream ends.
+   */
+  flush(): Array<{ event: string; data: string }> {
+    if (this.currentData.length > 0) {
+      const events = [{
+        event: this.currentEvent,
+        data: this.currentData.join('\n'),
+      }]
+      this.currentEvent = 'message'
+      this.currentData = []
+      return events
+    }
+    return []
+  }
+}
+
+function createChatStreamAdapter(callbacks: ChatStreamCallbacks) {
+  return (event: string, data: string) => {
+    try {
+      const parsed = JSON.parse(data)
+      switch (event) {
+        case 'node':
+          callbacks.onNode?.(parsed.label, parsed.nodes)
+          break
+        case 'token':
+          callbacks.onToken?.(parsed.text)
+          break
+        case 'debug':
+          callbacks.onDebug?.(parsed)
+          break
+        case 'sources':
+          callbacks.onSources?.(parsed)
+          break
+        case 'done':
+          callbacks.onDone?.(parsed)
+          break
+        case 'error':
+          callbacks.onError?.(parsed.message)
+          break
+      }
+    } catch (e) {
+      console.warn('SSE parse error', e)
+    }
+  }
+}
+
 export interface ChatStreamCallbacks {
   onNode?: (label: string, nodes: string[]) => void
   onToken?: (text: string) => void
@@ -252,47 +337,21 @@ export function chatStream(
       if (!reader) return
 
       const decoder = new TextDecoder()
-      let buffer = ''
+      const parser = new SSEParser()
+      const processSSEEvent = createChatStreamAdapter(callbacks)
 
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        let event = 'message'
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            event = line.slice(7).trim()
-          } else if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            try {
-              const parsed = JSON.parse(data)
-              switch (event) {
-                case 'node':
-                  callbacks.onNode?.(parsed.label, parsed.nodes)
-                  break
-                case 'token':
-                  callbacks.onToken?.(parsed.text)
-                  break
-                case 'debug':
-                  callbacks.onDebug?.(parsed)
-                  break
-                case 'sources':
-                  callbacks.onSources?.(parsed)
-                  break
-                case 'done':
-                  callbacks.onDone?.(parsed)
-                  break
-                case 'error':
-                  callbacks.onError?.(parsed.message)
-                  break
-              }
-            } catch (e) { console.warn('SSE parse error', e) }
-            event = 'message'
+        if (done) {
+          for (const parsed of parser.flush()) {
+            processSSEEvent(parsed.event, parsed.data)
           }
+          break
+        }
+
+        const text = decoder.decode(value, { stream: true })
+        for (const parsed of parser.feed(text)) {
+          processSSEEvent(parsed.event, parsed.data)
         }
       }
     })

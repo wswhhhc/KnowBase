@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { Button, ScrollArea, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Skeleton } from '@/components/ui'
 import { useChat } from '@/hooks/useChat'
+import { useTheme } from '@/hooks/useTheme'
 import EmptyState from './EmptyState'
 import MessageBubble from './MessageBubble'
 import type { ViewType } from '@/App'
@@ -12,11 +13,11 @@ interface ChatAreaProps {
   onOpenSidebar: () => void
   sidebarOpen: boolean
   onNavigate: (v: ViewType) => void
-  theme: { theme: 'dark' | 'light'; toggle: () => void }
   isLoadingMessages?: boolean
 }
 
-export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate, theme, isLoadingMessages }: ChatAreaProps) {
+export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate, isLoadingMessages }: ChatAreaProps) {
+  const theme = useTheme()
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [input, setInput] = useState('')

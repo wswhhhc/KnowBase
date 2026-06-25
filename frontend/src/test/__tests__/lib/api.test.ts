@@ -268,6 +268,71 @@ describe('chatStream (SSE)', () => {
     vi.unstubAllGlobals()
   })
 
+  it('parses CRLF line endings correctly', async () => {
+    const callbacks: ChatStreamCallbacks = {
+      onNode: vi.fn(),
+      onToken: vi.fn(),
+      onDone: vi.fn(),
+    }
+
+    // Simulate a real server that sends CRLF — if SSEParser doesn't normalize,
+    // events get stuck in the buffer and the last flush() merges them.
+    const encoder = new TextEncoder()
+    const crlfPayload = 'event: node\r\ndata: {"label":"路由","nodes":["路由"]}\r\n\r\nevent: token\r\ndata: {"text":"hi"}\r\n\r\n'
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(crlfPayload))
+        controller.close()
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      body: { getReader: () => stream.getReader() },
+    }))
+
+    api.chatStream('q', null, false, 'balanced', callbacks)
+
+    await vi.waitFor(() => {
+      expect(callbacks.onNode).toHaveBeenCalled()
+    })
+    await vi.waitFor(() => {
+      expect(callbacks.onToken).toHaveBeenCalled()
+    })
+    // Node and token must fire as TWO separate events, not merged into one
+    expect(callbacks.onNode).toHaveBeenCalledWith('路由', ['路由'])
+    expect(callbacks.onToken).toHaveBeenCalledWith('hi')
+    // done should NOT fire (we didn't send one)
+    expect(callbacks.onDone).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('handles mixed CR and LF correctly', async () => {
+    const callbacks: ChatStreamCallbacks = {
+      onToken: vi.fn(),
+    }
+
+    // Bare \r (old Mac style) must also be normalized
+    const encoder = new TextEncoder()
+    const crPayload = 'event: token\rdata: {"text":"ok"}\r\r'
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(crPayload))
+        controller.close()
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      body: { getReader: () => stream.getReader() },
+    }))
+
+    api.chatStream('q', null, false, 'balanced', callbacks)
+
+    await vi.waitFor(() => {
+      expect(callbacks.onToken).toHaveBeenCalledWith('ok')
+    })
+    vi.unstubAllGlobals()
+  })
+
   it('passes webSearchEnabled and searchStrategy in body', async () => {
     const mock = vi.fn().mockResolvedValue({
       ok: true,

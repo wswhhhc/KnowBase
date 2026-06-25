@@ -77,6 +77,7 @@ describe('Sidebar interactions', () => {
     })
     vi.mocked(useSources).mockReturnValue({
       sources: mockSources,
+      sourceError: null,
       refresh: vi.fn(),
     })
     vi.mocked(api.getKBStats).mockResolvedValue(mockKBStats)
@@ -235,7 +236,7 @@ describe('Sidebar interactions', () => {
   it('upload document shows success toast only when refresh returns true', async () => {
     const refresh = vi.fn()
     vi.mocked(useSources).mockReturnValue({
-      sources: mockSources, refresh,
+      sources: mockSources, sourceError: null, refresh,
     })
     refresh.mockResolvedValue(true)
     render(<Sidebar {...defaultProps} />)
@@ -251,7 +252,7 @@ describe('Sidebar interactions', () => {
   it('upload document skips success toast when refresh returns false', async () => {
     const refresh = vi.fn()
     vi.mocked(useSources).mockReturnValue({
-      sources: mockSources, refresh,
+      sources: mockSources, sourceError: null, refresh,
     })
     refresh.mockResolvedValue(false)
     render(<Sidebar {...defaultProps} />)
@@ -267,7 +268,7 @@ describe('Sidebar interactions', () => {
   it('ingest url shows success toast only when refresh returns true', async () => {
     const refresh = vi.fn()
     vi.mocked(useSources).mockReturnValue({
-      sources: mockSources, refresh,
+      sources: mockSources, sourceError: null, refresh,
     })
     refresh.mockResolvedValue(true)
     render(<Sidebar {...defaultProps} />)
@@ -283,7 +284,7 @@ describe('Sidebar interactions', () => {
   it('ingest url skips success toast when refresh returns false', async () => {
     const refresh = vi.fn()
     vi.mocked(useSources).mockReturnValue({
-      sources: mockSources, refresh,
+      sources: mockSources, sourceError: null, refresh,
     })
     refresh.mockResolvedValue(false)
     render(<Sidebar {...defaultProps} />)
