@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { toast } from 'sonner'
 import { Button, Input, Separator } from '@/components/ui'
 import { Globe, Trash2, Upload, Loader2 } from 'lucide-react'
@@ -16,6 +16,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
   const [uploading, setUploading] = useState(false)
   const [suggested, setSuggested] = useState<string[] | null>(null)
   const [versionPrompted, setVersionPrompted] = useState<{ res: any; file: File; sourceName: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, versionMode?: string) => {
     const file = e.target.files?.[0]
@@ -24,16 +25,20 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
     setSuggested(null)
     setVersionPrompted(null)
     try {
-      const res: any = await api.uploadDocument(file, versionMode)
-      if (res.existing_version && !versionMode) {
-        // Source exists and user hasn't chosen a mode yet — prompt for action
-        setVersionPrompted({ res, file, sourceName: file.name })
+      // Probe first: check if this source already exists (without importing)
+      const probe = await api.checkSource(file.name)
+      if (probe.exists && !versionMode) {
+        // Source exists and user hasn't chosen a mode yet — prompt before importing
+        setVersionPrompted({ res: probe, file, sourceName: file.name })
         setUploading(false)
-        await onRefresh()
         return
       }
+      const res: any = await api.uploadDocument(file, versionMode)
       if (await onRefresh()) {
-        toast.success('文档已上传', { description: file.name })
+        const msg = versionMode === 'replace' ? '文档已替换为新版本' :
+                    versionMode === 'append' ? '文档已追加新版本' :
+                    '文档已上传'
+        toast.success(msg, { description: file.name })
         if (res.suggested_questions?.length) {
           setSuggested(res.suggested_questions)
         }
@@ -46,13 +51,21 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
 
   const handleVersionAction = async (action: 'replace' | 'append' | 'skip') => {
     if (!versionPrompted) return
-    const { file } = versionPrompted
     setVersionPrompted(null)
+    if (action === 'skip') {
+      toast.info('已跳过，未重复导入')
+      return
+    }
     // Re-trigger upload with the chosen version mode
-    await handleUpload(
-      { target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>,
-      action,
-    )
+    if (fileInputRef.current) {
+      const dt = new DataTransfer()
+      dt.items.add(versionPrompted.file)
+      fileInputRef.current.files = dt.files
+      await handleUpload(
+        { target: { files: dt.files } } as unknown as React.ChangeEvent<HTMLInputElement>,
+        action,
+      )
+    }
   }
 
   const handleIngestUrl = async () => {

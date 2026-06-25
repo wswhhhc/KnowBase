@@ -21,24 +21,41 @@ async def list_sources(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[
     return [SourceOut(source=s, count=c) for s, c in kb.source_counts()]
 
 
+@router.get("/check-source")
+async def check_source(source_name: str, kb: KnowledgeBase = Depends(get_knowledge_base)) -> dict:
+    """Check if a source name already exists, without modifying any data."""
+    exists = False
+    for s, c in kb.source_counts():
+        if normalize_source(s) == normalize_source(source_name):
+            exists = True
+            break
+    return {"exists": exists}
+
+
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    version_mode: str = Query("replace", regex="^(replace|append|skip)$"),
+    version_mode: str | None = Query(None, regex="^(replace|append|skip)$"),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse:
     try:
         file_path, source_name = save_uploaded_file(file)
-        # Check if source already exists
-        existing_count = 0
         existing = False
         for s, c in kb.source_counts():
             if normalize_source(s) == normalize_source(source_name):
                 existing = True
-                existing_count = c
                 break
 
-        chunk_count = kb.ingest_file(str(file_path), source_name=source_name, version_mode=version_mode)
+        # If no version_mode specified and source exists, return probe info without importing
+        if existing and not version_mode:
+            return IngestResponse(
+                chunk_count=0, total_docs=kb.document_count,
+                message="来源已存在，请指定 version_mode（replace/append/skip）",
+                existing_version=True,
+            )
+
+        actual_mode = version_mode or "replace"
+        chunk_count = kb.ingest_file(str(file_path), source_name=source_name, version_mode=actual_mode)
         docs_text = " ".join(d.page_content for d in kb.all_docs if d.metadata.get("source", "").startswith(source_name.rsplit(".", 1)[0]))
         suggested = generate_suggested_questions(docs_text) if chunk_count > 0 else []
 
@@ -48,7 +65,6 @@ async def upload_file(
             message=msg,
             suggested_questions=suggested,
             existing_version=existing,
-            version_count=existing_count,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))

@@ -106,6 +106,9 @@ export const deleteWorkspace = (id: string) =>
 
 // ── Documents ──
 
+export const checkSource = (sourceName: string) =>
+  req<{ exists: boolean }>(`/documents/check-source?source_name=${encodeURIComponent(sourceName)}`)
+
 export const getSources = () => req<DocSource[]>('/documents/sources')
 
 export const uploadDocument = async (file: File, versionMode?: string) => {

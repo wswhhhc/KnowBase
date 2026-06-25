@@ -47,6 +47,7 @@ vi.mock('@/hooks/useData', () => ({
 vi.mock('@/lib/api', () => ({
   getMessages: vi.fn().mockResolvedValue([]),
   uploadDocument: vi.fn(),
+  checkSource: vi.fn(),
   ingestUrl: vi.fn(),
   clearKnowledgeBase: vi.fn(),
   deleteSource: vi.fn(),
@@ -254,6 +255,7 @@ describe('Sidebar interactions', () => {
       sources: mockSources, sourceError: null, refresh,
     })
     vi.mocked(api.uploadDocument).mockResolvedValue({ chunk_count: 5, existing_version: false })
+    vi.mocked(api.checkSource).mockResolvedValue({ exists: false })
     refresh.mockResolvedValue(true)
     render(<Sidebar {...defaultProps} />)
     await userEvent.click(screen.getByText('文档'))
@@ -271,6 +273,7 @@ describe('Sidebar interactions', () => {
       sources: mockSources, sourceError: null, refresh,
     })
     vi.mocked(api.uploadDocument).mockResolvedValue({ chunk_count: 5, existing_version: false })
+    vi.mocked(api.checkSource).mockResolvedValue({ exists: false })
     refresh.mockResolvedValue(false)
     render(<Sidebar {...defaultProps} />)
     await userEvent.click(screen.getByText('文档'))
