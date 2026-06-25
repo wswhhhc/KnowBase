@@ -20,6 +20,57 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         conversations._DB_PATH = self.original_path
         self.temp_dir.cleanup()
 
+    # ── Workspace tests ──
+
+    def test_default_workspace_created_on_init(self):
+        """init_db creates the default workspace with id=''."""
+        ws_list = conversations.list_workspaces()
+        ids = [w["id"] for w in ws_list]
+        self.assertIn("", ids)
+        default = next(w for w in ws_list if w["id"] == "")
+        self.assertEqual(default["name"], "默认工作区")
+
+    def test_delete_workspace_reassigns_conversations_to_default(self):
+        """Deleting a workspace moves its conversations to the default workspace."""
+        ws = conversations.create_workspace("测试工作区")
+        conv = conversations.create_conversation("测试对话", workspace_id=ws["id"])
+        self.assertEqual(conv["workspace_id"], ws["id"])
+
+        conversations.delete_workspace(ws["id"])
+
+        # Conversation should now belong to default workspace
+        reloaded = conversations.get_conversation(conv["id"])
+        self.assertEqual(reloaded["workspace_id"], "")
+
+    def test_list_workspaces_includes_default_first(self):
+        """list_workspaces returns default workspace (id='') first."""
+        conversations.create_workspace("项目 A")
+        ws_list = conversations.list_workspaces()
+        self.assertEqual(ws_list[0]["id"], "")
+
+    def test_conversation_filtered_by_workspace(self):
+        """list_conversations(workspace_id) only returns matching conversations."""
+        ws1 = conversations.create_workspace("WS1")
+        ws2 = conversations.create_workspace("WS2")
+        conv1 = conversations.create_conversation("对话1", workspace_id=ws1["id"])
+        conv2 = conversations.create_conversation("对话2", workspace_id=ws2["id"])
+
+        ws1_convs = conversations.list_conversations(workspace_id=ws1["id"])
+        ws2_convs = conversations.list_conversations(workspace_id=ws2["id"])
+        self.assertEqual(len(ws1_convs), 1)
+        self.assertEqual(ws1_convs[0]["id"], conv1["id"])
+        self.assertEqual(len(ws2_convs), 1)
+        self.assertEqual(ws2_convs[0]["id"], conv2["id"])
+
+    def test_delete_default_workspace_allowed(self):
+        """Deleting the default workspace is allowed (conversations stay with id='')."""
+        conversations.delete_workspace("")
+        # Re-init should re-create default workspace
+        conversations.init_db()
+        ws_list = conversations.list_workspaces()
+        self.assertIn("", [w["id"] for w in ws_list])
+        self.temp_dir.cleanup()
+
     def test_update_title_works(self):
         conv = conversations.create_conversation("旧标题")
         updated = conversations.update_title(conv["id"], "新标题")

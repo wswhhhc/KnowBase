@@ -46,8 +46,13 @@ async def create(body: WorkspaceCreate = WorkspaceCreate()) -> WorkspaceOut:
 async def update(ws_id: str, body: WorkspaceUpdate) -> WorkspaceOut:
     if not update_workspace(ws_id, name=body.name, description=body.description):
         raise HTTPException(404, "工作区不存在")
-    from src.conversations import get_conversation
-    return WorkspaceOut(id=ws_id, name=body.name or "", description=body.description or "", created_at="", updated_at="")
+    # 重新查询数据库获取完整记录，避免返回伪造数据
+    from src.conversations import list_workspaces
+    all_ws = list_workspaces()
+    for ws in all_ws:
+        if ws["id"] == ws_id:
+            return WorkspaceOut(**ws)
+    raise HTTPException(500, "更新后未找到工作区")
 
 
 @router.delete("/{ws_id}")

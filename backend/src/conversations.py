@@ -24,7 +24,7 @@ def init_db():
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS workspaces (
             id TEXT PRIMARY KEY,
-            name TEXT NOT NULL DEFAULT '默认工作区',
+            name TEXT NOT NULL,
             description TEXT DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -68,7 +68,22 @@ def init_db():
         conn.execute("ALTER TABLE messages ADD COLUMN feedback_detail TEXT DEFAULT NULL")
     except sqlite3.OperationalError:
         pass
+    _ensure_default_workspace()
     conn.commit()
+    conn.close()
+
+
+def _ensure_default_workspace():
+    """Create the default workspace if it doesn't exist."""
+    conn = _get_conn()
+    row = conn.execute("SELECT id FROM workspaces WHERE id = ''").fetchone()
+    if not row:
+        now = datetime.now(UTC).isoformat()
+        conn.execute(
+            "INSERT INTO workspaces (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            ("", "默认工作区", "所有未归类的对话", now, now),
+        )
+        conn.commit()
     conn.close()
 
 
@@ -302,9 +317,9 @@ def create_workspace(name: str = "新工作区", description: str = "") -> dict:
 
 
 def list_workspaces() -> list[dict]:
-    """Return all workspaces."""
+    """Return all workspaces, including the default one."""
     conn = _get_conn()
-    rows = conn.execute("SELECT id, name, description, created_at, updated_at FROM workspaces ORDER BY created_at").fetchall()
+    rows = conn.execute("SELECT id, name, description, created_at, updated_at FROM workspaces ORDER BY id = '' DESC, created_at").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -334,8 +349,9 @@ def update_workspace(ws_id: str, name: str | None = None, description: str | Non
 
 
 def delete_workspace(ws_id: str) -> bool:
-    """Delete a workspace (does not delete its conversations)."""
+    """Delete a workspace and reassign its conversations to the default workspace."""
     conn = _get_conn()
+    conn.execute("UPDATE conversations SET workspace_id = '' WHERE workspace_id = ?", (ws_id,))
     cursor = conn.execute("DELETE FROM workspaces WHERE id = ?", (ws_id,))
     conn.commit()
     conn.close()

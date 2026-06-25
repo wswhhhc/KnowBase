@@ -52,9 +52,10 @@ export function useWorkspaces() {
     try {
       const list = await api.getWorkspaces()
       setWorkspaces(list)
-      // Auto-select first workspace if none selected
+      // Auto-select default workspace ("") if no selection
       if (list.length > 0 && !activeWorkspaceId) {
-        setActiveWorkspaceId(list[0].id)
+        const defaultWs = list.find((ws) => ws.id === '') || list[0]
+        setActiveWorkspaceId(defaultWs.id)
       }
       return list
     } catch (e) {
