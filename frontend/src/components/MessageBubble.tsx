@@ -196,7 +196,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                     </TooltipProvider>
                   )}
                   {message.outcome_category === 'no_docs' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 知识库中未找到</span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 工作区中未找到</span>
                   )}
                   {message.outcome_category === 'web_empty' && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 无法回答</span>
@@ -294,7 +294,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                 {(message.outcome_category === 'no_docs' || message.outcome_category === 'web_empty' || message.outcome_category === 'weak_evidence' || message.outcome_category === 'vague_question') && (
                   <div className="mt-3 rounded-lg border border-border/60 bg-surface/30 px-3.5 py-3">
                     <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
-                      {message.outcome_category === 'no_docs' && '知识库中没有找到相关内容。你可以上传相关文档后再问一次。'}
+                      {message.outcome_category === 'no_docs' && '工作区中没有找到相关内容。你可以上传相关文档后再问一次。'}
                       {message.outcome_category === 'web_empty' && '联网搜索也没有找到相关信息。建议换一种问法或上传相关资料。'}
                       {message.outcome_category === 'weak_evidence' && `检索到的信息不足以支撑可靠回答。尝试更具体的问题或上传更详细的资料。${message.evidence_summary ? `（${message.evidence_summary}）` : ''}`}
                       {message.outcome_category === 'vague_question' && '问题比较模糊，建议补充更多细节。'}

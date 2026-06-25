@@ -149,7 +149,7 @@ describe('Sidebar interactions', () => {
   it('navigation buttons call onNavigate', async () => {
     const onNavigate = vi.fn()
     render(<Sidebar {...defaultProps} onNavigate={onNavigate} />)
-    await userEvent.click(screen.getByText('知识库'))
+    await userEvent.click(screen.getByText('工作区'))
     expect(onNavigate).toHaveBeenCalledWith('browser')
   })
 

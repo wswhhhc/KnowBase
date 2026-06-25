@@ -84,7 +84,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
   const handleClearAll = async () => {
     try {
       await api.clearKnowledgeBase()
-      if (await onRefresh()) toast.success('知识库已清空')
+      if (await onRefresh()) toast.success('工作区已清空')
     } catch (e) {
       toast.error('清空失败', { description: String(e) })
     }
@@ -93,7 +93,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
   const handleDeleteSource = async (source: string) => {
     try {
       await api.deleteSource(source)
-      if (await onRefresh()) toast.success('已删除来源')
+      if (await onRefresh()) toast.success('已删除引用文档')
     } catch (e) {
       toast.error('删除失败', { description: String(e) })
     }
@@ -178,7 +178,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
       {/* Source List */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">文档来源</span>
+          <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">引用文档</span>
           {sources.length > 0 && (
             <button onClick={handleClearAll} className="text-[10px] text-destructive/50 hover:text-destructive transition-colors">
               清空
@@ -189,7 +189,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
           {sources.map((s) => (
             <div key={s.source} className="group flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-foreground/70 hover:bg-muted transition-colors">
               <span className="truncate flex-1">{s.source}</span>
-              <span className="text-[10px] text-muted-foreground mr-2 font-mono">{s.count} 片段</span>
+              <span className="text-[10px] text-muted-foreground mr-2 font-mono">{s.count} 段落</span>
               <button
                 onClick={() => handleDeleteSource(s.source)}
                 className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
@@ -199,7 +199,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
             </div>
           ))}
           {sources.length === 0 && (
-            <p className="text-xs text-muted-foreground/60 text-center py-6 italic">知识库为空</p>
+            <p className="text-xs text-muted-foreground/60 text-center py-6 italic">工作区为空</p>
           )}
         </div>
       </div>

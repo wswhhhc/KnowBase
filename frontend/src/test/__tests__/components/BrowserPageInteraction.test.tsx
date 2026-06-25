@@ -56,7 +56,7 @@ describe('BrowserPage interactions', () => {
   it('search input calls getKBChunks with query', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
-    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
 
     const searchInput = screen.getByPlaceholderText('搜索文档内容…')
     await userEvent.type(searchInput, '年假{Enter}')
@@ -80,7 +80,7 @@ describe('BrowserPage interactions', () => {
   it('hotspot mode calls getKBHotspots', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
-    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
 
     // The hotspot toggle is the button wrapping a Flame icon — find by its test-id approach
     // The button has no text, so target the hotspot toggle button via its sibling structure
@@ -94,7 +94,7 @@ describe('BrowserPage interactions', () => {
   it('refresh button refetches data', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
-    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
 
     await userEvent.click(screen.getByText('RefreshCw'))
     expect(api.getKBChunks).toHaveBeenCalled()
@@ -102,7 +102,7 @@ describe('BrowserPage interactions', () => {
 
   it('createBookmark receives workspace_id when passed as prop', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} workspaceId="ws-1" />) })
-    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
     const bmBtns = screen.getAllByText('Bookmark')
     await userEvent.click(bmBtns[0])
     expect(api.createBookmark).toHaveBeenCalled()

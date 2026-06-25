@@ -59,7 +59,7 @@ async def upload_file(
         docs_text = " ".join(d.page_content for d in kb.all_docs if d.metadata.get("source", "").startswith(source_name.rsplit(".", 1)[0]))
         suggested = generate_suggested_questions(docs_text) if chunk_count > 0 else []
 
-        msg = f"已添加 {chunk_count} 个新片段" if chunk_count else "文件内容无变化，未新增片段"
+        msg = f"已添加 {chunk_count} 个新段落" if chunk_count else "文件内容无变化，未新增段落"
         return IngestResponse(
             chunk_count=chunk_count, total_docs=kb.document_count,
             message=msg,
@@ -76,7 +76,7 @@ async def ingest_url(body: URLIngestRequest, kb: KnowledgeBase = Depends(get_kno
         chunk_count = kb.ingest_url(body.url)
         return IngestResponse(
             chunk_count=chunk_count, total_docs=kb.document_count,
-            message=f"已添加 {chunk_count} 个新片段" if chunk_count else "URL 内容已存在",
+            message=f"已添加 {chunk_count} 个新段落" if chunk_count else "URL 内容已存在",
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -89,11 +89,11 @@ async def delete_source(source_name: str, kb: KnowledgeBase = Depends(get_knowle
         raise HTTPException(404, "来源不存在")
     return IngestResponse(
         chunk_count=removed, total_docs=kb.document_count,
-        message=f"已删除 {source_name}（{removed} 个片段）",
+        message=f"已删除 {source_name}（{removed} 个段落）",
     )
 
 
 @router.post("/clear")
 async def clear_kb(kb: KnowledgeBase = Depends(get_knowledge_base)):
     kb.clear()
-    return {"ok": True, "message": "知识库已清空"}
+    return {"ok": True, "message": "工作区已清空"}

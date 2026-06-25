@@ -31,7 +31,7 @@ interface SidebarProps {
 
 const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[] = [
   { view: 'chat', icon: MessageSquare, label: '对话' },
-  { view: 'browser', icon: BookOpen, label: '知识库' },
+  { view: 'browser', icon: BookOpen, label: '工作区' },
   { view: 'dashboard', icon: BarChart3, label: '指标' },
 ]
 

@@ -204,14 +204,14 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
           </button>
           <div className="h-4 w-px bg-border" />
           <BookOpen className="h-4 w-4 text-primary" />
-          <h1 className="font-heading text-lg text-foreground tracking-tight">知识库</h1>
+          <h1 className="font-heading text-lg text-foreground tracking-tight">工作区</h1>
         </div>
 
         <div className="flex items-center gap-4">
           {stats && (
             <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{stats.chunk_count} 片段</span>
-              <span className="flex items-center gap-1"><Layers className="h-3 w-3" />{stats.source_count} 来源</span>
+              <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{stats.chunk_count} 段落</span>
+              <span className="flex items-center gap-1"><Layers className="h-3 w-3" />{stats.source_count} 引用文档</span>
               <span className="flex items-center gap-1"><Hash className="h-3 w-3" />{(stats.total_chars / 1000).toFixed(0)}k 字符</span>
             </div>
           )}
@@ -336,7 +336,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
           ) : displayChunks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <BookOpen className="h-12 w-12 text-muted-foreground/20 mb-4" />
-              <p className="text-sm text-muted-foreground">知识库为空</p>
+              <p className="text-sm text-muted-foreground">工作区为空</p>
               <p className="text-xs text-muted-foreground/50 mt-1">上传文档或导入网页后即可浏览</p>
             </div>
           ) : chunkView === 'slice' && selectedSource ? (
@@ -395,7 +395,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                       <button
                         onClick={() => handleChunkBookmark(chunk)}
                         className={`${bookmarkedChunks.has(chunk.chunk_id) ? 'text-amber-400' : 'text-muted-foreground/20 hover:text-amber-400'} transition-colors`}
-                        title={bookmarkedChunks.has(chunk.chunk_id) ? '已收藏' : '收藏此片段'}
+                        title={bookmarkedChunks.has(chunk.chunk_id) ? '已收藏' : '收藏此段落'}
                       >
                         {bookmarkedChunks.has(chunk.chunk_id) ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
                       </button>
@@ -459,7 +459,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                         <button
                           onClick={(e) => { e.stopPropagation(); handleChunkBookmark(chunk) }}
                           className={`ml-auto ${bookmarkedChunks.has(chunk.chunk_id) ? 'text-amber-400' : 'text-muted-foreground/20 hover:text-amber-400'} transition-colors`}
-                          title={bookmarkedChunks.has(chunk.chunk_id) ? '已收藏' : '收藏此片段'}
+                          title={bookmarkedChunks.has(chunk.chunk_id) ? '已收藏' : '收藏此段落'}
                         >
                           {bookmarkedChunks.has(chunk.chunk_id) ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
                         </button>
@@ -501,7 +501,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                 </div>
               )}
               <span className="text-[10px] text-muted-foreground/30 font-mono">
-                共 {total} 个片段 · {stats?.source_count ?? 0} 个来源 · 总计 {(stats?.total_chars ?? 0) / 1000}k 字符
+                共 {total} 个段落 · {stats?.source_count ?? 0} 个引用文档 · 总计 {(stats?.total_chars ?? 0) / 1000}k 字符
               </span>
             </div>
           )}

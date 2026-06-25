@@ -118,13 +118,13 @@ describe('Sidebar', () => {
     expect(screen.getByText('RAG Assistant')).toBeInTheDocument()
   })
 
-  it('renders 3 navigation buttons: 对话, 知识库, 指标', () => {
+  it('renders 3 navigation buttons: 对话, 工作区, 指标', () => {
     render(<Sidebar {...defaultProps} />)
 
-    // Nav buttons: there are 3 nav items: 对话, 知识库, 指标
+    // Nav buttons: there are 3 nav items: 对话, 工作区, 指标
     // "对话" also appears in the tab toggle at the bottom, so use getAllByText
     expect(screen.getAllByText('对话')[0]).toBeInTheDocument()
-    expect(screen.getByText('知识库')).toBeInTheDocument()
+    expect(screen.getByText('工作区')).toBeInTheDocument()
     expect(screen.getByText('指标')).toBeInTheDocument()
   })
 
@@ -160,8 +160,8 @@ describe('Sidebar', () => {
     })
 
     // KBSummary renders "片段" and "来源" labels
-    expect(screen.getByText('片段')).toBeInTheDocument()
-    expect(screen.getByText('来源')).toBeInTheDocument()
+    expect(screen.getByText('段落')).toBeInTheDocument()
+    expect(screen.getByText('引用文档')).toBeInTheDocument()
     expect(screen.getByText('150')).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
   })

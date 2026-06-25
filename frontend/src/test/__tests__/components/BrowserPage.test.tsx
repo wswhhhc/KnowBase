@@ -78,11 +78,11 @@ describe('BrowserPage', () => {
     vi.mocked(api.getKBHotspots).mockResolvedValue([])
   })
 
-  it('renders the "知识库" title', async () => {
+  it('renders the "工作区" title', async () => {
     await act(async () => {
       render(<BrowserPage {...defaultProps} />)
     })
-    expect(screen.getByText('知识库')).toBeInTheDocument()
+    expect(screen.getByText('工作区')).toBeInTheDocument()
   })
 
   it('renders chunk cards after data loads', async () => {
@@ -116,11 +116,11 @@ describe('BrowserPage', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('150 片段')).toBeInTheDocument()
+      expect(screen.getByText('150 段落')).toBeInTheDocument()
     })
   })
 
-  it('shows "知识库为空" empty state when no chunks', async () => {
+  it('shows "工作区为空" empty state when no chunks', async () => {
     vi.mocked(api.getKBChunks).mockResolvedValue({ items: [], total: 0 })
 
     await act(async () => {
@@ -128,7 +128,7 @@ describe('BrowserPage', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('知识库为空')).toBeInTheDocument()
+      expect(screen.getByText('工作区为空')).toBeInTheDocument()
     })
   })
 
