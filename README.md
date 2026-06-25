@@ -29,7 +29,7 @@
 
 ### 1. 配置文件
 
-创建或编辑 `.env`：
+创建或编辑 `backend/.env`：
 
 ```env
 SILICONFLOW_API_KEY=你的硅基流动密钥
@@ -109,8 +109,6 @@ KnowBase/
 │           └── utils.ts        # 工具函数
 ├── docs/
 │   └── tests/                  # 测试文档：单元/集成/冒烟/P2边缘/接口/验收/缺陷/报告
-├── config/                     # 共享配置
-├── data/                       # 共享数据（chroma/checkpoints/logs）
 └── scripts/                    # 启动脚本
 ```
 

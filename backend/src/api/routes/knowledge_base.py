@@ -29,6 +29,8 @@ async def chunks(
     skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> dict:
+    # Trigger lazy load from Chroma before accessing all_docs
+    kb.source_counts()
     docs = kb.all_docs
     if source:
         docs = [d for d in docs if d.metadata.get("source", "") == normalize_source(source)]

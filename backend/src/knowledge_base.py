@@ -6,6 +6,7 @@ from collections import Counter
 from datetime import UTC, datetime
 import json
 import logging
+import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -152,15 +153,19 @@ class IngestionService:
         self._bm25_corpus = bm25_corpus
         self._bm25_index = bm25_index  # Mutable list wrapping BM25Okapi | None
         self._loaded = False
+        self._load_lock = threading.Lock()
 
     def _ensure_loaded(self):
-        """Lazy-load all documents from Chroma on first need."""
+        """Lazy-load all documents from Chroma on first need (double-checked locking)."""
         if self._loaded:
             return
-        result = self.vector_store.get(include=["documents", "metadatas"])
-        self._all_docs[:] = self._documents_from_chroma_result(result)
-        self._rebuild_all()
-        self._loaded = True
+        with self._load_lock:
+            if self._loaded:
+                return
+            result = self.vector_store.get(include=["documents", "metadatas"])
+            self._all_docs[:] = self._documents_from_chroma_result(result)
+            self._rebuild_all()
+            self._loaded = True
 
     def _rebuild_all(self):
         """Rebuild doc_by_id, existing_chunk_ids, and BM25 from all_docs."""
@@ -595,6 +600,9 @@ class KnowledgeBase:
             hotspots=self.hotspots,
         )
 
+        # Write lock serializes concurrent upload/delete/clear operations.
+        self._write_lock = threading.Lock()
+
     def _init_vector_store(self) -> Chroma:
         """Initialize the persistent vector store."""
         return Chroma(
@@ -626,28 +634,35 @@ class KnowledgeBase:
         return self.retriever.search_content(query)
 
     def load_preset_documents(self) -> int:
-        return self.ingestion.load_preset_documents()
+        with self._write_lock:
+            return self.ingestion.load_preset_documents()
 
     def ingest_file(self, file_path: str, source_name: str | None = None) -> int:
-        return self.ingestion.ingest_file(file_path, source_name=source_name)
+        with self._write_lock:
+            return self.ingestion.ingest_file(file_path, source_name=source_name)
 
     def ingest_url(self, url: str) -> int:
-        return self.ingestion.ingest_url(url)
+        with self._write_lock:
+            return self.ingestion.ingest_url(url)
 
     def add_document(self, file_path: str) -> int:
-        return self.ingestion.add_document(file_path)
+        with self._write_lock:
+            return self.ingestion.add_document(file_path)
 
     def delete_source(self, source_name: str) -> int:
-        return self.retriever.delete_source(source_name)
+        with self._write_lock:
+            return self.retriever.delete_source(source_name)
 
     def clear(self):
-        self.vector_store.delete_collection()
-        self.vector_store = self._init_vector_store()
-        self.retriever.vector_store = self.vector_store
-        self.ingestion.vector_store = self.vector_store
-        self.retriever.clear()
+        with self._write_lock:
+            self.vector_store.delete_collection()
+            self.vector_store = self._init_vector_store()
+            self.retriever.vector_store = self.vector_store
+            self.ingestion.vector_store = self.vector_store
+            self.retriever.clear()
 
     def get_hotspots(self, top_n: int = 50) -> List[dict]:
+        self.retriever._ingestion._ensure_loaded()
         raw = self.hotspots.get_hotspots(top_n, self.doc_by_id)
         return [HotspotEntry(**entry) for entry in raw]
 

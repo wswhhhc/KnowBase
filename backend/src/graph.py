@@ -38,17 +38,19 @@ logger = logging.getLogger(__name__)
 
 
 _GRAPH_CACHE: dict[int, tuple[weakref.ref, object]] = {}
+_CHECKPOINTER: SqliteSaver | None = None
 
 
 def _init_checkpointer():
+    global _CHECKPOINTER
+    if _CHECKPOINTER is not None:
+        return _CHECKPOINTER
     db_dir = os.path.dirname(CHECKPOINT_DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(CHECKPOINT_DB_PATH, check_same_thread=False)
-    return SqliteSaver(conn)
-
-
-_CHECKPOINTER = _init_checkpointer()
+    _CHECKPOINTER = SqliteSaver(conn)
+    return _CHECKPOINTER
 
 
 def build_graph(knowledge_base: KnowledgeBase):
@@ -102,7 +104,7 @@ def build_graph(knowledge_base: KnowledgeBase):
     )
     workflow.add_edge("finalize", END)
 
-    return workflow.compile(checkpointer=_CHECKPOINTER)
+    return workflow.compile(checkpointer=_init_checkpointer())
 
 
 def get_graph(knowledge_base: KnowledgeBase):

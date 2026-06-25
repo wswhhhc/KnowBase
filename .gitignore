@@ -20,6 +20,7 @@ data/chroma_db_backup_*/
 data/checkpoints.db*
 data/.thread_id
 data/rag_logs/
+data/sample_*
 scripts/
 .venv/
 __pycache__/

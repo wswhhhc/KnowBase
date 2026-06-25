@@ -62,11 +62,10 @@ KnowBase/
 │       │   ├── sidebar/        # ConversationList / DocumentPanel / KBSummary
 │       │   ├── ChatArea / Sidebar / BrowserPage / DashboardPage + ui/
 │       ├── hooks/              # useChat（SSE 流式）/ useData / useTheme
-│       └── lib/                # api.ts（SSEParser + 全量 API 客户端）/ utils.ts
-├── config/                     # 共享配置（pydantic-settings）
-├── data/                       # chroma_db / checkpoints.db / conversations.db / logs
-└── docs/
-    └── tests/                  # 8 份测试文档（单元/集成/冒烟/边界/接口/验收/缺陷/报告）
+│       └── lib/                # api.ts（SSEParser + 全量 API 客户端）/ api-types.ts / api-types.generated.ts / utils.ts
+│   ├── data/                   # chroma_db / checkpoints.db / conversations.db / logs
+├── docs/
+│   └── tests/                  # 8 份测试文档（单元/集成/冒烟/边界/接口/验收/缺陷/报告）
 ```
 
 ### API 端点

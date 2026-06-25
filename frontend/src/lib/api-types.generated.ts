@@ -1,6 +1,7 @@
 // Auto-generated type aliases — maps Pydantic model names to TS interfaces.
 // Generated from backend/openapi.json by openapi-typescript.
-// Run `npm run gen-api-types` to regenerate.
+// Run `cd frontend && npm run gen-api-types` to regenerate.
+// Depends on backend/openapi.json (export from a running backend).
 import type { components } from './api-types'
 
 type Schemas = components['schemas']
@@ -17,7 +18,10 @@ export type IngestResponse = Schemas['IngestResponse']
 
 // Manually maintained — these Pydantic models are used inside SSE events
 // (not FastAPI JSON responses), so openapi-typescript cannot infer them.
-// Keep in sync with backend/src/api/models.py
+// Keep in sync with backend/src/api/models.py.
+//
+// When you add/change fields in the Pydantic model, update these interfaces
+// to match.  There is no automated check for this.
 
 export interface KBChunk {
   source: string
