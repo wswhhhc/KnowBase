@@ -583,7 +583,10 @@ class Retriever:
         self._all_docs[:] = [
             doc
             for doc in self._all_docs
-            if normalize_source(doc.metadata.get("source", "")) != source_name
+            if not (
+                normalize_source(doc.metadata.get("source", "")) == source_name
+                and (version_filter is None or doc.metadata.get("version") == version_filter)
+            )
         ]
         self._ingestion._rebuild_all()
         return before

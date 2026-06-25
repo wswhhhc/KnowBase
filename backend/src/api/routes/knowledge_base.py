@@ -33,7 +33,19 @@ async def chunks(
     kb.source_counts()
     docs = kb.all_docs
     if source:
-        docs = [d for d in docs if d.metadata.get("source", "") == normalize_source(source)]
+        source = normalize_source(source)
+        # Parse optional version suffix: "doc.txt (v2)"
+        import re as _re
+        version_filter = None
+        m = _re.match(r"^(.+?)\s+\(v(\d+)\)$", source)
+        if m:
+            source = m.group(1).strip()
+            version_filter = f"v{m.group(2)}"
+        docs = [
+            d for d in docs
+            if d.metadata.get("source", "") == source
+            and (version_filter is None or d.metadata.get("version") == version_filter)
+        ]
     if search:
         keywords = [kw.strip().lower() for kw in search.split() if kw.strip()]
         docs = [d for d in docs if any(kw in d.page_content.lower() for kw in keywords)]
