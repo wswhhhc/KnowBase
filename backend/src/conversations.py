@@ -285,19 +285,43 @@ def update_feedback(msg_row_id: int, feedback: str, conv_id: str | None = None, 
     return cursor.rowcount > 0
 
 
-def export_conversation(conv_id: str) -> str:
-    """Export conversation as Markdown."""
+def export_conversation(conv_id: str, fmt: str = "markdown", include_sources: bool = True, include_debug: bool = False):
+    """Export conversation as Markdown or JSON.
+
+    Returns a Markdown string when fmt='markdown', or a dict when fmt='json'.
+    """
     conv = get_conversation(conv_id)
     if not conv:
-        return ""
+        return "" if fmt == "markdown" else {}
+
     messages = get_messages(conv_id)
+
+    if fmt == "json":
+        export_msgs = []
+        for msg in messages:
+            entry = {
+                "role": "用户" if msg["role"] == "user" else "助手",
+                "content": msg["content"],
+            }
+            if include_sources and msg.get("sources"):
+                entry["sources"] = msg["sources"]
+            if include_debug and msg.get("debug_info"):
+                entry["debug_info"] = msg["debug_info"]
+            export_msgs.append(entry)
+        return {
+            "title": conv["title"],
+            "created_at": conv["created_at"],
+            "messages": export_msgs,
+        }
+
+    # Markdown export (default)
     parts = [f"# {conv['title']}\n\n"]
     for msg in messages:
         role_label = "👤 用户" if msg["role"] == "user" else "🤖 助手"
         parts.append(f"### {role_label}\n{msg['content']}\n")
-        if msg["sources"]:
+        if include_sources and msg["sources"]:
             parts.append(f"**来源：** {', '.join(s.get('source', '?') for s in msg['sources'])}\n")
-        if msg["quality_reason"]:
+        if include_debug and msg["quality_reason"]:
             parts.append(f"*质量检查：{msg['quality_reason']}*\n")
         parts.append("\n---\n\n")
     return "".join(parts)

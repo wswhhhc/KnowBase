@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Query
 
 from src.api.deps import verify_api_key
 from src.api.models import ConversationCreate, ConversationOut, ExportOut, MessageFeedback, MessageOut
@@ -72,8 +72,17 @@ async def feedback(conv_id: str, msg_id: int, body: MessageFeedback):
 
 
 @router.get("/{conv_id}/export")
-async def export(conv_id: str) -> ExportOut:
-    md = export_conversation(conv_id)
-    if not md:
+async def export(
+    conv_id: str,
+    format: str = Query("markdown", regex="^(markdown|json)$"),
+    include_sources: bool = Query(True),
+    include_debug: bool = Query(False),
+) -> ExportOut:
+    result = export_conversation(conv_id, fmt=format, include_sources=include_sources, include_debug=include_debug)
+    if format == "json":
+        if not result:
+            raise HTTPException(404, "对话不存在")
+        return ExportOut(json=result)
+    if not result:
         raise HTTPException(404, "对话不存在")
-    return ExportOut(markdown=md)
+    return ExportOut(markdown=result)

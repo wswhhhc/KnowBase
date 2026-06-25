@@ -135,16 +135,28 @@ class ConversationEdgeCaseTests(unittest.TestCase):
             quality_reason="ok",
         )
 
-        md = conversations.export_conversation(conv["id"])
+        md = conversations.export_conversation(conv["id"], fmt="markdown")
         self.assertIn("导出测试", md)
         self.assertIn("你好", md)
         self.assertIn("你好！", md)
         self.assertIn("doc.md", md)
-        self.assertIn("ok", md)
 
     def test_export_nonexistent_conversation_returns_empty(self):
-        md = conversations.export_conversation("nonexistent")
+        md = conversations.export_conversation("nonexistent", fmt="markdown")
         self.assertEqual(md, "")
+
+    def test_export_json_returns_dict_for_existing(self):
+        conv = conversations.create_conversation("JSON测试")
+        conversations.add_message(conv["id"], "user", "对话内容")
+        data = conversations.export_conversation(conv["id"], fmt="json", include_sources=True, include_debug=True)
+        self.assertEqual(data["title"], "JSON测试")
+        self.assertEqual(len(data["messages"]), 1)
+        self.assertEqual(data["messages"][0]["role"], "用户")
+        self.assertEqual(data["messages"][0]["content"], "对话内容")
+
+    def test_export_json_returns_empty_dict_for_nonexistent(self):
+        result = conversations.export_conversation("nonexistent", fmt="json")
+        self.assertEqual(result, {})
 
     def test_update_feedback_works(self):
         conv = conversations.create_conversation("反馈测试")

@@ -86,6 +86,10 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
   const [feedbackCategory, setFeedbackCategory] = useState<string | null>(null)
   const [feedbackDetail, setFeedbackDetail] = useState('')
   const [exporting, setExporting] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportFormat, setExportFormat] = useState<'markdown' | 'json'>('markdown')
+  const [exportSources, setExportSources] = useState(true)
+  const [exportDebug, setExportDebug] = useState(false)
 
   const isFirstAssistant = !isUser && prevMessage?.role === 'user'
 
@@ -93,13 +97,22 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
     const convId = message.convId || threadId
     if (!convId) return
     setExporting(true)
+    setExportOpen(false)
     try {
-      const result = await api.exportConversation(convId)
-      const blob = new Blob([result.markdown], { type: 'text/markdown' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = `knowbase-${convId.slice(0, 8)}.md`
-      a.click(); URL.revokeObjectURL(url)
+      const result = await api.exportConversation(convId, exportFormat, exportSources, exportDebug)
+      if (exportFormat === 'json') {
+        const blob = new Blob([JSON.stringify(result.json, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = `knowbase-${convId.slice(0, 8)}.json`
+        a.click(); URL.revokeObjectURL(url)
+      } else {
+        const blob = new Blob([result.markdown || ''], { type: 'text/markdown' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = `knowbase-${convId.slice(0, 8)}.md`
+        a.click(); URL.revokeObjectURL(url)
+      }
     } catch (e) { console.error('导出失败', e) }
     setExporting(false)
   }
@@ -356,11 +369,40 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                 </AnimatePresence>
 
                 {isFirstAssistant && (
-                  <button onClick={handleExport} disabled={exporting}
-                    className="mt-2 inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-                    <FileDown className="h-3 w-3" />
-                    {exporting ? '导出中…' : '导出对话'}
-                  </button>
+                  <div className="relative mt-2">
+                    <button onClick={() => setExportOpen(!exportOpen)} disabled={exporting}
+                      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                      <FileDown className="h-3 w-3" />
+                      {exporting ? '导出中…' : '导出对话'}
+                    </button>
+                    {exportOpen && (
+                      <div className="mt-1.5 rounded-lg border border-border bg-surface shadow-lg p-2.5 w-56">
+                        <div className="space-y-1.5">
+                          <label className="flex items-center gap-2 text-[11px]">
+                            <input type="radio" name="export-fmt" checked={exportFormat === 'markdown'} onChange={() => setExportFormat('markdown')} className="accent-primary" />
+                            Markdown
+                          </label>
+                          <label className="flex items-center gap-2 text-[11px]">
+                            <input type="radio" name="export-fmt" checked={exportFormat === 'json'} onChange={() => setExportFormat('json')} className="accent-primary" />
+                            JSON（含结构化数据）
+                          </label>
+                          <div className="border-t border-border my-1" />
+                          <label className="flex items-center gap-2 text-[11px]">
+                            <input type="checkbox" checked={exportSources} onChange={(e) => setExportSources(e.target.checked)} className="accent-primary" />
+                            包含来源
+                          </label>
+                          <label className="flex items-center gap-2 text-[11px]">
+                            <input type="checkbox" checked={exportDebug} onChange={(e) => setExportDebug(e.target.checked)} className="accent-primary" />
+                            包含调试信息
+                          </label>
+                          <button onClick={handleExport}
+                            className="w-full mt-1 rounded bg-primary/10 text-primary text-[10px] font-medium py-1.5 hover:bg-primary/20 transition-colors">
+                            确认导出
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {message.debugData && (

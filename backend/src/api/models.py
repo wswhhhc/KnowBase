@@ -55,7 +55,8 @@ class MessageFeedback(BaseModel):
 
 
 class ExportOut(BaseModel):
-    markdown: str
+    markdown: str = ""
+    json: dict = Field(default_factory=dict)
 
 
 class IngestResponse(BaseModel):

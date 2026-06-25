@@ -82,8 +82,10 @@ export const updateFeedback = (convId: string, msgId: number, feedback: string, 
     body: JSON.stringify({ feedback, category, detail }),
   })
 
-export const exportConversation = (convId: string) =>
-  req<{ markdown: string }>(`/conversations/${convId}/export`)
+export const exportConversation = (convId: string, format = 'markdown', includeSources = true, includeDebug = false) => {
+  const params = new URLSearchParams({ format, include_sources: String(includeSources), include_debug: String(includeDebug) })
+  return req<{ markdown?: string; json?: any }>(`/conversations/${convId}/export?${params}`)
+}
 
 // ── Workspaces ──
 
