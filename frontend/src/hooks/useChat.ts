@@ -37,6 +37,17 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingNodes, setStreamingNodes] = useState<string[]>([])
   const [pinnedSources, setPinnedSources] = useState<PinnedSource[]>([])
+  const pinnedSourcesRef = useRef(pinnedSources)
+  pinnedSourcesRef.current = pinnedSources
+
+  const getPinnedIds = useCallback(() => {
+    return pinnedSourcesRef.current.filter((ps) => ps.pinned).map((ps) => ps.chunk_id)
+  }, [])
+
+  const getExcludedIds = useCallback(() => {
+    return pinnedSourcesRef.current.filter((ps) => ps.excluded).map((ps) => ps.chunk_id)
+  }, [])
+
   const abortRef = useRef<AbortController | null>(null)
   const threadIdRef = useRef<string | null>(null)
 
@@ -122,11 +133,11 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
                 : m,
             ),
           )
-          // Merge new sources into pinnedSources
+          // Merge new sources into pinnedSources (preserve existing pin/exclude states)
           setPinnedSources((prev) => {
-            const prevIds = new Set(prev.map((ps) => ps.chunk_id))
+            const prevMap = new Map(prev.map((ps) => [ps.chunk_id, ps]))
             const newEntries: PinnedSource[] = (data.sources || [])
-              .filter((s: any) => s.chunk_id && !prevIds.has(s.chunk_id))
+              .filter((s: any) => s.chunk_id && !prevMap.has(s.chunk_id))
               .map((s: any) => ({
                 chunk_id: s.chunk_id,
                 source: s.source || '',
@@ -159,6 +170,8 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
         webSearchEnabled,
         searchStrategy,
         callbacks,
+        getPinnedIds(),
+        getExcludedIds(),
       )
     },
     [isStreaming],
@@ -184,14 +197,14 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
 
   const loadMessages = useCallback((msgs: ChatMessage[], threadId?: string) => {
     setMessages(msgs)
-    // Restore pinned sources from loaded messages
-    const allSources = msgs.flatMap((m) => m.sources || [])
-    const seen = new Set<string>()
-    const restored: PinnedSource[] = []
-    for (const s of allSources) {
-      if (s.chunk_id && !seen.has(s.chunk_id)) {
-        seen.add(s.chunk_id)
-        restored.push({
+    // Merge loaded sources into pinnedSources — *preserve* existing pin/exclude states
+    // The key insight: pinnedSources from earlier in the session should keep their
+    // pinned/excluded flags. Only add *new* chunk_ids that haven't been seen.
+    const newFromMessages: PinnedSource[] = []
+    const allMsgsSources = msgs.flatMap((m) => m.sources || [])
+    for (const s of allMsgsSources) {
+      if (s.chunk_id && !newFromMessages.some((n) => n.chunk_id === s.chunk_id)) {
+        newFromMessages.push({
           chunk_id: s.chunk_id,
           source: s.source || '',
           content: s.content || '',
@@ -202,7 +215,11 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
         })
       }
     }
-    setPinnedSources(restored)
+    setPinnedSources((prev) => {
+      const prevMap = new Map(prev.map((ps) => [ps.chunk_id, ps]))
+      const trulyNew = newFromMessages.filter((n) => !prevMap.has(n.chunk_id))
+      return trulyNew.length > 0 ? [...prev, ...trulyNew] : prev
+    })
     threadIdRef.current = threadId || null
   }, [])
 

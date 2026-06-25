@@ -222,6 +222,8 @@ async def chat_stream(
                 stream_tokens=True,
                 web_search_enabled=body.web_search_enabled,
                 search_strategy=body.search_strategy,
+                pinned_chunk_ids=body.pinned_chunk_ids,
+                excluded_chunk_ids=body.excluded_chunk_ids,
             )
 
             for mode, data in events:

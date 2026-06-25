@@ -33,6 +33,8 @@ class GraphState(TypedDict):
     web_search_enabled: bool
     search_strategy: str
     search_filter: dict
+    pinned_chunk_ids: list[str]
+    excluded_chunk_ids: list[str]
 
     # 用户侧可信度信息
     evidence_level: str

@@ -147,6 +147,8 @@ def _initial_state(question: str) -> GraphState:
         "web_search_enabled": False,
         "search_strategy": "balanced",
         "search_filter": {},
+        "pinned_chunk_ids": [],
+        "excluded_chunk_ids": [],
         "evidence_level": "none",
         "evidence_summary": "",
         "outcome_category": "success",
@@ -192,11 +194,17 @@ def run_query(
     stream_tokens: bool = False,
     web_search_enabled: bool = False,
     search_strategy: str = "balanced",
+    pinned_chunk_ids: list[str] | None = None,
+    excluded_chunk_ids: list[str] | None = None,
 ) -> dict | Iterable[dict] | Generator[tuple[str, dict], None, None]:
     overrides = {
         "web_search_enabled": web_search_enabled,
         "search_strategy": search_strategy,
     }
+    if pinned_chunk_ids:
+        overrides["pinned_chunk_ids"] = pinned_chunk_ids
+    if excluded_chunk_ids:
+        overrides["excluded_chunk_ids"] = excluded_chunk_ids
     if stream_tokens:
         return _stream_query_with_tokens(question, thread_id, knowledge_base, **overrides)
     if stream:

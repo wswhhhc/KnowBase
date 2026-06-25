@@ -10,6 +10,8 @@ class ChatRequest(BaseModel):
     thread_id: str | None = None
     web_search_enabled: bool = False
     search_strategy: str = "balanced"
+    pinned_chunk_ids: list[str] = Field(default_factory=list)
+    excluded_chunk_ids: list[str] = Field(default_factory=list)
 
 
 class ChatSource(BaseModel):

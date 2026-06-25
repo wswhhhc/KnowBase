@@ -134,12 +134,20 @@ def retrieve_docs(state: GraphState, kb) -> dict:
         retrieval_k = max(retrieval_k, TOP_K_RETRIEVAL * 3)
     score_threshold = state.get("score_threshold", SCORE_THRESHOLD)
     search_filter = state.get("search_filter") or None
+    pinned_ids = state.get("pinned_chunk_ids", []) or []
+    excluded_ids = state.get("excluded_chunk_ids", []) or []
+    excluded_set = set(excluded_ids)
+    pinned_set = set(pinned_ids)
+
     docs = kb.hybrid_search(
         query,
         k=retrieval_k,
         score_threshold=score_threshold,
         filter=search_filter,
     )
+
+    # Apply exclusion filter
+    docs = [r for r in docs if r.chunk_id not in excluded_set]
 
     score_by_id = {r.chunk_id: r.score for r in docs}
     doc_by_id = {r.chunk_id: r.document for r in docs}
@@ -160,6 +168,13 @@ def retrieve_docs(state: GraphState, kb) -> dict:
             if cid and cid not in seen_ids:
                 seen_ids.add(cid)
                 enriched_docs.append(n)
+
+    # Ensure pinned chunks are always included (even if low score)
+    if pinned_set:
+        for result in docs:
+            if result.chunk_id in pinned_set and result.chunk_id not in seen_ids:
+                enriched_docs.append(result.document)
+                seen_ids.add(result.chunk_id)
 
     enriched_results = [
         RetrievalResult(

@@ -223,6 +223,8 @@ export function chatStream(
   webSearchEnabled: boolean,
   searchStrategy: string,
   callbacks: ChatStreamCallbacks,
+  pinnedChunkIds?: string[],
+  excludedChunkIds?: string[],
 ): AbortController {
   const controller = new AbortController()
 
@@ -234,6 +236,8 @@ export function chatStream(
       thread_id: threadId,
       web_search_enabled: webSearchEnabled,
       search_strategy: searchStrategy,
+      pinned_chunk_ids: pinnedChunkIds || [],
+      excluded_chunk_ids: excludedChunkIds || [],
     }),
     signal: controller.signal,
   })
