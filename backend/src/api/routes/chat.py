@@ -284,6 +284,25 @@ async def chat_stream(
             answer = accumulated_answer.strip() or "抱歉，我无法回答这个问题。"
             elapsed = int((time.monotonic() - t0) * 1000)
 
+            # Compute TTFB: time until first chunk of data returned from run_query
+            # first_token_ms: time until first token event
+            ttfb = 0
+            first_token = 0
+            fetch_start = t0
+            _iterated = False
+            for mode, data in events:
+                if not _iterated:
+                    ttfb = int((time.monotonic() - fetch_start) * 1000)
+                    _iterated = True
+                if mode == "messages":
+                    chunk, metadata = data
+                    if isinstance(chunk, AIMessageChunk) and chunk.content:
+                        first_token = int((time.monotonic() - fetch_start) * 1000)
+                        break
+                elif mode == "updates":
+                    first_token = int((time.monotonic() - fetch_start) * 1000)
+                    break
+
             debug_info = DebugInfo(
                 nodes=[NodeDebug(**nd) for nd in debug_state.nodes],
                 rewritten_question=debug_state.rewritten_question,
@@ -317,8 +336,8 @@ async def chat_stream(
                 pinned_chunk_ids=body.pinned_chunk_ids,
                 excluded_chunk_ids=body.excluded_chunk_ids,
                 workspace_id=body.workspace_id,
-                ttfb_ms=0,
-                first_token_ms=0,
+                ttfb_ms=ttfb,
+                first_token_ms=first_token,
             )
 
             yield {"event": "debug", "data": json.dumps(debug_info.model_dump())}
