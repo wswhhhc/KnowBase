@@ -55,6 +55,8 @@ function createChat(overrides?: any) {
     loadMessages: mockLoadMessages,
     pinnedSources: [] as any[],
     setPinnedSources: vi.fn(),
+    workspaceId: '',
+    setWorkspaceId: vi.fn(),
     threadId: null,
     ...overrides,
   }

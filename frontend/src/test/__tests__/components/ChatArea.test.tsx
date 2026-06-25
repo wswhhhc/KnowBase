@@ -66,6 +66,8 @@ describe('ChatArea', () => {
       loadMessages: vi.fn(),
       pinnedSources: [] as any[],
       setPinnedSources: vi.fn(),
+      workspaceId: '',
+      setWorkspaceId: vi.fn(),
       threadId: null,
     },
     onOpenSidebar: vi.fn(),

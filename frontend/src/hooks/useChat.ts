@@ -36,6 +36,8 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
   const [workspaceId, setWorkspaceId] = useState('')
   const abortRef = useRef<AbortController | null>(null)
   const threadIdRef = useRef<string | null>(null)
+  const rafRef = useRef<number | null>(null)
+  const maxVisibleMessages = 100
 
   // Helper: get pinnedSources for current thread
   const currentPinned = threadIdRef.current ? pinnedByConv[threadIdRef.current] ?? [] : []
@@ -90,9 +92,13 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
         },
         onToken(text) {
           accumulatedContent += text
-          setMessages((prev) =>
-            prev.map((m) => (m.id === msgId ? { ...m, content: accumulatedContent } : m)),
-          )
+          if (rafRef.current) cancelAnimationFrame(rafRef.current)
+          rafRef.current = requestAnimationFrame(() => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === msgId ? { ...m, content: accumulatedContent } : m)),
+            )
+            rafRef.current = null
+          })
         },
         onDebug(data) {
           debugData = data

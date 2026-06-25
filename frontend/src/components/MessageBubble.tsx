@@ -215,7 +215,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                         {bookmarked ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
                       </button>
                       {bookmarkOpen && (
-                        <div className="absolute top-full right-0 mt-1 w-56 rounded-lg border border-border bg-surface shadow-xl p-2.5 z-50">
+                        <div className="absolute top-full right-0 mt-1 w-56 rounded-lg border border-border bg-surface shadow-xl p-2.5 z-50 max-sm:right-auto max-sm:left-0">
                           <p className="text-[10px] font-medium text-muted-foreground mb-2">添加备注（可选）</p>
                           <input
                             value={bookmarkNote}

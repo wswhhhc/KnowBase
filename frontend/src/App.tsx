@@ -1,5 +1,5 @@
 import { Toaster } from 'sonner'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useChat } from '@/hooks/useChat'
 import type { Source } from '@/lib/api'
 import Sidebar from '@/components/Sidebar'
@@ -9,8 +9,20 @@ import DashboardPage from '@/components/DashboardPage'
 
 export type ViewType = 'chat' | 'browser' | 'dashboard'
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const mql = window.matchMedia(query)
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [query])
+  return matches
+}
+
 function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const isMobile = useMediaQuery('(max-width: 767px)')
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile)
   const [activeView, setActiveView] = useState<ViewType>('chat')
   const [convRefreshKey, setConvRefreshKey] = useState(0)
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
@@ -22,19 +34,22 @@ function App() {
     setConvRefreshKey((k) => k + 1)
   })
 
+  // Auto-close sidebar on mobile when switching views
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(false)
+  }, [activeView, isMobile])
+
   const handleCitationClick = useCallback((source: Source) => {
-    if (source.chunk_id) {
-      setHighlightChunkId(source.chunk_id)
-    }
+    if (source.chunk_id) setHighlightChunkId(source.chunk_id)
     setActiveView('browser')
-  }, [])
+    if (isMobile) setSidebarOpen(false)
+  }, [isMobile])
 
   const handleSendQuestion = useCallback((q: string) => {
     setActiveView('chat')
     setTimeout(() => chat.sendMessage(q, false, 'balanced'), 100)
   }, [chat])
 
-  // Sync workspaceId to chat hook
   const syncWsId = useCallback((wsId: string) => {
     setActiveWsId(wsId)
     chat.setWorkspaceId(wsId)
@@ -42,9 +57,24 @@ function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background noise-overlay">
+      {/* Mobile backdrop */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
       <div
-        className={`flex-shrink-0 border-r border-border transition-all duration-300 z-10 ${
-          sidebarOpen ? 'w-72' : 'w-0 overflow-hidden'
+        className={`${
+          isMobile
+            ? `fixed inset-y-0 left-0 z-50 transition-transform duration-300 ${
+                sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+              }`
+            : `flex-shrink-0 border-r border-border transition-all duration-300 z-10 ${
+                sidebarOpen ? 'w-72' : 'w-0 overflow-hidden'
+              }`
         }`}
       >
         <Sidebar

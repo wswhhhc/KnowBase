@@ -112,35 +112,37 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
             </Tooltip>
           </TooltipProvider>
 
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-                  <Globe className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">搜索</span>
-                  <Switch checked={webSearch} onCheckedChange={setWebSearch} />
-                </label>
-              </TooltipTrigger>
-              <TooltipContent>联网搜索开关</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="flex items-center gap-1 flex-wrap justify-end">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                    <Globe className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">搜索</span>
+                    <Switch checked={webSearch} onCheckedChange={setWebSearch} />
+                  </label>
+                </TooltipTrigger>
+                <TooltipContent>联网搜索开关</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-          <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-            {(['fast', 'balanced', 'high_quality', 'deep'] as const).map((s) => (
-              <TooltipProvider key={s}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button onClick={() => setSearchStrategy(s)}
-                      className={`px-2 py-1 text-[10px] font-medium rounded-sm transition-colors ${
-                        searchStrategy === s ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
-                      }`}>
-                      {s === 'fast' ? '⚡快速' : s === 'balanced' ? '⚖️标准' : s === 'high_quality' ? '🔬严谨' : '🔍深度'}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>{s === 'fast' ? '快速回答：不重排，最快响应。适合简单事实性问题' : s === 'balanced' ? '标准模式：智能判断是否需要重排。适合大多数情况' : s === 'high_quality' ? '严谨模式：强制重排+质量检查。质量优先，速度次之' : '深度检索：扩检索+综合回答。需要全面覆盖时使用'}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ))}
+            <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
+              {(['fast', 'balanced', 'high_quality', 'deep'] as const).map((s) => (
+                <TooltipProvider key={s}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button onClick={() => setSearchStrategy(s)}
+                        className={`px-2 py-1 text-[10px] font-medium rounded-sm transition-colors ${
+                          searchStrategy === s ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
+                        }`}>
+                        {s === 'fast' ? '⚡快速' : s === 'balanced' ? '⚖️标准' : s === 'high_quality' ? '🔬严谨' : '🔍深度'}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>{s === 'fast' ? '快速回答：不重排，最快响应。适合简单事实性问题' : s === 'balanced' ? '标准模式：智能判断是否需要重排。适合大多数情况' : s === 'high_quality' ? '严谨模式：强制重排+质量检查。质量优先，速度次之' : '深度检索：扩检索+综合回答。需要全面覆盖时使用'}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
+            </div>
           </div>
         </div>
       </header>
