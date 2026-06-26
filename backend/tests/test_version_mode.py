@@ -73,6 +73,30 @@ class VersionModeTests(unittest.TestCase):
                 result = self.kb.ingestion.ingest_file("/f/new_doc.txt", source_name="new_doc.txt", version_mode="skip")
         self.assertEqual(result, 1)
 
+    def test_skip_loads_existing_docs_before_duplicate_check(self):
+        """skip mode should honor persisted sources after a cold start."""
+        self.kb.ingestion._all_docs.clear()
+        self.kb.ingestion._doc_by_id.clear()
+        self.kb.ingestion._existing_chunk_ids.clear()
+
+        def _load_existing():
+            doc = Document(
+                page_content="existing",
+                metadata={"source": "doc.txt", "chunk_id": "doc.txt:0:exist"},
+            )
+            self.kb.ingestion._all_docs[:] = [doc]
+            self.kb.ingestion._doc_by_id["doc.txt:0:exist"] = doc
+            self.kb.ingestion._existing_chunk_ids.add("doc.txt:0:exist")
+
+        self.kb.ingestion._ensure_loaded = MagicMock(side_effect=_load_existing)
+
+        with patch("src.knowledge_base.load_document", return_value=self._make_file_docs("fresh content")):
+            with patch.object(self.kb.ingestion, "_process_documents", return_value=1) as mock_process:
+                result = self.kb.ingestion.ingest_file("/f/doc.txt", source_name="doc.txt", version_mode="skip")
+
+        self.assertEqual(result, 0)
+        mock_process.assert_not_called()
+
     def test_first_upload_without_version_mode_works(self):
         """Default version_mode='replace' on first upload does not break anything."""
         new_doc = self._make_file_docs("brand new", source="fresh.txt")

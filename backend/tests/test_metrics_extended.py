@@ -11,6 +11,7 @@ import pandas as pd
 
 from src import metrics
 from src.metrics import quality_fail_rate
+from src.api.routes.metrics import _pricing_for_model
 
 
 class LogQueryFormatTests(unittest.TestCase):
@@ -103,6 +104,8 @@ class LogQueryFormatTests(unittest.TestCase):
                 answer="ans",
                 error="timeout",
                 token_count=150,
+                prompt_tokens=90,
+                completion_tokens=60,
                 used_web_search=True,
                 used_rerank=False,
                 used_rewrite=True,
@@ -114,6 +117,8 @@ class LogQueryFormatTests(unittest.TestCase):
         self.assertFalse(record["used_rerank"])
         self.assertTrue(record["used_rewrite"])
         self.assertEqual(record["token_count"], 150)
+        self.assertEqual(record["prompt_tokens"], 90)
+        self.assertEqual(record["completion_tokens"], 60)
         self.assertEqual(record["error"], "timeout")
 
 
@@ -154,6 +159,11 @@ class ClearTodayLogExtendedTests(unittest.TestCase):
         with patch("src.metrics._LOG_DIR", Path("/nonexistent/path/xyz")):
             result = metrics.clear_today_log()
             self.assertFalse(result)
+
+
+class MetricsPricingTests(unittest.TestCase):
+    def test_gpt_4o_uses_more_specific_pricing_rule(self):
+        self.assertEqual(_pricing_for_model("gpt-4o"), (18.0, 72.0))
 
 
 if __name__ == "__main__":

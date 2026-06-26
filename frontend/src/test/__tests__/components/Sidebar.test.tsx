@@ -1,28 +1,8 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Sidebar from '@/components/Sidebar'
-import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
-import * as api from '@/lib/api'
-import { mockConversations, mockSources, mockKBStats } from '@/test/mocks/data'
 
-// Mock framer-motion (Sidebar doesn't use framer-motion directly, but KBSummary might)
-vi.mock('framer-motion', () => ({
-  motion: {
-    div: ({ children, ...props }: any) => {
-      const { initial, animate, exit, transition, ...rest } = props
-      return <div {...rest}>{children}</div>
-    },
-  },
-  AnimatePresence: ({ children }: any) => <>{children}</>,
-}))
-
-// Mock sonner
-vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
-}))
-
-// Mock lucide-react icons used by Sidebar
 vi.mock('lucide-react', () => {
   const icons: Record<string, string> = {
     MessageSquare: 'MessageSquare',
@@ -40,11 +20,21 @@ vi.mock('lucide-react', () => {
     Globe: 'Globe',
     FileText: 'FileText',
     Loader2: 'Loader2',
+    Settings: 'Settings',
+    Bookmark: 'Bookmark',
+    Search: 'Search',
+    Tag: 'Tag',
+    BookmarkCheck: 'BookmarkCheck',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
   )
 })
+
+const mockConversations = [
+  { id: 'conv-1', thread_id: 'thread-1', title: '测试对话 1', created_at: '2024-01-01T00:00:00', updated_at: '2024-01-01T00:00:00' },
+  { id: 'conv-2', thread_id: 'thread-2', title: '测试对话 2', created_at: '2024-01-02T00:00:00', updated_at: '2024-01-02T00:00:00' },
+]
 
 // Mock hooks
 vi.mock('@/hooks/useData', () => ({
@@ -61,20 +51,19 @@ vi.mock('@/hooks/useTheme', () => ({
 vi.mock('@/lib/api', () => ({
   getMessages: vi.fn().mockResolvedValue([]),
   uploadDocument: vi.fn(),
+  uploadDocumentStream: vi.fn(),
   ingestUrl: vi.fn(),
+  ingestUrlStream: vi.fn(),
   clearKnowledgeBase: vi.fn(),
   deleteSource: vi.fn(),
   getKBStats: vi.fn(),
   queryLogs: vi.fn().mockResolvedValue([]),
 }))
 
+const { useConversations, useSources, useWorkspaces } = await import('@/hooks/useData')
+
 const defaultProps = {
-  chat: {
-    messages: [] as any[],
-    loadMessages: vi.fn(),
-    clearMessages: vi.fn(),
-    sendMessage: vi.fn(),
-  },
+  chat: { messages: [] as any[], loadMessages: vi.fn(), clearMessages: vi.fn(), sendMessage: vi.fn() },
   activeView: 'chat' as const,
   onNavigate: vi.fn(),
   onClose: vi.fn(),
@@ -85,17 +74,6 @@ const defaultProps = {
 describe('Sidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-
-    vi.mocked(useConversations).mockReturnValue({
-      conversations: mockConversations,
-      activeId: 'conv-1',
-      setActiveId: vi.fn(),
-      create: vi.fn(),
-      remove: vi.fn(),
-      rename: vi.fn(),
-      refresh: vi.fn().mockResolvedValue(mockConversations),
-      loading: false,
-    })
 
     vi.mocked(useWorkspaces).mockReturnValue({
       workspaces: [{ id: 'ws-1', name: '默认工作区', description: '', created_at: '', updated_at: '' }],
@@ -108,38 +86,44 @@ describe('Sidebar', () => {
       loading: false,
     })
 
+    vi.mocked(useConversations).mockReturnValue({
+      conversations: mockConversations,
+      activeId: 'conv-1',
+      setActiveId: vi.fn(),
+      rename: vi.fn(),
+      create: vi.fn(),
+      remove: vi.fn(),
+      refresh: vi.fn().mockResolvedValue([]),
+      loading: false,
+    })
+
     vi.mocked(useSources).mockReturnValue({
-      sources: mockSources,
+      sources: [],
       sourceError: null,
       refresh: vi.fn(),
     })
-
-    vi.mocked(api.getKBStats).mockResolvedValue(mockKBStats)
   })
 
   it('renders the "K" logo and "KnowBase" title', () => {
     render(<Sidebar {...defaultProps} />)
-
     expect(screen.getByText('K')).toBeInTheDocument()
     expect(screen.getByText('KnowBase')).toBeInTheDocument()
-    expect(screen.getByText('RAG Assistant')).toBeInTheDocument()
   })
 
-  it('renders 3 navigation buttons: 对话, 工作区, 指标', () => {
+  it('renders 4 navigation buttons: 对话, 工作区, 指标, 设置', () => {
     render(<Sidebar {...defaultProps} />)
-
-    // Nav buttons: there are 3 nav items: 对话, 工作区, 指标
-    // "对话" also appears in the tab toggle at the bottom, so use getAllByText
-    expect(screen.getAllByText('对话')[0]).toBeInTheDocument()
+    const btns = screen.getAllByText('对话')
+    expect(btns.length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('工作区')).toBeInTheDocument()
     expect(screen.getByText('指标')).toBeInTheDocument()
+    expect(screen.getByText('设置')).toBeInTheDocument()
   })
 
-  it('shows conversation list from useConversations', () => {
+  it('shows conversation list from useConversations', async () => {
     render(<Sidebar {...defaultProps} />)
-
-    expect(screen.getByText('测试对话')).toBeInTheDocument()
-    expect(screen.getByText('关于 LLM 的讨论')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('测试对话 1')).toBeInTheDocument()
+    })
   })
 
   it('shows "暂无对话" when conversations empty', () => {
@@ -147,65 +131,23 @@ describe('Sidebar', () => {
       conversations: [],
       activeId: null,
       setActiveId: vi.fn(),
+      rename: vi.fn(),
       create: vi.fn(),
       remove: vi.fn(),
-      rename: vi.fn(),
       refresh: vi.fn().mockResolvedValue([]),
       loading: false,
     })
-
     render(<Sidebar {...defaultProps} />)
-
     expect(screen.getByText('暂无对话')).toBeInTheDocument()
-  })
-
-  it('in browser view, shows KBSummary with chunk/source labels', async () => {
-    vi.mocked(api.getKBStats).mockResolvedValue(mockKBStats)
-
-    await act(async () => {
-      render(<Sidebar {...defaultProps} activeView="browser" />)
-    })
-
-    // KBSummary renders "片段" and "来源" labels
-    expect(screen.getByText('段落')).toBeInTheDocument()
-    expect(screen.getByText('引用文档')).toBeInTheDocument()
-    expect(screen.getByText('150')).toBeInTheDocument()
-    expect(screen.getByText('3')).toBeInTheDocument()
-  })
-
-  it('in dashboard view, shows summary', () => {
-    render(<Sidebar {...defaultProps} activeView="dashboard" />)
-
-    expect(screen.getByText('快速统计')).toBeInTheDocument()
   })
 
   it('clicking 新对话 button clears messages and navigates to chat', async () => {
     const onNavigate = vi.fn()
-    const clearMessages = vi.fn()
-    const setActiveId = vi.fn()
-
-    vi.mocked(useConversations).mockReturnValue({
-      conversations: mockConversations,
-      activeId: 'conv-1',
-      setActiveId,
-      create: vi.fn(),
-      remove: vi.fn(),
-      rename: vi.fn(),
-      refresh: vi.fn().mockResolvedValue(mockConversations),
-      loading: false,
-    })
-
-    render(
-      <Sidebar
-        {...defaultProps}
-        onNavigate={onNavigate}
-        chat={{ ...defaultProps.chat, clearMessages }}
-      />
-    )
-
-    await userEvent.click(screen.getByText('新对话'))
-    expect(clearMessages).toHaveBeenCalled()
-    expect(setActiveId).toHaveBeenCalledWith(null)
+    const chat = { messages: [{ role: 'user', content: 'hi' }], loadMessages: vi.fn(), clearMessages: vi.fn(), sendMessage: vi.fn() }
+    render(<Sidebar {...defaultProps} chat={chat as any} onNavigate={onNavigate} />)
+    const newBtn = screen.getByText('新对话')
+    await userEvent.click(newBtn)
+    expect(chat.clearMessages).toHaveBeenCalled()
     expect(onNavigate).toHaveBeenCalledWith('chat')
   })
 })

@@ -69,6 +69,9 @@ def log_query(
     used_rewrite: bool | None = None,
     ttfb_ms: int = 0,
     first_token_ms: int = 0,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    llm_model: str | None = None,
 ) -> None:
     """Append one query record to the daily log file."""
     _ensure_log_dir()
@@ -92,6 +95,9 @@ def log_query(
         "used_rewrite": used_rewrite,
         "ttfb_ms": ttfb_ms,
         "first_token_ms": first_token_ms,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "llm_model": llm_model,
     }
     with open(_log_file(), "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")

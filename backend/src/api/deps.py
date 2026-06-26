@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.knowledge_base import KnowledgeBase
-from config.settings import settings
+from config.settings import settings, get_runtime_setting
 
 _security = HTTPBearer(auto_error=False)
 
@@ -18,9 +18,10 @@ def verify_api_key(credentials: HTTPAuthorizationCredentials | None = Depends(_s
 
     If no API_KEY is configured, skip auth (local dev mode).
     """
-    if not settings.api_key:
+    api_key = get_runtime_setting("api_key", settings.api_key)
+    if not api_key:
         return
-    if credentials is None or credentials.credentials != settings.api_key:
+    if credentials is None or credentials.credentials != api_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key")
 
 

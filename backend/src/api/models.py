@@ -112,6 +112,19 @@ class QueryLogEntry(BaseModel):
     error: str = ""
     ttfb_ms: int = 0
     first_token_ms: int = 0
+    token_count: int | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    llm_model: str | None = None
+    estimated_cost: float | None = None
+
+
+class QueryLogsResponse(BaseModel):
+    logs: list[QueryLogEntry] = Field(default_factory=list)
+    total_cost: float = 0.0
+    total_tokens: int = 0
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
 
 
 class NodeDebug(BaseModel):
@@ -140,6 +153,9 @@ class DebugInfo(BaseModel):
     used_web_search: bool = False
     web_results_count: int = 0
     context_sources: list[ChatSource] = Field(default_factory=list)
+    token_count: int | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
 
 class SourceOut(BaseModel):

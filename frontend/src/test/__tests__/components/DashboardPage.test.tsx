@@ -34,6 +34,7 @@ vi.mock('lucide-react', () => {
     ChevronDown: 'ChevronDown',
     ChevronUp: 'ChevronUp',
     X: 'X',
+    DollarSign: 'DollarSign',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
@@ -55,7 +56,13 @@ const defaultProps = {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(api.queryLogs).mockResolvedValue(mockQueryLogs)
+    vi.mocked(api.queryLogs).mockResolvedValue({
+      logs: mockQueryLogs,
+      total_cost: 0.006,
+      total_tokens: 12000,
+      total_prompt_tokens: 8000,
+      total_completion_tokens: 4000,
+    })
   })
 
   it('renders the "指标面板" title', async () => {
@@ -75,7 +82,25 @@ describe('DashboardPage', () => {
     })
     expect(screen.getByText('平均耗时')).toBeInTheDocument()
     expect(screen.getByText('质量通过率')).toBeInTheDocument()
-    expect(screen.getByText('联网搜索率')).toBeInTheDocument()
+    expect(screen.getByText('总 Token 消耗')).toBeInTheDocument()
+    expect(screen.getByText('Token 估算')).toBeInTheDocument()
+    expect(screen.getByText('<¥0.01')).toBeInTheDocument()
+    expect(screen.getByText(/输入 8,000 \/ 输出 4,000/)).toBeInTheDocument()
+  })
+
+  it('prefers backend total cost summary when provided', async () => {
+    vi.mocked(api.queryLogs).mockResolvedValue({
+      logs: mockQueryLogs,
+      total_cost: 1.23,
+    } as any)
+
+    await act(async () => {
+      render(<DashboardPage {...defaultProps} />)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('¥1.23')).toBeInTheDocument()
+    })
   })
 
   it('renders time range buttons', async () => {
@@ -90,7 +115,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('近30天')).toBeInTheDocument()
   })
 
-  it('renders query log table with question text', async () => {
+  it('renders query log table with question text and token columns', async () => {
     await act(async () => {
       render(<DashboardPage {...defaultProps} />)
     })
@@ -99,6 +124,10 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('你好').length).toBeGreaterThanOrEqual(1)
     })
+    // New token and cost columns
+    expect(screen.getByText('Token')).toBeInTheDocument()
+    expect(screen.getByText('费用')).toBeInTheDocument()
+    expect(screen.getByText('¥0.0060')).toBeInTheDocument()
   })
 
   it('back button calls onNavigate(\'chat\')', async () => {
@@ -117,7 +146,13 @@ describe('DashboardPage', () => {
   })
 
   it('shows "暂无查询数据" when logs empty', async () => {
-    vi.mocked(api.queryLogs).mockResolvedValue([])
+    vi.mocked(api.queryLogs).mockResolvedValue({
+      logs: [],
+      total_cost: 0,
+      total_tokens: 0,
+      total_prompt_tokens: 0,
+      total_completion_tokens: 0,
+    })
 
     await act(async () => {
       render(<DashboardPage {...defaultProps} />)

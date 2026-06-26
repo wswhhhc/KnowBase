@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch, call
 from langchain_core.documents import Document
 
 from src.knowledge_base import (
+    EmbeddingIndexMismatchError,
     IngestionService,
     KnowledgeBase,
     rrf_fuse,
@@ -132,6 +133,25 @@ class ClearTests(unittest.TestCase):
             self.kb.clear()
         except Exception as e:
             self.fail(f"clear raised {e}")
+
+    def test_embedding_model_mismatch_blocks_search_until_cleared(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            meta_path = Path(temp_dir) / "vector_store_meta.json"
+            meta_path.write_text(
+                json.dumps({"embedding_model": "old-embedding-model"}),
+                encoding="utf-8",
+            )
+            self.kb.existing_chunk_ids.clear()
+            self.kb.existing_chunk_ids.add("doc.txt:0:abc")
+            self.kb._index_meta_path = meta_path
+            self.kb.embedding_model = "new-embedding-model"
+            self.kb._refresh_index_metadata_state()
+
+            with self.assertRaises(EmbeddingIndexMismatchError):
+                self.kb.hybrid_search("测试")
+
+            self.kb.clear()
+            self.assertIsNone(self.kb._embedding_mismatch_error)
 
 
 class ContentHashTests(unittest.TestCase):
@@ -751,6 +771,35 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
 
                 mock_load.assert_called_once_with("/fake/path/doc.pdf", source_name="my_doc.pdf")
                 self.assertEqual(result, 2)
+
+    def test_ingest_file_progress_callback_stops_before_route_done(self):
+        fake_docs = [
+            Document(page_content="test", metadata={"source": "custom.txt"}),
+        ]
+        progress = []
+        with patch("src.knowledge_base.load_document", return_value=fake_docs):
+            with patch.object(self.kb.ingestion, "_process_documents", return_value=2):
+                self.kb.ingest_file(
+                    "/fake/path/doc.pdf",
+                    source_name="my_doc.pdf",
+                    progress_callback=lambda phase, percent: progress.append((phase, percent)),
+                )
+
+        self.assertEqual(progress, [("loading", 25), ("splitting", 50), ("embedding", 75)])
+
+    def test_ingest_url_progress_callback_stops_before_route_done(self):
+        fake_docs = [
+            Document(page_content="test", metadata={"source": "https://example.com"}),
+        ]
+        progress = []
+        with patch("src.loaders.load_url", return_value=fake_docs):
+            with patch.object(self.kb.ingestion, "_process_documents", return_value=1):
+                self.kb.ingest_url(
+                    "https://example.com",
+                    progress_callback=lambda phase, percent: progress.append((phase, percent)),
+                )
+
+        self.assertEqual(progress, [("loading", 25), ("splitting", 50), ("embedding", 75)])
 
     def test_ingest_file_replaces_old_chunks_when_source_exists(self):
         """Re-uploading same source name removes old chunks from vector_store."""

@@ -11,74 +11,145 @@ interface DocumentPanelProps {
   onSendQuestion?: (q: string) => void
 }
 
+type VersionPrompt =
+  | { kind: 'file'; file: File; sourceName: string }
+  | { kind: 'url'; url: string; sourceName: string }
+
 export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: DocumentPanelProps) {
   const [urlInput, setUrlInput] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [uploadPhase, setUploadPhase] = useState('')
+  const [uploadPercent, setUploadPercent] = useState(0)
   const [suggested, setSuggested] = useState<string[] | null>(null)
-  const [versionPrompted, setVersionPrompted] = useState<{ res: any; file: File; sourceName: string } | null>(null)
+  const [versionPrompted, setVersionPrompted] = useState<VersionPrompt | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, versionMode?: string) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const resetUploadState = () => {
+    setUploading(false)
+    setUploadPhase('')
+    setUploadPercent(0)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const startUpload = async (file: File, versionMode?: string) => {
     setUploading(true)
+    setUploadPhase('loading')
+    setUploadPercent(0)
     setSuggested(null)
     setVersionPrompted(null)
     try {
       // Probe first: check if this source already exists (without importing)
-      const probe = await api.checkSource(file.name)
+        const probe = await api.checkSource(file.name)
       if (probe.exists && !versionMode) {
         // Source exists and user hasn't chosen a mode yet — prompt before importing
-        setVersionPrompted({ res: probe, file, sourceName: file.name })
-        setUploading(false)
+        setVersionPrompted({ kind: 'file', file, sourceName: file.name })
+        resetUploadState()
         return
       }
-      const res: any = await api.uploadDocument(file, versionMode)
-      if (await onRefresh()) {
-        const msg = versionMode === 'replace' ? '文档已替换为新版本' :
-                    versionMode === 'append' ? '文档已追加新版本' :
-                    '文档已上传'
-        toast.success(msg, { description: file.name })
-        if (res.suggested_questions?.length) {
-          setSuggested(res.suggested_questions)
-        }
-      }
+
+      api.uploadDocumentStream(file, versionMode, {
+        onProgress: (phase, percent) => {
+          setUploadPhase(phase)
+          setUploadPercent(percent)
+        },
+        onDone: async (res) => {
+          if (res.existing_version && !versionMode) {
+            setVersionPrompted({ kind: 'file', file, sourceName: file.name })
+            resetUploadState()
+            return
+          }
+          if (await onRefresh()) {
+            const msg = versionMode === 'replace' ? '文档已替换为新版本' :
+                        versionMode === 'append' ? '文档已追加新版本' :
+                        '文档已上传'
+            toast.success(msg, { description: file.name })
+            if (res.suggested_questions?.length) {
+              setSuggested(res.suggested_questions)
+            }
+          }
+          resetUploadState()
+        },
+        onError: (message) => {
+          toast.error('上传失败', { description: message })
+          resetUploadState()
+        },
+      })
     } catch (err) {
       toast.error('上传失败', { description: String(err) })
+      resetUploadState()
     }
-    setUploading(false)
+  }
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, versionMode?: string) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await startUpload(file, versionMode)
   }
 
   const handleVersionAction = async (action: 'replace' | 'append' | 'skip') => {
     if (!versionPrompted) return
-    setVersionPrompted(null)
     if (action === 'skip') {
+      setVersionPrompted(null)
       toast.info('已跳过，未重复导入')
+      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
-    // Re-trigger upload with the chosen version mode
-    if (fileInputRef.current) {
-      const dt = new DataTransfer()
-      dt.items.add(versionPrompted.file)
-      fileInputRef.current.files = dt.files
-      await handleUpload(
-        { target: { files: dt.files } } as unknown as React.ChangeEvent<HTMLInputElement>,
-        action,
-      )
+    if (versionPrompted.kind === 'file') {
+      await startUpload(versionPrompted.file, action)
+      return
     }
+    await startUrlIngest(versionPrompted.url, action)
+  }
+
+  const startUrlIngest = async (url: string, versionMode?: string) => {
+    setUploading(true)
+    setUploadPhase('loading')
+    setUploadPercent(0)
+    setVersionPrompted(null)
+    try {
+      const probe = await api.checkSource(url)
+      if (probe.exists && !versionMode) {
+        setVersionPrompted({ kind: 'url', url, sourceName: url })
+        resetUploadState()
+        return
+      }
+    } catch (err) {
+      toast.error('导入前检查失败', { description: String(err) })
+      resetUploadState()
+      return
+    }
+
+    api.ingestUrlStream(url, versionMode, {
+      onProgress: (phase, percent) => {
+        setUploadPhase(phase)
+        setUploadPercent(percent)
+      },
+      onDone: async (res) => {
+        if (res.existing_version && !versionMode) {
+          setVersionPrompted({ kind: 'url', url, sourceName: url })
+          resetUploadState()
+          return
+        }
+        setUrlInput('')
+        if (await onRefresh()) {
+          const msg = versionMode === 'replace' ? '网页已替换为新版本' :
+            versionMode === 'append' ? '网页已追加新版本' :
+            '网页已导入'
+          toast.success(msg)
+        }
+        resetUploadState()
+      },
+      onError: (message) => {
+        toast.error('导入失败', { description: message })
+        resetUploadState()
+      },
+    })
   }
 
   const handleIngestUrl = async () => {
-    if (!urlInput.trim()) return
-    try {
-      await api.ingestUrl(urlInput.trim())
-      setUrlInput('')
-      if (await onRefresh()) {
-        toast.success('网页已导入')
-      }
-    } catch (err) {
-      toast.error('导入失败', { description: String(err) })
-    }
+    const url = urlInput.trim()
+    if (!url) return
+    await startUrlIngest(url)
   }
 
   const handleClearAll = async () => {
@@ -108,19 +179,24 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
           uploading ? 'border-primary/40 bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
         }`}>
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          {uploading ? '正在处理…' : '选择文件'}
-          <input type="file" className="hidden" accept=".txt,.md,.pdf,.docx,.html" onChange={handleUpload} disabled={uploading} />
+          {uploading && uploadPhase ? (
+            <span>{ { loading: '正在加载文档…', splitting: '正在切分段落…', embedding: '正在向量化…', done: '完成' }[uploadPhase] || '正在处理…' }</span>
+          ) : '选择文件'}
+          <input ref={fileInputRef} type="file" className="hidden" accept=".txt,.md,.pdf,.docx,.html" onChange={handleUpload} disabled={uploading} />
         </label>
         {uploading && (
-          <div className="mt-1.5 h-1 w-full rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full bg-primary animate-pulse" style={{ width: '60%' }} />
+          <div className="mt-1.5 space-y-1">
+            <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+            </div>
+            <p className="text-2xs text-muted-foreground/60 text-right">{uploadPercent}%</p>
           </div>
         )}
 
         {/* Version mode selector */}
         {versionPrompted && (
           <div className="mt-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
-            <p className="text-2xs font-medium text-primary/80 mb-2 tracking-wide">该文档已存在，请选择操作方式</p>
+            <p className="text-2xs font-medium text-primary/80 mb-2 tracking-wide">该来源已存在，请选择操作方式</p>
             <div className="space-y-1">
               <button onClick={() => handleVersionAction('replace')}
                 className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">

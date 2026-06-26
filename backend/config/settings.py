@@ -1,5 +1,8 @@
 """Typed application settings for KnowBase."""
 
+from __future__ import annotations
+
+import json
 import os
 from pathlib import Path
 
@@ -92,6 +95,71 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+_RUNTIME_SETTINGS_PATH = ROOT_DIR / "data" / "runtime_settings.json"
+_runtime_overrides: dict[str, str | float | bool | int] = {}
+_MISSING = object()
+MASKED_SECRET_VALUE = "__KEEP_EXISTING_SECRET__"
+
+
+def _load_runtime_settings():
+    global _runtime_overrides
+    try:
+        if _RUNTIME_SETTINGS_PATH.exists():
+            with open(_RUNTIME_SETTINGS_PATH, encoding="utf-8") as f:
+                _runtime_overrides = json.load(f)
+    except Exception:
+        _runtime_overrides = {}
+
+
+def get_runtime_setting(key: str, default=_MISSING):
+    """Return the runtime-overridden value, or fall back to settings."""
+    if key in _runtime_overrides:
+        return _runtime_overrides[key]
+    if default is _MISSING:
+        return getattr(settings, key, None)
+    return getattr(settings, key, default)
+
+
+def update_runtime_settings(values: dict):
+    """Persist runtime config overrides to JSON file."""
+    global _runtime_overrides
+    merged = settings.model_dump()
+    merged.update(_runtime_overrides)
+    merged.update(values)
+    validated = Settings.model_validate(merged)
+    normalized = {key: getattr(validated, key) for key in values}
+    _runtime_overrides.update(normalized)
+    _RUNTIME_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(_RUNTIME_SETTINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(_runtime_overrides, f, ensure_ascii=False, indent=2)
+
+
+def get_all_settings() -> dict:
+    """Return all user-facing config (env defaults merged with runtime overrides)."""
+    return {k: get_runtime_setting(k) for k in _USER_FACING_SETTINGS}
+
+
+def get_public_settings() -> dict:
+    """Return UI-safe settings, masking secrets instead of exposing raw values."""
+    data = get_all_settings()
+    for key in _SECRET_SETTINGS:
+        value = str(data.get(key, "") or "")
+        data[key] = MASKED_SECRET_VALUE if value else ""
+    return data
+
+
+# Keys exposed in the settings UI
+_USER_FACING_SETTINGS = [
+    "siliconflow_api_key", "siliconflow_base_url",
+    "embedding_model", "llm_model", "llm_temperature",
+    "tavily_api_key", "api_key",
+    "chunk_size", "chunk_overlap", "top_k_retrieval", "top_k_rerank",
+    "enable_quality_check", "enable_contextual_retrieval",
+]
+_SECRET_SETTINGS = {"siliconflow_api_key", "tavily_api_key", "api_key"}
+
+
+_load_runtime_settings()
 
 if settings.langsmith_tracing:
     os.environ.setdefault("LANGSMITH_TRACING", "true")
@@ -108,12 +176,13 @@ def _is_configured_api_key(api_key: str) -> bool:
 
 def require_siliconflow_api_key() -> str:
     """Return a configured API key or raise a user-actionable error."""
-    if not _is_configured_api_key(settings.siliconflow_api_key):
+    api_key = get_runtime_setting("siliconflow_api_key", settings.siliconflow_api_key)
+    if not _is_configured_api_key(api_key):
         raise ValueError(
             "缺少硅基流动 API Key。请在 .env 中配置 SILICONFLOW_API_KEY=你的密钥，"
             "或设置系统环境变量 SILICONFLOW_API_KEY。"
         )
-    return settings.siliconflow_api_key
+    return api_key
 
 
 # Backwards-compatible constants for existing imports.

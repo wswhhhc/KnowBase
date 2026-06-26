@@ -12,11 +12,24 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from langchain_core.documents import Document
+from src.kb_models import RetrievalResult
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
 from src.api.models import ConversationCreate, IngestResponse, URLIngestRequest
 from src import conversations
+
+
+def _parse_sse_events(text: str) -> list[dict]:
+    events = []
+    current_event = "message"
+    for line in text.splitlines():
+        if line.startswith("event: "):
+            current_event = line[7:].strip()
+        elif line.startswith("data: "):
+            events.append({"event": current_event, "data": json.loads(line[6:])})
+            current_event = "message"
+    return events
 
 
 class FakeKnowledgeBase:
@@ -64,16 +77,45 @@ class FakeKnowledgeBase:
     def hybrid_search(self, *args, **kwargs):
         return []
 
+    def debug_search_breakdown(self, *args, **kwargs):
+        docs = [
+            RetrievalResult(
+                chunk_id="test.txt:0:abc123",
+                document=self.doc_by_id["test.txt:0:abc123"],
+                score=0.91,
+                vector_score=0.91,
+            ),
+            RetrievalResult(
+                chunk_id="test.txt:1:def456",
+                document=self.doc_by_id["test.txt:1:def456"],
+                score=0.42,
+                bm25_score=0.42,
+            ),
+        ]
+        return {
+            "vector_results": docs[:1],
+            "bm25_results": docs[1:],
+            "fused_results": docs,
+        }
+
     def get_neighbor_chunks(self, chunk_id, window=1):
         return []
 
     def get_hotspots(self, top_n=50):
         return [{"chunk_id": "test.txt:0:abc", "source": "test.txt", "hits": 5, "content_preview": "测试"}]
 
-    def ingest_file(self, file_path, source_name=None):
+    def ingest_file(self, file_path, source_name=None, version_mode="replace", progress_callback=None):
+        if progress_callback:
+            progress_callback("loading", 25)
+            progress_callback("splitting", 50)
+            progress_callback("embedding", 75)
         return 2
 
-    def ingest_url(self, url):
+    def ingest_url(self, url, version_mode="replace", progress_callback=None):
+        if progress_callback:
+            progress_callback("loading", 25)
+            progress_callback("splitting", 50)
+            progress_callback("embedding", 75)
         return 1
 
     def delete_source(self, source_name):
@@ -278,11 +320,125 @@ class APIEndpointTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIsInstance(resp.json(), list)
 
+    def test_kb_debug_search_happy_path(self):
+        self.fake_kb._ensure_loaded()
+        resp = self.client.post(
+            "/api/knowledge-base/debug-search",
+            json={"query": "测试", "k": 2, "search_strategy": "balanced"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["strategy"], "balanced")
+        self.assertIn("vector_results", data)
+        self.assertIn("bm25_results", data)
+        self.assertIn("fused_results", data)
+        self.assertEqual(data["vector_results"][0]["vector_rank"], 1)
+        self.assertEqual(data["fused_results"][0]["rrf_rank"], 1)
+
+    def test_kb_debug_search_strategy_changes_backend_parameters(self):
+        self.fake_kb._ensure_loaded()
+
+        calls: list[dict] = []
+        original_debug_search = self.fake_kb.debug_search_breakdown
+
+        def _record_debug_search(query, k=5, **kwargs):
+            calls.append({"query": query, "k": k, **kwargs})
+            return original_debug_search(query, k=k, **kwargs)
+
+        with patch.object(self.fake_kb, "debug_search_breakdown", side_effect=_record_debug_search):
+            fast = self.client.post(
+                "/api/knowledge-base/debug-search",
+                json={"query": "测试", "k": 2, "search_strategy": "fast"},
+            )
+            deep = self.client.post(
+                "/api/knowledge-base/debug-search",
+                json={"query": "测试", "k": 2, "search_strategy": "deep"},
+            )
+
+        self.assertEqual(fast.status_code, 200)
+        self.assertEqual(deep.status_code, 200)
+        self.assertEqual(len(calls), 2)
+        self.assertNotEqual(calls[0]["k"], calls[1]["k"])
+        self.assertNotEqual(calls[0].get("vector_candidate_k"), calls[1].get("vector_candidate_k"))
+
+    @patch("src.api.routes.knowledge_base.gn.rerank_docs")
+    def test_kb_debug_search_does_not_call_llm_rerank(self, mock_rerank_docs):
+        self.fake_kb._ensure_loaded()
+        resp = self.client.post(
+            "/api/knowledge-base/debug-search",
+            json={"query": "测试", "k": 2, "search_strategy": "high_quality"},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(mock_rerank_docs.called)
+
     # ---- Documents ----
     def test_list_document_sources(self):
         resp = self.client.get("/api/documents/sources")
         self.assertEqual(resp.status_code, 200)
         self.assertIsInstance(resp.json(), list)
+
+    def test_check_source_matches_versioned_source_names(self):
+        with patch.object(self.fake_kb, "source_counts", return_value=[("fresh.txt (v1)", 2)]):
+            resp = self.client.get("/api/documents/check-source?source_name=fresh.txt")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"exists": True})
+
+    def test_upload_stream_prompts_when_only_versioned_source_exists(self):
+        with patch.object(self.fake_kb, "source_counts", return_value=[("fresh.txt (v1)", 2)]):
+            resp = self.client.post(
+                "/api/documents/upload-stream",
+                files={"file": ("fresh.txt", b"hello world", "text/plain")},
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        events = _parse_sse_events(resp.text)
+        self.assertEqual(events[-1]["event"], "done")
+        self.assertTrue(events[-1]["data"]["existing_version"])
+
+    def test_upload_stream_returns_progress_and_done_events(self):
+        resp = self.client.post(
+            "/api/documents/upload-stream",
+            files={"file": ("fresh.txt", b"hello world", "text/plain")},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("event: progress", resp.text)
+        self.assertIn("event: done", resp.text)
+
+    def test_upload_stream_emits_terminal_done_progress_before_done_event(self):
+        resp = self.client.post(
+            "/api/documents/upload-stream",
+            files={"file": ("fresh.txt", b"hello world", "text/plain")},
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        events = _parse_sse_events(resp.text)
+        progress_events = [event for event in events if event["event"] == "progress"]
+
+        self.assertGreater(len(progress_events), 0)
+        self.assertEqual(progress_events[-1]["data"], {"phase": "done", "percent": 100})
+        self.assertEqual(events[-1]["event"], "done")
+
+    def test_ingest_url_stream_passes_version_mode_to_backend(self):
+        calls: list[dict] = []
+
+        def _record_ingest(url, version_mode="replace", progress_callback=None):
+            calls.append({"url": url, "version_mode": version_mode})
+            if progress_callback:
+                progress_callback("loading", 25)
+                progress_callback("splitting", 50)
+                progress_callback("embedding", 75)
+            return 1
+
+        with patch.object(self.fake_kb, "ingest_url", side_effect=_record_ingest):
+            resp = self.client.post(
+                "/api/documents/ingest-url-stream?version_mode=append",
+                json={"url": "https://example.com/page"},
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(calls, [{"url": "https://example.com/page", "version_mode": "append"}])
 
     def test_delete_source_happy_path(self):
         resp = self.client.delete("/api/documents/source/existing.txt")
@@ -313,11 +469,70 @@ class APIEndpointTests(unittest.TestCase):
     def test_metrics_logs_happy_path(self):
         resp = self.client.get("/api/metrics/logs?days=7&limit=10")
         self.assertEqual(resp.status_code, 200)
-        self.assertIsInstance(resp.json(), list)
+        data = resp.json()
+        self.assertIn("logs", data)
+        self.assertIn("total_cost", data)
 
     def test_metrics_logs_default_params(self):
         resp = self.client.get("/api/metrics/logs")
         self.assertEqual(resp.status_code, 200)
+        self.assertIn("logs", resp.json())
+
+    @patch("src.api.routes.metrics._load_query_logs")
+    def test_metrics_logs_include_total_cost_summary(self, mock_load_query_logs):
+        from src.api.models import QueryLogEntry
+
+        mock_load_query_logs.return_value = [
+            QueryLogEntry(
+                timestamp="2026-06-26T00:00:00+00:00",
+                thread_id="t-1",
+                question="测试",
+                elapsed_ms=1200,
+                retrieval_count=1,
+                quality_ok=True,
+                quality_reason="ok",
+                token_count=1000,
+                prompt_tokens=400,
+                completion_tokens=600,
+                llm_model="deepseek-ai/DeepSeek-V4-Flash",
+            )
+        ]
+
+        resp = self.client.get("/api/metrics/logs")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("logs", data)
+        self.assertIn("total_cost", data)
+        self.assertGreater(data["total_cost"], 0)
+        self.assertEqual(data["logs"][0]["llm_model"], "deepseek-ai/DeepSeek-V4-Flash")
+
+    @patch("src.api.routes.settings.get_public_settings")
+    def test_settings_get_masks_secrets(self, mock_get_public_settings):
+        mock_get_public_settings.return_value = {"api_key": "__KEEP_EXISTING_SECRET__", "chunk_size": 1000}
+        resp = self.client.get("/api/settings")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["api_key"], "__KEEP_EXISTING_SECRET__")
+
+    @patch("src.api.routes.settings.update_runtime_settings")
+    def test_settings_put_returns_warnings(self, mock_update_runtime_settings):
+        resp = self.client.put(
+            "/api/settings",
+            json={"api_key": "new-local-key", "embedding_model": "foo/bar", "chunk_size": 2048},
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["updated"])
+        self.assertGreaterEqual(len(data["warnings"]), 2)
+        mock_update_runtime_settings.assert_called_once()
+
+    @patch("src.api.routes.settings.update_runtime_settings")
+    def test_settings_put_ignores_masked_secret_placeholder(self, mock_update_runtime_settings):
+        resp = self.client.put(
+            "/api/settings",
+            json={"api_key": "__KEEP_EXISTING_SECRET__", "chunk_size": 2048},
+        )
+        self.assertEqual(resp.status_code, 200)
+        mock_update_runtime_settings.assert_called_once_with({"chunk_size": 2048})
 
     # ---- Chat SSE endpoint ----
     def test_chat_stream_returns_sse(self):

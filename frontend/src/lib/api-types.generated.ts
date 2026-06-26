@@ -55,4 +55,7 @@ export interface DebugInfo {
   used_web_search: boolean
   web_results_count: number
   context_sources: Source[]
+  token_count: number | null
+  prompt_tokens: number | null
+  completion_tokens: number | null
 }

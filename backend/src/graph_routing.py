@@ -102,7 +102,11 @@ def route_question(state: GraphState) -> dict:
         )
         decision = RouteDecision.model_validate(json_from_text(str(result.content)))
         search_filter = _route_search_scope(state["question"], decision.question_type)
-        return {"question_type": decision.question_type, "search_filter": search_filter}
+        return {
+            "question_type": decision.question_type,
+            "search_filter": search_filter,
+            **gu.extract_token_usage(result),
+        }
     except Exception as exc:
         logger.warning("LLM 路由失败，使用默认路由: %s", exc)
 

@@ -43,6 +43,8 @@ vi.mock('lucide-react', () => {
     X: 'X',
     Bookmark: 'Bookmark',
     BookmarkCheck: 'BookmarkCheck',
+    Bug: 'Bug',
+    Loader2: 'Loader2',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
@@ -58,6 +60,7 @@ vi.mock('@/lib/api', () => ({
   getKBHotspots: vi.fn(),
   uploadDocument: vi.fn(),
   ingestUrl: vi.fn(),
+  debugSearch: vi.fn(),
 }))
 
 const defaultProps = {
@@ -125,6 +128,39 @@ describe('BrowserPage', () => {
 
     await act(async () => {
       render(<BrowserPage {...defaultProps} />)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('工作区为空')).toBeInTheDocument()
+    })
+  })
+
+  it('keeps the loading state until the initial chunk request resolves', async () => {
+    let resolveChunks: ((value: { items: typeof mockKBChunks; total: number } | { items: []; total: number }) => void) | undefined
+    vi.mocked(api.getKBChunks).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveChunks = resolve
+        }) as ReturnType<typeof api.getKBChunks>,
+    )
+
+    render(<BrowserPage {...defaultProps} />)
+
+    await waitFor(() => {
+      expect(api.getKBStats).toHaveBeenCalled()
+      expect(api.getKBSourceNames).toHaveBeenCalled()
+      expect(api.getKBConfig).toHaveBeenCalled()
+    })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByText('工作区为空')).not.toBeInTheDocument()
+    expect(screen.queryByText('这是第一段内容')).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveChunks?.({ items: [], total: 0 })
     })
 
     await waitFor(() => {

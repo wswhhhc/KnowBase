@@ -70,6 +70,10 @@ def init_db():
     try:
         conn.execute("ALTER TABLE messages ADD COLUMN debug_info TEXT DEFAULT '{}'")
     except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE bookmarks ADD COLUMN tags TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
         pass  # 列已存在
     try:
         conn.execute("ALTER TABLE messages ADD COLUMN feedback_category TEXT DEFAULT NULL")
@@ -370,36 +374,72 @@ def export_conversation(conv_id: str, fmt: str = "markdown", include_sources: bo
 
 
 def create_bookmark(workspace_id: str = "", conversation_id: str = "", message_id: int = 0,
-                    chunk_id: str = "", note: str = "", content: str = "", source: str = "") -> dict:
+                    chunk_id: str = "", note: str = "", content: str = "", source: str = "",
+                    tags: str = "") -> dict:
     """Create a bookmark."""
     conn = _get_conn()
+    if chunk_id:
+        existing = conn.execute(
+            "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, created_at "
+            "FROM bookmarks WHERE workspace_id = ? AND chunk_id = ? ORDER BY id LIMIT 1",
+            (workspace_id, chunk_id),
+        ).fetchone()
+        if existing:
+            conn.close()
+            return dict(existing)
+
     now = datetime.now(UTC).isoformat()
     cursor = conn.execute(
-        "INSERT INTO bookmarks (workspace_id, conversation_id, message_id, chunk_id, note, content, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (workspace_id, conversation_id, message_id, chunk_id, note, content, source, now),
+        "INSERT INTO bookmarks (workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, now),
     )
     conn.commit()
     bm_id = cursor.lastrowid
     conn.close()
     return {"id": bm_id, "workspace_id": workspace_id, "conversation_id": conversation_id,
             "message_id": message_id, "chunk_id": chunk_id, "note": note, "content": content,
-            "source": source, "created_at": now}
+            "source": source, "tags": tags, "created_at": now}
 
 
-def list_bookmarks(workspace_id: str | None = None) -> list[dict]:
-    """Return bookmarks, optionally filtered by workspace."""
+def list_bookmarks(workspace_id: str | None = None, search: str | None = None) -> list[dict]:
+    """Return bookmarks, optionally filtered by workspace or search query."""
     conn = _get_conn()
+    clauses: list[str] = []
+    params: list[str] = []
     if workspace_id is not None:
-        rows = conn.execute(
-            "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, created_at FROM bookmarks WHERE workspace_id = ? ORDER BY created_at DESC",
-            (workspace_id,),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, created_at FROM bookmarks ORDER BY created_at DESC"
-        ).fetchall()
+        clauses.append("workspace_id = ?")
+        params.append(workspace_id)
+    if search:
+        like = f"%{search}%"
+        clauses.append("(content LIKE ? OR note LIKE ? OR tags LIKE ?)")
+        params.extend([like, like, like])
+
+    query = "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, created_at FROM bookmarks"
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+    query += " ORDER BY created_at DESC"
+    rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def update_bookmark(bm_id: int, **kwargs) -> dict | None:
+    """Update bookmark fields (note, tags). Returns updated bookmark or None."""
+    allowed = {"note", "tags"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return None
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [bm_id]
+    conn = _get_conn()
+    conn.execute(f"UPDATE bookmarks SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    row = conn.execute(
+        "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, created_at FROM bookmarks WHERE id = ?",
+        (bm_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def delete_bookmark(bm_id: int) -> bool:
@@ -464,6 +504,7 @@ def delete_workspace(ws_id: str) -> bool:
     """Delete a workspace and reassign its conversations to the default workspace."""
     conn = _get_conn()
     conn.execute("UPDATE conversations SET workspace_id = '' WHERE workspace_id = ?", (ws_id,))
+    conn.execute("UPDATE bookmarks SET workspace_id = '' WHERE workspace_id = ?", (ws_id,))
     cursor = conn.execute("DELETE FROM workspaces WHERE id = ?", (ws_id,))
     conn.commit()
     conn.close()

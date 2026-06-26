@@ -42,6 +42,9 @@ class GraphState(TypedDict):
     outcome_category: str
     used_rerank: bool
     used_rewrite: bool
+    token_count: int | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
 
 
 class RouteDecision(BaseModel):

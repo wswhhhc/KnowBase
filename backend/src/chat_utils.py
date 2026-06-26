@@ -6,6 +6,7 @@ import logging
 
 from langchain_core.prompts import ChatPromptTemplate
 
+from config.settings import LLM_MODEL, get_runtime_setting
 from src.api.models import DebugInfo
 from src.metrics import log_query
 
@@ -39,6 +40,9 @@ def record_query_metrics(
     debug_info: DebugInfo,
     ttfb_ms: int = 0,
     first_token_ms: int = 0,
+    token_count: int | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
 ) -> None:
     """Persist the final query metrics using actual debug flags."""
     log_query(
@@ -58,6 +62,10 @@ def record_query_metrics(
         retrieval_k=debug_info.retrieval_k,
         ttfb_ms=ttfb_ms,
         first_token_ms=first_token_ms,
+        token_count=token_count,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        llm_model=get_runtime_setting("llm_model", LLM_MODEL),
     )
 
 
@@ -67,20 +75,20 @@ def generate_title(question: str) -> str:
         from langchain_openai import ChatOpenAI
         from config.settings import (
             _is_configured_api_key,
-            settings,
             require_siliconflow_api_key,
             SILICONFLOW_BASE_URL,
             LLM_MODEL,
+            get_runtime_setting,
         )
 
-        if not _is_configured_api_key(settings.siliconflow_api_key):
+        if not _is_configured_api_key(get_runtime_setting("siliconflow_api_key", "")):
             return question[:30]
 
         llm = ChatOpenAI(
-            model=LLM_MODEL,
+            model=get_runtime_setting("llm_model", LLM_MODEL),
             temperature=0.3,
             openai_api_key=require_siliconflow_api_key(),
-            openai_api_base=SILICONFLOW_BASE_URL,
+            openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
         )
         prompt = ChatPromptTemplate.from_messages([
             ("system", "根据用户的问题，生成一个简短（不超过15字）的对话标题。只返回标题本身，不要加引号和标点。"),
@@ -102,20 +110,20 @@ def generate_suggested_questions(docs_text: str, max_questions: int = 5) -> list
         from langchain_openai import ChatOpenAI
         from config.settings import (
             _is_configured_api_key,
-            settings,
             require_siliconflow_api_key,
             SILICONFLOW_BASE_URL,
             LLM_MODEL,
+            get_runtime_setting,
         )
 
-        if not _is_configured_api_key(settings.siliconflow_api_key):
+        if not _is_configured_api_key(get_runtime_setting("siliconflow_api_key", "")):
             return []
 
         llm = ChatOpenAI(
-            model=LLM_MODEL,
+            model=get_runtime_setting("llm_model", LLM_MODEL),
             temperature=0.3,
             openai_api_key=require_siliconflow_api_key(),
-            openai_api_base=SILICONFLOW_BASE_URL,
+            openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
         )
         prompt = ChatPromptTemplate.from_messages([
             ("system", "根据以下文档内容，生成{max_n}个用户可能想问的问题，每行一个，用中文。只返回问题，不要编号和额外的文字。"),

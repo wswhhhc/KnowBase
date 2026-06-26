@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 import unittest
 from unittest.mock import patch
 
@@ -101,6 +102,7 @@ class ChatRouteSSEIntegrationTests(unittest.TestCase):
         self._mock_run_query.side_effect = self._make_run_query(
             ("updates", {"route_question": {"question_type": "knowledge_base"}}),
             ("updates", {"retrieve_docs": {"sources": ["doc1"]}}),
+            ("updates", {"generate_answer": {"answer": "测试回答", "token_count": 321}}),
             ("updates", {"check_quality": {"quality_ok": True, "quality_reason": "pass"}}),
             ("updates", {"finalize": {"evidence_level": "high", "outcome_category": "success"}}),
         )
@@ -115,6 +117,47 @@ class ChatRouteSSEIntegrationTests(unittest.TestCase):
         self.assertIn("quality_passed", debug)
         self.assertIn("used_rerank", debug)
         self.assertIn("used_rewrite", debug)
+        self.assertEqual(debug["token_count"], 321)
+
+    def test_debug_event_accumulates_token_usage_across_nodes(self):
+        """Token usage is summed across every node update that reports usage."""
+        self._mock_run_query.side_effect = self._make_run_query(
+            ("updates", {
+                "route_question": {
+                    "question_type": "knowledge_base",
+                    "token_count": 15,
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                }
+            }),
+            ("updates", {
+                "generate_answer": {
+                    "answer": "测试回答",
+                    "token_count": 30,
+                    "prompt_tokens": 20,
+                    "completion_tokens": 10,
+                }
+            }),
+            ("updates", {
+                "check_quality": {
+                    "quality_ok": True,
+                    "quality_reason": "pass",
+                    "token_count": 9,
+                    "prompt_tokens": 6,
+                    "completion_tokens": 3,
+                }
+            }),
+            ("updates", {"finalize": {"evidence_level": "high", "outcome_category": "success"}}),
+        )
+
+        events = _parse_sse_events(self._post())
+        debug_events = [e for e in events if e["event"] == "debug"]
+
+        self.assertEqual(len(debug_events), 1)
+        debug = debug_events[0]["data"]
+        self.assertEqual(debug["token_count"], 54)
+        self.assertEqual(debug["prompt_tokens"], 36)
+        self.assertEqual(debug["completion_tokens"], 18)
 
     def test_sources_event(self):
         """SSE sources event carries final source metadata."""
@@ -193,6 +236,25 @@ class ChatRouteSSEIntegrationTests(unittest.TestCase):
 
         self.assertGreater(len(error_events), 0)
         self.assertIn("模拟异常", str(error_events[0]["data"]))
+
+    @patch("src.api.routes.chat._persist_and_record", return_value=("conv-1", 1))
+    def test_first_token_metrics_wait_for_the_first_token_event(self, mock_persist):
+        """first_token_ms should be recorded when the first token is emitted, not on node updates."""
+        from langchain_core.messages import AIMessageChunk
+
+        def _delayed_sequence(**kwargs):
+            yield ("updates", {"route_question": {"question_type": "knowledge_base"}})
+            time.sleep(0.05)
+            yield ("messages", (AIMessageChunk(content="你好"), {"langgraph_node": "generate_answer"}))
+            yield ("updates", {"finalize": {"evidence_level": "high", "outcome_category": "success"}})
+
+        self._mock_run_query.side_effect = _delayed_sequence
+
+        self._post()
+
+        _, kwargs = mock_persist.call_args
+        self.assertLess(kwargs["ttfb_ms"], kwargs["first_token_ms"])
+        self.assertGreaterEqual(kwargs["first_token_ms"], 40)
 
 
 if __name__ == "__main__":

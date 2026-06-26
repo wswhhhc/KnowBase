@@ -8,6 +8,8 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from langchain_core.documents import Document
+from src.kb_models import RetrievalResult
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
@@ -25,7 +27,7 @@ class FakeKnowledgeBase:
         if not self._loaded:
             from langchain_core.documents import Document
             self.all_docs = [
-                Document(page_content="test", metadata={"source": "test.txt", "chunk_id": "test.txt:0:abc"}),
+                Document(page_content="test", metadata={"source": "test.txt", "chunk_id": "test.txt:0:abc", "chunk_index": 0}),
             ]
             self._loaded = True
 
@@ -42,16 +44,31 @@ class FakeKnowledgeBase:
     def hybrid_search(self, *args, **kwargs):
         return []
 
+    def debug_search_breakdown(self, *args, **kwargs):
+        self._ensure_loaded()
+        doc = self.all_docs[0]
+        result = RetrievalResult(
+            chunk_id="test.txt:0:abc",
+            document=doc,
+            score=0.88,
+            vector_score=0.88,
+        )
+        return {"vector_results": [result], "bm25_results": [result], "fused_results": [result]}
+
     def get_neighbor_chunks(self, chunk_id, window=1):
         return []
 
     def get_hotspots(self, top_n=50):
         return [{"chunk_id": "test.txt:0:abc", "source": "test.txt", "hits": 5, "content_preview": "test"}]
 
-    def ingest_file(self, file_path, source_name=None):
+    def ingest_file(self, file_path, source_name=None, version_mode="replace", progress_callback=None):
+        if progress_callback:
+            progress_callback("loading", 25)
         return 2
 
-    def ingest_url(self, url):
+    def ingest_url(self, url, version_mode="replace", progress_callback=None):
+        if progress_callback:
+            progress_callback("loading", 25)
         return 1
 
     def delete_source(self, source_name):
@@ -157,6 +174,14 @@ class APIRoutesCoverageTests(unittest.TestCase):
         self.assertIn("chunk_size", data)
         self.assertIn("chunk_overlap", data)
 
+    def test_debug_search_returns_grouped_results(self):
+        response = self.client.post("/api/knowledge-base/debug-search", json={"query": "test"})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("vector_results", data)
+        self.assertIn("bm25_results", data)
+        self.assertIn("fused_results", data)
+
     # ── Metrics routes ──
 
     @patch("src.api.routes.metrics._LOG_DIR")
@@ -167,12 +192,21 @@ class APIRoutesCoverageTests(unittest.TestCase):
 
     @patch("src.api.routes.metrics._LOG_DIR")
     def test_metrics_logs_empty(self, mock_log_dir):
-        """Log directory with no matching files → empty list."""
+        """Log directory with no matching files → empty summary payload."""
         mock_log_dir.exists.return_value = True
-        mock_log_dir.iterdir.return_value = []
+        mock_log_dir.glob.return_value = []
         response = self.client.get("/api/metrics/logs")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(
+            response.json(),
+            {
+                "logs": [],
+                "total_cost": 0.0,
+                "total_tokens": 0,
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+            },
+        )
 
     def test_health_check(self):
         response = self.client.get("/api/health")

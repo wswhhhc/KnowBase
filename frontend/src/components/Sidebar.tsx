@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
+import React from 'react'
 import { Button, ScrollArea, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import {
-  MessageSquare, FileText,
-  PanelRightClose, BookOpen, BarChart3, Plus, Trash2, Sun, Moon,
+  MessageSquare, FileText, Bookmark,
+  PanelRightClose, BookOpen, BarChart3, Settings, Plus, Trash2, Sun, Moon,
 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
 import { useTheme } from '@/hooks/useTheme'
 import ConversationList from '@/components/sidebar/ConversationList'
 import DocumentPanel from '@/components/sidebar/DocumentPanel'
+import BookmarkPanel from '@/components/sidebar/BookmarkPanel'
 import KBSummary from '@/components/sidebar/KBSummary'
 import DashboardSummary from '@/components/sidebar/DashboardSummary'
 import type { ChatMessage } from '@/hooks/useChat'
@@ -32,10 +34,11 @@ interface SidebarProps {
   isMobile?: boolean
 }
 
-const NAV_ITEMS: { view: ViewType; icon: typeof MessageSquare; label: string }[] = [
+const NAV_ITEMS: { view: ViewType; icon: React.ComponentType<{ className?: string }>; label: string }[] = [
   { view: 'chat', icon: MessageSquare, label: '对话' },
   { view: 'browser', icon: BookOpen, label: '工作区' },
   { view: 'dashboard', icon: BarChart3, label: '指标' },
+  { view: 'settings', icon: Settings, label: '设置' },
 ]
 
 export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages, onWorkspaceChange, isMobile = false }: SidebarProps) {
@@ -43,7 +46,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   const wss = useWorkspaces()
   const convs = useConversations(wss.activeWorkspaceId || undefined)
   const srcs = useSources()
-  const [tab, setTab] = useState<'conversations' | 'documents'>('conversations')
+  const [tab, setTab] = useState<'conversations' | 'documents' | 'bookmarks'>('conversations')
   const prevKey = useRef(convRefreshKey)
 
   // Refresh conversation list when workspace changes or new conv created
@@ -201,13 +204,20 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
               setActiveId={convs.setActiveId}
               clearMessages={chat.clearMessages}
             />
-          ) : (
+          ) : tab === 'documents' ? (
             <DocumentPanel sources={srcs.sources} onRefresh={srcs.refresh} onSendQuestion={(q) => { onNavigate('chat'); chat.sendMessage(q, false, 'balanced') }} />
+          ) : (
+            <BookmarkPanel workspaceId={wss.activeWorkspaceId || undefined} onNavigate={onNavigate} />
           )
         ) : activeView === 'browser' ? (
           <KBSummary />
-        ) : (
+        ) : activeView === 'dashboard' ? (
           <DashboardSummary />
+        ) : (
+          <div className="rounded-lg border border-dashed border-border/60 bg-surface/20 p-4 text-xs text-muted-foreground/70">
+            <p className="font-medium text-foreground/80">设置项将在主面板中编辑</p>
+            <p className="mt-1">这里保留导航、工作区切换和常用入口，避免误显示仪表板摘要。</p>
+          </div>
         )}
       </ScrollArea>
 
@@ -226,6 +236,12 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
                 tab === 'documents' ? 'bg-surface text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}>
               <FileText className="inline h-3 w-3 mr-1" />文档
+            </button>
+            <button onClick={() => setTab('bookmarks')}
+              className={`flex-1 py-1.5 text-2xs font-medium rounded-sm transition-colors ${
+                tab === 'bookmarks' ? 'bg-surface text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}>
+              <Bookmark className="inline h-3 w-3 mr-1" />书签
             </button>
           </div>
         </div>
