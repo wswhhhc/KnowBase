@@ -25,6 +25,13 @@ class ChatSource(BaseModel):
     url: str | None = None
     index: int | None = None
 
+    @field_validator("chunk_index", "page", "score", mode="before")
+    @classmethod
+    def _coerce_empty_numeric_fields(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
 
 class ConversationCreate(BaseModel):
     title: str = "新对话"

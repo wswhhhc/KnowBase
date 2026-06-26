@@ -570,6 +570,8 @@ class GenerateAnswerTests(unittest.TestCase):
             ))
         urls = [s.get("url") for s in result.get("sources", [])]
         self.assertIn("https://example.com", urls)
+        self.assertIsNone(result["sources"][0]["chunk_index"])
+        self.assertIsNone(result["sources"][0]["page"])
 
     def test_usage_metadata_dict_updates_token_count(self):
         fake_llm = MagicMock()

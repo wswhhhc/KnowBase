@@ -1,7 +1,7 @@
-"""Tests for DebugInfo and NodeDebug Pydantic models."""
+"""Tests for DebugInfo, NodeDebug, and ChatSource Pydantic models."""
 import unittest
 
-from src.api.models import DebugInfo, NodeDebug
+from src.api.models import ChatSource, DebugInfo, NodeDebug
 
 
 class DebugModelTests(unittest.TestCase):
@@ -48,6 +48,19 @@ class DebugModelTests(unittest.TestCase):
         self.assertEqual(len(info.nodes), 2)
         self.assertEqual(info.nodes[0].name, "route_question")
         self.assertEqual(info.nodes[1].elapsed_ms, 340)
+
+    def test_chat_source_coerces_empty_numeric_strings_to_none(self):
+        source = ChatSource.model_validate({
+            "source": "网络来源",
+            "content": "内容",
+            "chunk_index": "",
+            "page": "",
+            "score": "",
+        })
+
+        self.assertIsNone(source.chunk_index)
+        self.assertIsNone(source.page)
+        self.assertIsNone(source.score)
 
 
 if __name__ == "__main__":
