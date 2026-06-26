@@ -7,7 +7,7 @@ import type { Source } from '@/lib/api'
 import MessageBubble from './MessageBubble'
 import type { ViewType } from '@/App'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3, Sun, Moon, Globe, Zap, Scale, FileSearch, Search } from 'lucide-react'
+import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3, Sun, Moon, Globe, Zap, Scale, FileSearch, Search, ChevronDown, ChevronRight } from 'lucide-react'
 
 interface ChatAreaProps {
   chat: ReturnType<typeof useChat>
@@ -39,6 +39,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
   const [input, setInput] = useState('')
   const [webSearch, setWebSearch] = useState(false)
   const [searchStrategy, setSearchStrategy] = useState('balanced')
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -102,7 +103,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
             </button>
             <button onClick={() => onNavigate('browser')}
               className="flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-              <BookOpen className="h-3 w-3" />工作区
+              <BookOpen className="h-3 w-3" />知识库
             </button>
             <button onClick={() => onNavigate('dashboard')}
               className="flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
@@ -112,38 +113,50 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
 
           <div className="h-4 w-px bg-border hidden md:block" />
 
-          <div className="flex items-center gap-1 flex-wrap justify-end">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-                    <Globe className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">搜索</span>
-                    <Switch checked={webSearch} onCheckedChange={setWebSearch} />
-                  </label>
-                </TooltipTrigger>
-                <TooltipContent>联网搜索开关</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+            >
+              {showAdvanced ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              高级选项
+            </button>
 
-            <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-                {STRATEGIES.map(({ key, icon: Icon, label }) => (
-                  <TooltipProvider key={key}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button onClick={() => setSearchStrategy(key)}
-                          className={`inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-sm transition-colors ${
-                            searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
-                          }`}>
-                          <Icon className="h-3 w-3" />
-                          {label}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>{STRATEGY_DESC[key]}</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ))}
+            {showAdvanced && (
+              <div className="flex items-center gap-1 flex-wrap" onMouseDown={(e) => e.stopPropagation()}>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                        <Globe className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">搜索</span>
+                        <Switch checked={webSearch} onCheckedChange={setWebSearch} />
+                      </label>
+                    </TooltipTrigger>
+                    <TooltipContent>联网搜索开关</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
+                  {STRATEGIES.map(({ key, icon: Icon, label }) => (
+                    <TooltipProvider key={key}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button onClick={() => setSearchStrategy(key)}
+                            className={`inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-sm transition-colors ${
+                              searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
+                            }`}>
+                            <Icon className="h-3 w-3" />
+                            {label}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{STRATEGY_DESC[key]}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+                </div>
               </div>
+            )}
           </div>
         </div>
       </header>
@@ -151,7 +164,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
       {/* Messages */}
       <ScrollArea ref={scrollRef} className="flex-1">
         <div className="mx-auto max-w-3xl px-5 py-8">
-          {isLoadingMessages ? <MessageSkeleton /> : isEmpty ? <EmptyState /> : (
+          {isLoadingMessages ? <MessageSkeleton /> : isEmpty ? <EmptyState onImport={() => onNavigate('browser')} /> : (
             <div className="space-y-6">
               {chat.messages.map((msg, idx) => (
                 <motion.div

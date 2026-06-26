@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { toast } from 'sonner'
-import { Button, Input, Separator } from '@/components/ui'
+import { Button, Input, Separator, ConfirmDialog } from '@/components/ui'
 import { Globe, Trash2, Upload, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { DocSource } from '@/lib/api'
@@ -22,6 +22,8 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
   const [uploadPercent, setUploadPercent] = useState(0)
   const [suggested, setSuggested] = useState<string[] | null>(null)
   const [versionPrompted, setVersionPrompted] = useState<VersionPrompt | null>(null)
+  const [deleteSourceTarget, setDeleteSourceTarget] = useState<string | null>(null)
+  const [clearOpen, setClearOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const resetUploadState = () => {
@@ -152,24 +154,6 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
     await startUrlIngest(url)
   }
 
-  const handleClearAll = async () => {
-    try {
-      await api.clearKnowledgeBase()
-      if (await onRefresh()) toast.success('工作区已清空')
-    } catch (e) {
-      toast.error('清空失败', { description: String(e) })
-    }
-  }
-
-  const handleDeleteSource = async (source: string) => {
-    try {
-      await api.deleteSource(source)
-      if (await onRefresh()) toast.success('已删除引用文档')
-    } catch (e) {
-      toast.error('删除失败', { description: String(e) })
-    }
-  }
-
   return (
     <div className="space-y-4">
       {/* Upload */}
@@ -256,7 +240,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">引用文档</span>
           {sources.length > 0 && (
-            <button onClick={handleClearAll} className="text-2xs text-destructive/50 hover:text-destructive transition-colors">
+            <button onClick={() => setClearOpen(true)} className="text-2xs text-destructive/50 hover:text-destructive transition-colors">
               清空
             </button>
           )}
@@ -267,7 +251,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
               <span className="truncate flex-1">{s.source}</span>
               <span className="text-2xs text-muted-foreground mr-2 font-mono">{s.count} 段落</span>
               <button
-                onClick={() => handleDeleteSource(s.source)}
+                onClick={() => setDeleteSourceTarget(s.source)}
                 className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
               >
                 <Trash2 className="h-3 w-3" />
@@ -275,10 +259,43 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
             </div>
           ))}
           {sources.length === 0 && (
-            <p className="text-xs text-muted-foreground/60 text-center py-6 italic">工作区为空</p>
+            <p className="text-xs text-muted-foreground/60 text-center py-6 italic">知识库为空</p>
           )}
         </div>
       </div>
+
+      {/* Delete source confirm */}
+      <ConfirmDialog
+        open={!!deleteSourceTarget}
+        onOpenChange={(open) => { if (!open) setDeleteSourceTarget(null) }}
+        title="删除引用文档"
+        description={`确定要删除"${deleteSourceTarget ?? ''}"吗？关联的段落将被移除。`}
+        onConfirm={async () => {
+          if (!deleteSourceTarget) return
+          try {
+            await api.deleteSource(deleteSourceTarget)
+            if (await onRefresh()) toast.success('已删除引用文档')
+          } catch (e) {
+            toast.error('删除失败', { description: String(e) })
+          }
+        }}
+      />
+
+      {/* Clear KB confirm */}
+      <ConfirmDialog
+        open={clearOpen}
+        onOpenChange={setClearOpen}
+        title="清空知识库"
+        description="确定要清空整个知识库中的所有文档和段落吗？此操作不可撤销。"
+        onConfirm={async () => {
+          try {
+            await api.clearKnowledgeBase()
+            if (await onRefresh()) toast.success('知识库已清空')
+          } catch (e) {
+            toast.error('清空失败', { description: String(e) })
+          }
+        }}
+      />
     </div>
   )
 }

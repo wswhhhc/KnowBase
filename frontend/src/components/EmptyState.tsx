@@ -1,7 +1,12 @@
-import { Search, Globe, Zap } from 'lucide-react'
+import { Upload, Search, Globe, Zap } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { Button } from '@/components/ui'
 
-export default function EmptyState() {
+interface EmptyStateProps {
+  onImport?: () => void
+}
+
+export default function EmptyState({ onImport }: EmptyStateProps) {
   const suggestions = [
     { icon: Search, text: '上传一份文档，然后问一个关于它的问题' },
     { icon: Globe, text: '导入一个公开网页的内容' },
@@ -38,6 +43,19 @@ export default function EmptyState() {
           </motion.div>
         ))}
       </div>
+
+      {onImport && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6, duration: 0.3 }}
+          className="mt-6"
+        >
+          <Button onClick={onImport} size="lg" className="gap-2">
+            <Upload className="h-4 w-4" />开始导入资料
+          </Button>
+        </motion.div>
+      )}
     </div>
   )
 }

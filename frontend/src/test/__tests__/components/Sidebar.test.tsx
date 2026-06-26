@@ -25,6 +25,8 @@ vi.mock('lucide-react', () => {
     Search: 'Search',
     Tag: 'Tag',
     BookmarkCheck: 'BookmarkCheck',
+    ChevronDown: 'ChevronDown',
+    ChevronRight: 'ChevronRight',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
@@ -110,11 +112,11 @@ describe('Sidebar', () => {
     expect(screen.getByText('KnowBase')).toBeInTheDocument()
   })
 
-  it('renders 4 navigation buttons: 对话, 工作区, 指标, 设置', () => {
+  it('renders 4 navigation buttons: 对话, 知识库, 指标, 设置', () => {
     render(<Sidebar {...defaultProps} />)
     const btns = screen.getAllByText('对话')
     expect(btns.length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('工作区')).toBeInTheDocument()
+    expect(screen.getByText('知识库')).toBeInTheDocument()
     expect(screen.getByText('指标')).toBeInTheDocument()
     expect(screen.getByText('设置')).toBeInTheDocument()
   })
@@ -149,5 +151,23 @@ describe('Sidebar', () => {
     await userEvent.click(newBtn)
     expect(chat.clearMessages).toHaveBeenCalled()
     expect(onNavigate).toHaveBeenCalledWith('chat')
+  })
+
+  it('renders the default workspace when its id is an empty string', () => {
+    vi.mocked(useWorkspaces).mockReturnValue({
+      workspaces: [{ id: '', name: '默认工作区', description: '', created_at: '', updated_at: '' }],
+      activeWorkspaceId: '',
+      setActiveWorkspaceId: vi.fn(),
+      create: vi.fn(),
+      remove: vi.fn(),
+      rename: vi.fn(),
+      refresh: vi.fn(),
+      loading: false,
+    })
+
+    render(<Sidebar {...defaultProps} />)
+
+    expect(screen.getByText('默认工作区')).toBeInTheDocument()
+    expect(screen.getByText('知识库')).toBeInTheDocument()
   })
 })

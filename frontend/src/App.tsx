@@ -143,7 +143,7 @@ function App() {
             <div className="flex items-center justify-around h-14">
               {([
                 { view: 'chat' as ViewType, icon: Sparkles, label: '聊天' },
-                { view: 'browser' as ViewType, icon: BookOpen, label: '工作区' },
+                { view: 'browser' as ViewType, icon: BookOpen, label: '知识库' },
                 { view: 'dashboard' as ViewType, icon: BarChart3, label: '指标' },
                 { view: 'settings' as ViewType, icon: Settings, label: '设置' },
               ]).map(({ view, icon: Icon, label }) => (

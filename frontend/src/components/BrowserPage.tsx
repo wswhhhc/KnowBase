@@ -485,7 +485,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
           </button>
           <div className="h-4 w-px bg-border" />
           <BookOpen className="h-4 w-4 text-primary" />
-          <h1 className="font-heading text-lg text-foreground tracking-tight">工作区</h1>
+          <h1 className="font-heading text-lg text-foreground tracking-tight">知识库</h1>
         </div>
 
         <div className="flex items-center gap-4">
@@ -622,6 +622,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
         >
           <Bug className="h-3 w-3" />
           检索测试沙盒
+          <span className="text-2xs text-muted-foreground/30 mr-1">高级功能</span>
           <span className="ml-auto">{debugOpen ? '收起' : '展开'}</span>
         </button>
         {debugOpen && (
@@ -688,7 +689,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
           ) : displayChunks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <BookOpen className="h-12 w-12 text-muted-foreground/20 mb-4" />
-              <p className="text-sm text-muted-foreground">工作区为空</p>
+              <p className="text-sm text-muted-foreground">知识库为空</p>
               <p className="text-xs text-muted-foreground/50 mt-1">上传文档或导入网页后即可浏览</p>
             </div>
           ) : chunkView === 'slice' && selectedSource ? (
