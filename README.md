@@ -73,7 +73,19 @@
 
 ### 1. 配置环境变量
 
-创建或编辑 `backend/.env`：
+先从模板创建 `backend/.env`：
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item backend\.env.example backend\.env
+```
+
+然后按需编辑：
 
 ```env
 SILICONFLOW_API_KEY=你的硅基流动密钥
@@ -356,6 +368,8 @@ uv run python -m src.evaluate
 - 后端目录见 [backend/](backend/)
 - 测试文档见 [docs/tests/](docs/tests/)
 - 一键脚本见 [scripts/](scripts/)
+- 需求基线见 [docs/requirements.md](docs/requirements.md)
+- 协作约定见 [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
