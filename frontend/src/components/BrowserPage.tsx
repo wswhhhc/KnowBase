@@ -1,9 +1,9 @@
 import { toast } from 'sonner'
 import { useEffect, useState, useRef } from 'react'
 import { Button, Input, ScrollArea, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, SkeletonGrid } from '@/components/ui'
-import { BookOpen, PanelRightOpen, ArrowLeft, Search, FileText, Hash, ExternalLink, Layers, Flame, List, LayoutGrid, Upload, Globe, RefreshCw, Bookmark, BookmarkCheck, AlertTriangle } from 'lucide-react'
+import { BookOpen, PanelRightOpen, ArrowLeft, Search, FileText, Hash, ExternalLink, Layers, Flame, List, LayoutGrid, Upload, Globe, RefreshCw, Bookmark, BookmarkCheck, AlertTriangle, Bug, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
-import type { KBStats, KBChunk, KBConfig, HotspotEntry } from '@/lib/api'
+import type { KBStats, KBChunk, KBConfig, DebugSearchResponse, DebugSearchHit } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ViewType } from '@/App'
 import { Separator, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
@@ -16,6 +16,10 @@ interface BrowserPageProps {
   onHighlightConsumed?: () => void
   workspaceId?: string
 }
+
+type VersionPrompt =
+  | { kind: 'file'; file: File; sourceName: string }
+  | { kind: 'url'; url: string; sourceName: string }
 
 export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, highlightChunkId, onHighlightConsumed, workspaceId }: BrowserPageProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -36,6 +40,15 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   const [kbConfig, setKbConfig] = useState<KBConfig | null>(null)
   const [urlInput, setUrlInput] = useState('')
   const [ingesting, setIngesting] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadPhase, setUploadPhase] = useState('')
+  const [uploadPercent, setUploadPercent] = useState(0)
+  const [versionPrompted, setVersionPrompted] = useState<VersionPrompt | null>(null)
+  const [debugOpen, setDebugOpen] = useState(false)
+  const [debugQuery, setDebugQuery] = useState('')
+  const [debugResults, setDebugResults] = useState<DebugSearchResponse | null>(null)
+  const [debugSearching, setDebugSearching] = useState(false)
+  const [debugStrategy, setDebugStrategy] = useState<'fast' | 'balanced' | 'high_quality' | 'deep'>('balanced')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
@@ -81,9 +94,13 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   useEffect(() => {
     setError(null)
     setLoading(true)
-    loadChunks('', '', 0, pageSize)
-    Promise.all([api.getKBStats(), api.getKBSourceNames(), api.getKBConfig()])
-      .then(([s, srcs, cfg]) => { setStats(s); setSources(srcs); setKbConfig(cfg) })
+    Promise.all([
+      loadChunks('', '', 0, pageSize),
+      api.getKBStats(),
+      api.getKBSourceNames(),
+      api.getKBConfig(),
+    ])
+      .then(([, s, srcs, cfg]) => { setStats(s); setSources(srcs); setKbConfig(cfg) })
       .catch((e) => { setError(String(e)); toast.error('加载失败', { description: String(e) }) })
       .finally(() => setLoading(false))
   }, [])
@@ -223,6 +240,29 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     ? [...chunks].sort((a, b) => (hotspots.get(b.chunk_id) || 0) - (hotspots.get(a.chunk_id) || 0))
     : chunks
 
+  const resetProgressState = () => {
+    setUploading(false)
+    setIngesting(false)
+    setUploadPhase('')
+    setUploadPercent(0)
+  }
+
+  const runDebugSearch = async (query: string, strategy = debugStrategy) => {
+    if (!query.trim()) return
+    setDebugSearching(true)
+    try {
+      const results = await api.debugSearch(query.trim(), 5, strategy)
+      setDebugResults(results)
+    } catch (e) {
+      toast.error('检索测试失败', { description: String(e) })
+    }
+    setDebugSearching(false)
+  }
+
+  const handleDebugSearch = async () => {
+    await runDebugSearch(debugQuery, debugStrategy)
+  }
+
   // Compute overlap marking for slice view
   const findOverlap = (prev: string, curr: string): number => {
     const maxOverlap = kbConfig?.chunk_overlap || 200
@@ -257,27 +297,124 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     setSelectedSource(selectedSource === src ? '' : src)
   }
 
+  const startUpload = async (file: File, versionMode?: 'replace' | 'append') => {
+    setUploading(true)
+    setUploadPhase('loading')
+    setUploadPercent(0)
+    setVersionPrompted(null)
+    try {
+      const probe = await api.checkSource(file.name)
+      if (probe.exists && !versionMode) {
+        setVersionPrompted({ kind: 'file', file, sourceName: file.name })
+        resetProgressState()
+        return
+      }
+    } catch (error) {
+      toast.error('上传前检查失败', { description: String(error) })
+      resetProgressState()
+      return
+    }
+
+    api.uploadDocumentStream(file, versionMode, {
+      onProgress: (phase, percent) => {
+        setUploadPhase(phase)
+        setUploadPercent(percent)
+      },
+      onDone: async (result) => {
+        if (result.existing_version && !versionMode) {
+          setVersionPrompted({ kind: 'file', file, sourceName: file.name })
+          resetProgressState()
+          return
+        }
+        await refreshData()
+        const message = versionMode === 'replace'
+          ? '文档已替换为新版本'
+          : versionMode === 'append'
+            ? '文档已追加新版本'
+            : '文档已上传'
+        toast.success(message, { description: file.name })
+        resetProgressState()
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      },
+      onError: (message) => {
+        toast.error('上传失败', { description: message })
+        resetProgressState()
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      },
+    })
+  }
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    await startUpload(file)
+  }
+
+  const handleVersionAction = async (action: 'replace' | 'append' | 'skip') => {
+    if (!versionPrompted) return
+    if (action === 'skip') {
+      setVersionPrompted(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      toast.info('已跳过，未重复导入')
+      return
+    }
+    if (versionPrompted.kind === 'file') {
+      await startUpload(versionPrompted.file, action)
+      return
+    }
+    await startUrlIngest(versionPrompted.url, action)
+  }
+
+  const startUrlIngest = async (url: string, versionMode?: 'replace' | 'append') => {
+    setIngesting(true)
+    setUploadPhase('loading')
+    setUploadPercent(0)
+    setVersionPrompted(null)
     try {
-      await api.uploadDocument(file)
-      await refreshData()
-      toast.success('文档已上传', { description: file.name })
-    } catch (err) { toast.error('上传失败', { description: String(err) }) }
-    e.target.value = ''
+      const probe = await api.checkSource(url)
+      if (probe.exists && !versionMode) {
+        setVersionPrompted({ kind: 'url', url, sourceName: url })
+        resetProgressState()
+        return
+      }
+    } catch (error) {
+      toast.error('导入前检查失败', { description: String(error) })
+      resetProgressState()
+      return
+    }
+
+    api.ingestUrlStream(url, versionMode, {
+      onProgress: (phase, percent) => {
+        setUploadPhase(phase)
+        setUploadPercent(percent)
+      },
+      onDone: async (result) => {
+        if (result.existing_version && !versionMode) {
+          setVersionPrompted({ kind: 'url', url, sourceName: url })
+          resetProgressState()
+          return
+        }
+        setUrlInput('')
+        await refreshData()
+        const message = versionMode === 'replace'
+          ? '网页已替换为新版本'
+          : versionMode === 'append'
+            ? '网页已追加新版本'
+            : '网页已导入'
+        toast.success(message)
+        resetProgressState()
+      },
+      onError: (message) => {
+        toast.error('导入失败', { description: message })
+        resetProgressState()
+      },
+    })
   }
 
   const handleIngestUrl = async () => {
-    if (!urlInput.trim()) return
-    setIngesting(true)
-    try {
-      await api.ingestUrl(urlInput.trim())
-      setUrlInput('')
-      await refreshData()
-      toast.success('网页已导入')
-    } catch (err) { toast.error('导入失败', { description: String(err) }) }
-    setIngesting(false)
+    const url = urlInput.trim()
+    if (!url) return
+    await startUrlIngest(url)
   }
 
   const refreshData = async () => {
@@ -292,6 +429,45 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   }
 
   const totalPages = chunks.reduce((acc, c) => acc + Math.ceil(c.content.length / 800), 0)
+
+  const renderDebugSection = (title: string, hits: DebugSearchHit[], scoreMode: 'vector' | 'bm25' | 'rrf') => (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <h4 className="text-2xs font-medium text-foreground/80">{title}</h4>
+        <span className="text-2xs text-muted-foreground/40">{hits.length} 条</span>
+      </div>
+      {hits.length === 0 ? (
+        <div className="rounded border border-dashed border-border/60 px-2 py-3 text-2xs text-muted-foreground/50">
+          没有命中结果
+        </div>
+      ) : (
+        <div className="space-y-1 max-h-52 overflow-y-auto">
+          {hits.map((hit) => (
+            <div key={`${title}-${hit.chunk_id}`} className="rounded border border-border/50 p-2 text-xs">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-2xs font-mono text-primary/60">
+                  #
+                  {scoreMode === 'vector' ? hit.vector_rank : scoreMode === 'bm25' ? hit.bm25_rank : hit.rrf_rank}
+                </span>
+                <span className="text-2xs font-mono text-muted-foreground/40 truncate">{hit.chunk_id}</span>
+              </div>
+              <p className="text-2xs text-muted-foreground/50 truncate mb-1">{hit.source}</p>
+              <p className="text-2xs text-foreground/70 line-clamp-3 mb-1">{hit.content}</p>
+              <div className="flex flex-wrap gap-3 text-2xs text-muted-foreground/40 font-mono">
+                {scoreMode === 'vector' && <span>向量: {hit.vector_score?.toFixed(4) ?? '-'}</span>}
+                {scoreMode === 'bm25' && <span>BM25: {hit.bm25_score?.toFixed(4) ?? '-'}</span>}
+                {scoreMode === 'rrf' && <span>RRF: {hit.rrf_score?.toFixed(4) ?? '-'}</span>}
+                {hit.vector_rank != null && <span>V#{hit.vector_rank}</span>}
+                {hit.bm25_rank != null && <span>B#{hit.bm25_rank}</span>}
+                {hit.rrf_rank != null && <span>R#{hit.rrf_rank}</span>}
+                {hit.rerank_rank != null && <span>重排#{hit.rerank_rank}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div className="flex flex-col h-full">
@@ -342,11 +518,36 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
             <Globe className="h-3 w-3" />
           </Button>
         </div>
+        {(uploading || ingesting) && (
+          <div className="min-w-[120px] text-right">
+            <div className="text-2xs text-muted-foreground/60">
+              {{
+                loading: '正在加载文档…',
+                splitting: '正在切分段落…',
+                embedding: '正在向量化…',
+                done: '完成',
+              }[uploadPhase] || '正在处理…'}
+            </div>
+            <div className="mt-1 h-1 w-full rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+            </div>
+          </div>
+        )}
         <button onClick={refreshData}
           className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/30 transition-colors">
           <RefreshCw className="h-3.5 w-3.5" />
         </button>
       </div>
+      {versionPrompted && (
+        <div className="border-b border-border bg-primary/5 px-5 py-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-foreground/80">引用来源“{versionPrompted.sourceName}”已存在，选择处理方式：</span>
+            <Button size="sm" variant="outline" onClick={() => handleVersionAction('replace')}>替换</Button>
+            <Button size="sm" variant="outline" onClick={() => handleVersionAction('append')}>追加版本</Button>
+            <Button size="sm" variant="ghost" onClick={() => handleVersionAction('skip')}>取消</Button>
+          </div>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 border-b border-border px-5 py-2.5 bg-surface/30">
@@ -412,6 +613,65 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
           )}
         </div>
       )}
+
+      {/* Debug Search Sandbox */}
+      <div className="border-b border-border">
+        <button
+          onClick={() => setDebugOpen(!debugOpen)}
+          className="flex items-center gap-2 px-5 py-2 w-full text-left text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+        >
+          <Bug className="h-3 w-3" />
+          检索测试沙盒
+          <span className="ml-auto">{debugOpen ? '收起' : '展开'}</span>
+        </button>
+        {debugOpen && (
+          <div className="px-5 pb-3 space-y-3">
+            <div className="flex flex-wrap gap-1">
+              {[
+                { value: 'fast', label: '快速' },
+                { value: 'balanced', label: '标准' },
+                { value: 'high_quality', label: '严谨' },
+                { value: 'deep', label: '深度' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    const nextStrategy = option.value as typeof debugStrategy
+                    setDebugStrategy(nextStrategy)
+                    if (debugQuery.trim()) void runDebugSearch(debugQuery, nextStrategy)
+                  }}
+                  className={`rounded-md px-2 py-1 text-2xs transition-colors ${
+                    debugStrategy === option.value
+                      ? 'bg-primary/15 text-primary'
+                      : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="输入测试查询…"
+                value={debugQuery}
+                onChange={(e) => setDebugQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleDebugSearch() }}
+                className="flex-1 h-8 text-xs"
+              />
+              <Button size="sm" onClick={handleDebugSearch} disabled={debugSearching}>
+                {debugSearching ? <Loader2 className="h-3 w-3 animate-spin" /> : '检索'}
+              </Button>
+            </div>
+            {debugResults && (
+              <div className="grid gap-3 md:grid-cols-3">
+                {renderDebugSection('向量 Top-5', debugResults.vector_results, 'vector')}
+                {renderDebugSection('BM25 Top-5', debugResults.bm25_results, 'bm25')}
+                {renderDebugSection('RRF 融合', debugResults.fused_results, 'rrf')}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Content — magazine shelf layout */}
       <ScrollArea className="flex-1">

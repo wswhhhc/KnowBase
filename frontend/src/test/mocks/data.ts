@@ -27,7 +27,7 @@ export const mockKBChunks: KBChunk[] = [
 ]
 
 export const mockQueryLogs: QueryLogEntry[] = [
-  { timestamp: '2026-06-16T08:00:00Z', thread_id: 'thread-1', question: '你好', elapsed_ms: 1500, retrieval_count: 3, quality_ok: true, quality_reason: 'PASS', used_web_search: false, used_rerank: false, question_type: 'knowledge_base', retry_count: 0, source_count: 2, answer_preview: '你好！', error: '' },
+  { timestamp: '2026-06-16T08:00:00Z', thread_id: 'thread-1', question: '你好', elapsed_ms: 1500, retrieval_count: 3, quality_ok: true, quality_reason: 'PASS', used_web_search: false, used_rerank: false, question_type: 'knowledge_base', retry_count: 0, source_count: 2, answer_preview: '你好！', error: '', token_count: 12000, prompt_tokens: 8000, completion_tokens: 4000, llm_model: 'gpt-4o', estimated_cost: 0.006, ttfb_ms: 180, first_token_ms: 220 },
 ]
 
 export const mockDebugInfo: DebugInfo = {
@@ -47,6 +47,9 @@ export const mockDebugInfo: DebugInfo = {
   retry_count: 0,
   used_web_search: false,
   web_results_count: 0,
+  token_count: 320,
+  prompt_tokens: 220,
+  completion_tokens: 100,
   context_sources: [
     { index: 1, source: 'sample_西游记.txt', chunk_id: 'sample_西游记.txt:22:abc', chunk_index: 22, page: null, content: '孙悟空保护唐僧西天取经，二人是师徒关系。', score: 0.91 },
   ],
@@ -77,6 +80,9 @@ export const mockSSEDebugEvent: DebugInfo = {
   retry_count: 0,
   used_web_search: false,
   web_results_count: 0,
+  token_count: 320,
+  prompt_tokens: 220,
+  completion_tokens: 100,
   context_sources: [
     { index: 1, source: 'sample_西游记.txt', chunk_id: 'sample_西游记.txt:22:abc', chunk_index: 22, page: null, content: '孙悟空保护唐僧西天取经，二人是师徒关系。', score: 0.91 },
   ],

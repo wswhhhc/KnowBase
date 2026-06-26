@@ -1,9 +1,27 @@
 import type {
-  Source, Conversation, ApiMessage, KBStats, QueryLogEntry,
+  Source, Conversation, ApiMessage, KBStats, QueryLogEntry as GeneratedQueryLogEntry,
   DebugNodeInfo, DebugInfo, DocSource, HotspotEntry, KBConfig, IngestResponse,
 } from './api-types.generated'
 
-export type { Source, Conversation, KBStats, QueryLogEntry, DebugNodeInfo, DebugInfo, DocSource, HotspotEntry, KBConfig, IngestResponse }
+export interface QueryLogEntry extends GeneratedQueryLogEntry {
+  ttfb_ms?: number
+  first_token_ms?: number
+  token_count?: number | null
+  prompt_tokens?: number | null
+  completion_tokens?: number | null
+  llm_model?: string | null
+  estimated_cost?: number | null
+}
+
+export interface QueryLogsResponse {
+  logs: QueryLogEntry[]
+  total_cost: number
+  total_tokens: number
+  total_prompt_tokens: number
+  total_completion_tokens: number
+}
+
+export type { Source, Conversation, KBStats, DebugNodeInfo, DebugInfo, DocSource, HotspotEntry, KBConfig, IngestResponse }
 import type { KBChunk } from './api-types.generated'
 export type { KBChunk }
 
@@ -117,20 +135,69 @@ export interface Bookmark {
   note: string
   content: string
   source: string
+  tags: string
   created_at: string
 }
 
-export const getBookmarks = (workspaceId?: string) => {
-  const params = workspaceId !== undefined ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
-  return req<Bookmark[]>(`/bookmarks${params}`)
+export interface DebugSearchHit {
+  chunk_id: string
+  source: string
+  content: string
+  score: number | null
+  vector_score: number | null
+  bm25_score: number | null
+  rrf_score: number | null
+  vector_rank: number | null
+  bm25_rank: number | null
+  rrf_rank: number | null
+  rerank_rank: number | null
+}
+
+export interface DebugSearchResponse {
+  strategy: string
+  vector_results: DebugSearchHit[]
+  bm25_results: DebugSearchHit[]
+  fused_results: DebugSearchHit[]
+}
+
+export interface RuntimeSettings {
+  siliconflow_api_key: string
+  siliconflow_base_url: string
+  embedding_model: string
+  llm_model: string
+  llm_temperature: number
+  tavily_api_key: string
+  api_key: string
+  chunk_size: number
+  chunk_overlap: number
+  top_k_retrieval: number
+  top_k_rerank: number
+  enable_quality_check: boolean
+  enable_contextual_retrieval: boolean
+}
+
+export const MASKED_SECRET_VALUE = '__KEEP_EXISTING_SECRET__'
+
+export const getBookmarks = (workspaceId?: string, search?: string) => {
+  const params = new URLSearchParams()
+  if (workspaceId) params.set('workspace_id', workspaceId)
+  if (search) params.set('search', search)
+  const qs = params.toString()
+  return req<Bookmark[]>(`/bookmarks${qs ? `?${qs}` : ''}`)
 }
 
 export const createBookmark = (data: {
   workspace_id?: string; conversation_id?: string; message_id?: number;
-  chunk_id?: string; note?: string; content?: string; source?: string
+  chunk_id?: string; note?: string; content?: string; source?: string; tags?: string
 }) =>
   req<Bookmark>('/bookmarks', {
     method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+export const updateBookmark = (id: number, data: { note?: string; tags?: string }) =>
+  req<Bookmark>(`/bookmarks/${id}`, {
+    method: 'PATCH',
     body: JSON.stringify(data),
   })
 
@@ -154,8 +221,122 @@ export const uploadDocument = async (file: File, versionMode?: string) => {
   return res.json()
 }
 
-export const ingestUrl = (url: string) =>
-  req<{ chunk_count: number; total_docs: number; message: string }>('/documents/ingest-url', {
+export function uploadDocumentStream(
+  file: File,
+  versionMode: string | undefined,
+  callbacks: {
+    onProgress?: (phase: string, percent: number) => void
+    onDone?: (result: any) => void
+    onError?: (message: string) => void
+  },
+): AbortController {
+  const controller = new AbortController()
+  const form = new FormData()
+  form.append('file', file)
+  const params = versionMode ? `?version_mode=${versionMode}` : ''
+
+  fetch(`${BASE}/documents/upload-stream${params}`, {
+    method: 'POST',
+    body: form,
+    headers: authHeaders(),
+    signal: controller.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok) { callbacks.onError?.(await res.text()); return }
+      const reader = res.body?.getReader()
+      if (!reader) return
+      const decoder = new TextDecoder()
+      const parser = new SSEParser()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          for (const parsed of parser.flush()) {
+            handleSSEEvent(parsed.event, parsed.data, callbacks)
+          }
+          break
+        }
+        const text = decoder.decode(value, { stream: true })
+        for (const parsed of parser.feed(text)) {
+          handleSSEEvent(parsed.event, parsed.data, callbacks)
+        }
+      }
+    })
+    .catch((err) => {
+      if (err.name !== 'AbortError') callbacks.onError?.(err.message)
+    })
+  return controller
+}
+
+export function ingestUrlStream(
+  url: string,
+  versionMode: string | undefined,
+  callbacks: {
+    onProgress?: (phase: string, percent: number) => void
+    onDone?: (result: any) => void
+    onError?: (message: string) => void
+  },
+): AbortController {
+  const controller = new AbortController()
+  const params = versionMode ? `?version_mode=${versionMode}` : ''
+  fetch(`${BASE}/documents/ingest-url-stream${params}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ url }),
+    signal: controller.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok) { callbacks.onError?.(await res.text()); return }
+      const reader = res.body?.getReader()
+      if (!reader) return
+      const decoder = new TextDecoder()
+      const parser = new SSEParser()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          for (const parsed of parser.flush()) {
+            handleSSEEvent(parsed.event, parsed.data, callbacks)
+          }
+          break
+        }
+        const text = decoder.decode(value, { stream: true })
+        for (const parsed of parser.feed(text)) {
+          handleSSEEvent(parsed.event, parsed.data, callbacks)
+        }
+      }
+    })
+    .catch((err) => {
+      if (err.name !== 'AbortError') callbacks.onError?.(err.message)
+    })
+  return controller
+}
+
+function handleSSEEvent(
+  event: string,
+  data: string,
+  callbacks: {
+    onProgress?: (phase: string, percent: number) => void
+    onDone?: (result: any) => void
+    onError?: (message: string) => void
+  },
+) {
+  try {
+    const parsed = JSON.parse(data)
+    switch (event) {
+      case 'progress':
+        callbacks.onProgress?.(parsed.phase, parsed.percent)
+        break
+      case 'done':
+        callbacks.onDone?.(parsed)
+        break
+      case 'error':
+        callbacks.onError?.(parsed.message)
+        break
+    }
+  } catch { /* ignore parse errors */ }
+}
+
+export const ingestUrl = (url: string, versionMode?: string) =>
+  req<{ chunk_count: number; total_docs: number; message: string }>(`/documents/ingest-url${versionMode ? `?version_mode=${versionMode}` : ''}`, {
     method: 'POST',
     body: JSON.stringify({ url }),
   })
@@ -185,10 +366,27 @@ export const getKBConfig = () => req<KBConfig>('/knowledge-base/config')
 
 export const getKBHotspots = () => req<HotspotEntry[]>('/knowledge-base/hotspots')
 
+export const debugSearch = (query: string, k = 5, searchStrategy = 'balanced') =>
+  req<DebugSearchResponse>(
+    '/knowledge-base/debug-search',
+    { method: 'POST', body: JSON.stringify({ query, k, search_strategy: searchStrategy }) },
+  )
+
 // ── Metrics ──
 
 export const queryLogs = (days: number = 7, limit: number = 500) =>
-  req<QueryLogEntry[]>(`/metrics/logs?days=${days}&limit=${limit}`)
+  req<QueryLogsResponse>(`/metrics/logs?days=${days}&limit=${limit}`)
+
+// ── Settings ──
+
+export const getSettings = () =>
+  req<RuntimeSettings>('/settings')
+
+export const updateSettings = (data: Partial<RuntimeSettings>) =>
+  req<{ updated: boolean; warnings: string[] }>('/settings', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
 
 // ── Chat SSE ──
 
@@ -271,8 +469,8 @@ function createChatStreamAdapter(callbacks: ChatStreamCallbacks) {
           callbacks.onError?.(parsed.message)
           break
       }
-    } catch (e) {
-      console.warn('SSE parse error', e)
+    } catch {
+      // Ignore malformed SSE payloads so the stream can continue.
     }
   }
 }

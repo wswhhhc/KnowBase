@@ -22,6 +22,7 @@ from config.settings import (
     SCORE_THRESHOLD,
     SILICONFLOW_BASE_URL,
     TOP_K_RETRIEVAL,
+    get_runtime_setting,
     require_siliconflow_api_key,
 )
 from src import graph_nodes as gn
@@ -135,7 +136,7 @@ def _initial_state(question: str) -> GraphState:
         "answer": "",
         "sources": [],
         "retry_count": 0,
-        "retrieval_k": TOP_K_RETRIEVAL,
+        "retrieval_k": get_runtime_setting("top_k_retrieval", TOP_K_RETRIEVAL),
         "score_threshold": SCORE_THRESHOLD,
         "quality_ok": True,
         "quality_reason": "",

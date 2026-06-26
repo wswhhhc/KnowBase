@@ -1,7 +1,7 @@
 """Coverage tests for graph.py — covers all missing branches of internal and node functions."""
 
 import unittest
-from unittest.mock import patch, PropertyMock
+from unittest.mock import MagicMock, patch, PropertyMock
 from uuid import uuid4
 
 from langchain_core.documents import Document
@@ -20,6 +20,7 @@ from src.graph_nodes import (
     _should_rerank,
     _rule_check_quality,
     _compute_evidence,
+    _rewrite_cache,
     rewrite_query,
     rerank_docs,
     check_quality,
@@ -31,8 +32,9 @@ from src.knowledge_base import KnowledgeBase, RetrievalResult
 
 
 class FakeResponse:
-    def __init__(self, content):
+    def __init__(self, content, usage_metadata=None):
         self.content = content
+        self.usage_metadata = usage_metadata
 
 
 class FakeLLM:
@@ -41,7 +43,10 @@ class FakeLLM:
 
     def invoke(self, _prompt):
         if self.responses:
-            return FakeResponse(self.responses.pop(0))
+            response = self.responses.pop(0)
+            if isinstance(response, FakeResponse):
+                return response
+            return FakeResponse(response)
         return FakeResponse("fake answer")
 
 
@@ -184,6 +189,25 @@ class RewriteQueryTests(unittest.TestCase):
         self.assertIn("政策", result["rewritten_question"])
         self.assertTrue(result["used_rewrite"])
         mock_terms.assert_called_once()
+
+    def test_rewrite_query_returns_llm_usage(self):
+        _rewrite_cache.clear()
+        state = _state(
+            question="这个是什么意思",
+            messages=[HumanMessage(content="年假"), AIMessage(content="5天")],
+        )
+        fake_llm = FakeLLM([
+            FakeResponse(
+                "年假是什么意思",
+                usage_metadata={"input_tokens": 11, "output_tokens": 7},
+            )
+        ])
+        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+            result = rewrite_query(state)
+
+        self.assertEqual(result["token_count"], 18)
+        self.assertEqual(result["prompt_tokens"], 11)
+        self.assertEqual(result["completion_tokens"], 7)
 
 
 # =============================================================================
@@ -391,7 +415,7 @@ class CheckQualityTests(unittest.TestCase):
         self.assertTrue(result["quality_ok"])
 
     def test_skip_when_quality_check_disabled(self):
-        with patch("src.graph_nodes.ENABLE_QUALITY_CHECK", False):
+        with patch("src.graph_nodes.get_runtime_setting", return_value=False):
             result = check_quality(_state(question_type="knowledge_base"))
         self.assertTrue(result["quality_ok"])
 
@@ -424,7 +448,12 @@ class CheckQualityTests(unittest.TestCase):
         self.assertEqual(result.get("retry_strategy"), "web_search")
 
     def test_llm_quality_passes(self):
-        fake_llm = FakeLLM(['{"quality_passed":true,"quality_reason":"OK","retry_strategy":"none"}'])
+        fake_llm = FakeLLM([
+            FakeResponse(
+                '{"quality_passed":true,"quality_reason":"OK","retry_strategy":"none"}',
+                usage_metadata={"input_tokens": 9, "output_tokens": 4},
+            )
+        ])
         with patch("src.graph_utils._get_llm", return_value=fake_llm):
             with patch("src.graph_nodes._tavily_configured", return_value=False):
                 with patch("src.graph_nodes.hash") as mock_hash:
@@ -444,6 +473,9 @@ class CheckQualityTests(unittest.TestCase):
         # Since strategy="high_quality", the condition is False immediately, so we go to LLM
         # llm returns quality_passed=true
         self.assertTrue(result["quality_ok"])
+        self.assertEqual(result["token_count"], 13)
+        self.assertEqual(result["prompt_tokens"], 9)
+        self.assertEqual(result["completion_tokens"], 4)
 
     def test_llm_quality_fails_triggers_web_search(self):
         fake_llm = FakeLLM(['{"quality_passed":false,"quality_reason":"bad","retry_strategy":"expand_retrieval"}'])
@@ -538,6 +570,22 @@ class GenerateAnswerTests(unittest.TestCase):
             ))
         urls = [s.get("url") for s in result.get("sources", [])]
         self.assertIn("https://example.com", urls)
+
+    def test_usage_metadata_dict_updates_token_count(self):
+        fake_llm = MagicMock()
+        fake_llm.invoke.return_value = FakeResponse(
+            "answer",
+            usage_metadata={"input_tokens": 11, "output_tokens": 7},
+        )
+        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+            result = generate_answer(_state(
+                context="some docs",
+                question="token test?",
+                messages=[],
+            ))
+        self.assertEqual(result["token_count"], 18)
+        self.assertEqual(result["prompt_tokens"], 11)
+        self.assertEqual(result["completion_tokens"], 7)
 
 
 # =============================================================================

@@ -11,11 +11,12 @@ from langchain_openai import ChatOpenAI
 from pydantic import ValidationError
 
 from config.settings import (
+    SILICONFLOW_BASE_URL,
     LLM_MAX_TOKENS,
     LLM_MODEL,
     LLM_TEMPERATURE,
-    SILICONFLOW_BASE_URL,
     require_siliconflow_api_key,
+    get_runtime_setting,
 )
 from src.graph_state import RerankDecision, QualityDecision
 from src.kb_models import RetrievalResult
@@ -27,12 +28,45 @@ logger = logging.getLogger(__name__)
 
 def _get_llm():
     return ChatOpenAI(
-        model=LLM_MODEL,
-        temperature=LLM_TEMPERATURE,
+        model=get_runtime_setting("llm_model", LLM_MODEL),
+        temperature=get_runtime_setting("llm_temperature", LLM_TEMPERATURE),
         max_tokens=LLM_MAX_TOKENS,
         openai_api_key=require_siliconflow_api_key(),
-        openai_api_base=SILICONFLOW_BASE_URL,
+        openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
     )
+
+
+def extract_token_usage(result: object) -> dict[str, int]:
+    """Extract normalized token usage fields from a LangChain/OpenAI response."""
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    token_count: int | None = None
+
+    usage_metadata = getattr(result, "usage_metadata", None)
+    if usage_metadata:
+        if isinstance(usage_metadata, dict):
+            prompt_tokens = usage_metadata.get("input_tokens") or usage_metadata.get("prompt_tokens")
+            completion_tokens = usage_metadata.get("output_tokens") or usage_metadata.get("completion_tokens")
+        else:
+            prompt_tokens = getattr(usage_metadata, "input_tokens", None) or getattr(usage_metadata, "prompt_tokens", None)
+            completion_tokens = getattr(usage_metadata, "output_tokens", None) or getattr(usage_metadata, "completion_tokens", None)
+    elif isinstance(result, dict):
+        usage = result.get("usage_metadata") or result.get("usage")
+        if isinstance(usage, dict):
+            prompt_tokens = usage.get("input_tokens") or usage.get("prompt_tokens")
+            completion_tokens = usage.get("output_tokens") or usage.get("completion_tokens")
+
+    if prompt_tokens is None and completion_tokens is None:
+        return {}
+
+    prompt_tokens = int(prompt_tokens or 0)
+    completion_tokens = int(completion_tokens or 0)
+    token_count = prompt_tokens + completion_tokens
+    return {
+        "token_count": token_count,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+    }
 
 
 def _messages_to_turns(

@@ -65,16 +65,23 @@ class FakeKnowledgeBase:
     def hybrid_search(self, *args, **kwargs):
         return []
 
+    def debug_search_breakdown(self, *args, **kwargs):
+        return {"vector_results": [], "bm25_results": [], "fused_results": []}
+
     def get_neighbor_chunks(self, chunk_id, window=1):
         return []
 
     def get_hotspots(self, top_n=50):
         return []
 
-    def ingest_file(self, file_path, source_name=None):
+    def ingest_file(self, file_path, source_name=None, version_mode="replace", progress_callback=None):
+        if progress_callback:
+            progress_callback("loading", 25)
         return 0
 
-    def ingest_url(self, url):
+    def ingest_url(self, url, version_mode="replace", progress_callback=None):
+        if progress_callback:
+            progress_callback("loading", 25)
         return 0
 
     def delete_source(self, source_name):

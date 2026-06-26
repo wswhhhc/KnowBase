@@ -31,7 +31,8 @@ vi.mock('lucide-react', () => {
     MessageSquare: 'MessageSquare', Plus: 'Plus', Trash2: 'Trash2',
     BookOpen: 'BookOpen', BarChart3: 'BarChart3', PanelRightClose: 'PanelRightClose',
     Pencil: 'Pencil', Check: 'Check', X: 'X', Upload: 'Upload', Globe: 'Globe',
-    FileText: 'FileText', Loader2: 'Loader2', Sun: 'Sun', Moon: 'Moon',
+    FileText: 'FileText', Loader2: 'Loader2', Sun: 'Sun', Moon: 'Moon', Settings: 'Settings',
+    Bookmark: 'Bookmark', Search: 'Search', Tag: 'Tag',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
@@ -51,8 +52,16 @@ vi.mock('@/hooks/useTheme', () => ({
 vi.mock('@/lib/api', () => ({
   getMessages: vi.fn().mockResolvedValue([]),
   uploadDocument: vi.fn(),
+  uploadDocumentStream: vi.fn().mockImplementation((file, versionMode, callbacks) => {
+    callbacks.onDone?.({ chunk_count: 5, existing_version: false })
+    return { abort: vi.fn() }
+  }),
   checkSource: vi.fn(),
   ingestUrl: vi.fn(),
+  ingestUrlStream: vi.fn().mockImplementation((url, _mode, callbacks) => {
+    callbacks.onDone?.({ chunk_count: 1, existing_version: false })
+    return { abort: vi.fn() }
+  }),
   clearKnowledgeBase: vi.fn(),
   deleteSource: vi.fn(),
   deleteConversations: vi.fn(),
@@ -153,9 +162,20 @@ describe('Sidebar interactions', () => {
     expect(screen.getByText('暂无对话')).toBeInTheDocument()
   })
 
-  it('in dashboard view shows summary', () => {
-    render(<Sidebar {...defaultProps} activeView="dashboard" />)
+  it('in dashboard view shows summary', async () => {
+    await act(async () => {
+      render(<Sidebar {...defaultProps} activeView="dashboard" />)
+    })
     expect(screen.getByText('快速统计')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(api.queryLogs).toHaveBeenCalledWith(7, 100)
+    })
+  })
+
+  it('in settings view does not fall back to dashboard summary', () => {
+    render(<Sidebar {...defaultProps} activeView="settings" />)
+    expect(screen.queryByText('快速统计')).not.toBeInTheDocument()
+    expect(screen.getByText('设置项将在主面板中编辑')).toBeInTheDocument()
   })
 
   it('navigation buttons call onNavigate', async () => {
@@ -338,5 +358,62 @@ describe('Sidebar interactions', () => {
     await waitFor(() => {
       expect(sonnerToast.success).not.toHaveBeenCalled()
     })
+  })
+
+  it('duplicate upload can continue with replace mode after user confirms', async () => {
+    const refresh = vi.fn().mockResolvedValue(true)
+    vi.mocked(useSources).mockReturnValue({
+      sources: mockSources, sourceError: null, refresh,
+    })
+    vi.mocked(api.checkSource).mockResolvedValue({ exists: true })
+
+    render(<Sidebar {...defaultProps} />)
+    await userEvent.click(screen.getByText('文档'))
+
+    const file = new File(['test'], 'duplicate.txt', { type: 'text/plain' })
+    const input = screen.getByLabelText(/选择文件/)
+    await userEvent.upload(input, file)
+
+    await waitFor(() => {
+      expect(screen.getByText('该来源已存在，请选择操作方式')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByText('替换为新版本（删除旧内容后重新导入）'))
+
+    await waitFor(() => {
+      expect(api.uploadDocumentStream).toHaveBeenCalledWith(
+        expect.any(File),
+        'replace',
+        expect.objectContaining({
+          onProgress: expect.any(Function),
+          onDone: expect.any(Function),
+          onError: expect.any(Function),
+        }),
+      )
+    })
+  })
+
+  it('re-prompts version handling if the stream completion reports an existing source', async () => {
+    const refresh = vi.fn().mockResolvedValue(true)
+    vi.mocked(useSources).mockReturnValue({
+      sources: mockSources, sourceError: null, refresh,
+    })
+    vi.mocked(api.checkSource).mockResolvedValue({ exists: false })
+    vi.mocked(api.uploadDocumentStream).mockImplementationOnce((_file, _mode, callbacks) => {
+      callbacks.onDone?.({ existing_version: true, chunk_count: 0 })
+      return { abort: vi.fn() } as any
+    })
+
+    render(<Sidebar {...defaultProps} />)
+    await userEvent.click(screen.getByText('文档'))
+
+    const file = new File(['test'], 'duplicate.txt', { type: 'text/plain' })
+    const input = screen.getByLabelText(/选择文件/)
+    await userEvent.upload(input, file)
+
+    await waitFor(() => {
+      expect(screen.getByText('该来源已存在，请选择操作方式')).toBeInTheDocument()
+    })
+    expect(sonnerToast.success).not.toHaveBeenCalled()
   })
 })

@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Button, ScrollArea } from '@/components/ui'
-import { BarChart3, PanelRightOpen, ArrowLeft, TrendingUp, Clock, CheckCircle2, XCircle, HelpCircle, AlertTriangle, Sun, Moon, Globe, ChevronDown, ChevronUp } from 'lucide-react'
+import { BarChart3, PanelRightOpen, ArrowLeft, TrendingUp, Clock, CheckCircle2, XCircle, HelpCircle, AlertTriangle, Sun, Moon, Globe, ChevronDown, ChevronUp, DollarSign } from 'lucide-react'
 import * as api from '@/lib/api'
-import type { QueryLogEntry } from '@/lib/api'
+import type { QueryLogEntry, QueryLogsResponse } from '@/lib/api'
 
 // Extended type for runtime fields not in the auto-generated schema
 interface LogEntryExtended extends QueryLogEntry {
   ttfb_ms?: number
   first_token_ms?: number
+  token_count?: number
+  prompt_tokens?: number
+  completion_tokens?: number
+  llm_model?: string
+  estimated_cost?: number
 }
 import { motion } from 'framer-motion'
 import type { ViewType } from '@/App'
@@ -38,6 +43,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
   const [loading, setLoading] = useState(true)
   const [days, setDays] = useState(7)
   const [showAllLogs, setShowAllLogs] = useState(false)
+  const [totalCostSummary, setTotalCostSummary] = useState<number | null>(null)
 
   const hasError = (log: QueryLogEntry) => Boolean(log.error?.trim())
   const answeredLogs = logs.filter((log) => !hasError(log))
@@ -48,7 +54,15 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
   useEffect(() => {
     setLoading(true)
     api.queryLogs(days, 1000)
-      .then(setLogs)
+      .then((result: QueryLogsResponse | QueryLogEntry[]) => {
+        if (Array.isArray(result)) {
+          setLogs(result)
+          setTotalCostSummary(null)
+          return
+        }
+        setLogs(result.logs)
+        setTotalCostSummary(result.total_cost)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [days])
@@ -86,10 +100,26 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
   const avgTtfb = ttfbValues.length ? Math.round(ttfbValues.reduce((a, b) => a + b, 0) / ttfbValues.length) : 0
   const avgFirstToken = firstTokenValues.length ? Math.round(firstTokenValues.reduce((a, b) => a + b, 0) / firstTokenValues.length) : 0
 
+  // Token cost estimation
+  const totalTokens = typedLogs.reduce((sum, l) => sum + (l.token_count || 0), 0)
+  const totalPromptTokens = typedLogs.reduce((sum, l) => sum + (l.prompt_tokens || 0), 0)
+  const totalCompletionTokens = typedLogs.reduce((sum, l) => sum + (l.completion_tokens || 0), 0)
+  const hasPerLogCost = typedLogs.some((log) => log.estimated_cost != null)
+  const fallbackEstimatedCost = hasPerLogCost
+    ? typedLogs.reduce((sum, l) => sum + (l.estimated_cost || 0), 0)
+    : (totalTokens / 1_000_000) * 0.5
+  const effectiveCost = totalCostSummary ?? fallbackEstimatedCost
+  const totalTokenCost = effectiveCost > 0
+    ? (effectiveCost < 0.01 ? '<¥0.01' : `¥${effectiveCost.toFixed(2)}`)
+    : 'N/A'
+
   // Time distribution (hourly buckets)
   const hourlyData = Array.from({ length: 24 }, (_, h) => ({
     hour: h,
     count: logs.filter((l) => new Date(l.timestamp).getHours() === h).length,
+    tokens: typedLogs
+      .filter((l) => new Date(l.timestamp).getHours() === h)
+      .reduce((sum, log) => sum + (log.token_count || 0), 0),
     avgMs: (() => {
       const hLogs = logs.filter((l) => new Date(l.timestamp).getHours() === h)
       return hLogs.length ? Math.round(hLogs.reduce((a, b) => a + b.elapsed_ms, 0) / hLogs.length) : 0
@@ -97,6 +127,14 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
   }))
 
   const maxHourlyCount = Math.max(...hourlyData.map((h) => h.count), 1)
+  const maxHourlyTokens = Math.max(...hourlyData.map((h) => h.tokens), 1)
+  const tokenLinePoints = hourlyData
+    .map((h, index) => {
+      const x = (index / (hourlyData.length - 1)) * 100
+      const y = 100 - ((h.tokens || 0) / maxHourlyTokens) * 100
+      return `${x},${y}`
+    })
+    .join(' ')
 
   return (
     <div className="flex flex-col h-full">
@@ -135,8 +173,8 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-5xl px-5 py-6">
           {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              {Array.from({ length: 4 }).map((_, i) => (
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
+              {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="rounded-lg border border-border bg-surface/30 p-4 animate-pulse">
                   <div className="h-3 bg-muted rounded w-1/2 mb-2" />
                   <div className="h-6 bg-muted rounded w-2/3" />
@@ -152,14 +190,16 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
           ) : (
             <>
               {/* Hero stats row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
                 <StatCard icon={BarChart3} label="首 token (avg)" value={avgFirstToken ? `${avgFirstToken}ms` : '-'} sub={avgTtfb ? `TTFB avg ${avgTtfb}ms` : '等待数据'} delay={0} />
                 <StatCard icon={TrendingUp} label="总查询" value={stats.total.toString()} sub={`近24h ${stats.last24h} 次`} delay={0.05} />
                 <StatCard icon={Clock} label="平均耗时" value={`${stats.avgElapsed}ms`} sub={`检索 ${stats.avgRetrieval} 条`} delay={0.1} />
                 <StatCard icon={CheckCircle2} label="质量通过率" value={`${(stats.qualityRate * 100).toFixed(0)}%`}
                   sub={`${stats.qualityPassed}/${stats.answeredTotal || 0}`} delay={0.1} color="emerald" />
-                <StatCard icon={stats.webSearchRate > 0.3 ? AlertTriangle : HelpCircle} label="联网搜索率" value={`${(stats.webSearchRate * 100).toFixed(0)}%`}
-                  sub={stats.errorCount > 0 ? `${stats.errorCount} 次错误` : `${stats.webSearchCount}/${stats.answeredTotal || 0}`} delay={0.15} color={stats.webSearchRate > 0.3 ? 'amber' : 'violet'} />
+                <StatCard icon={BarChart3} label="总 Token 消耗" value={totalTokens.toLocaleString()}
+                  sub={`输入 ${totalPromptTokens.toLocaleString()} / 输出 ${totalCompletionTokens.toLocaleString()}`} delay={0.12} color="violet" />
+                <StatCard icon={DollarSign} label="Token 估算" value={totalTokenCost}
+                  sub={`${totalCostSummary !== null ? '合计' : '估算'} ${totalTokenCost}`} delay={0.15} color="amber" />
               </div>
 
               {/* Hourly distribution — editorial bar chart */}
@@ -171,32 +211,59 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-heading text-sm text-foreground tracking-tight">小时分布</h3>
-                  <span className="text-2xs text-muted-foreground/50 font-mono">avg {stats.avgElapsed}ms</span>
+                  <span className="text-2xs text-muted-foreground/50 font-mono">
+                    avg {stats.avgElapsed}ms · 峰值 {maxHourlyTokens.toLocaleString()} tokens
+                  </span>
                 </div>
-                <div className="flex items-end gap-1 h-40 pt-5">
-                  {hourlyData.map((h) => (
-                    <TooltipProvider key={h.hour}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex-1 flex flex-col items-center gap-1">
-                            <span className="text-2xs text-muted-foreground/50 font-mono h-3">
-                              {h.count > 0 ? h.count : ''}
-                            </span>
-                            <div
-                              className="w-full rounded-t-sm bg-primary/60 hover:bg-primary/80 transition-colors cursor-pointer"
-                              style={{ height: h.count > 0 ? `${Math.max((h.count / maxHourlyCount) * 104, 10)}px` : '0px' }}
-                            />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {h.hour}:00 — {h.count} 次查询 · avg {h.avgMs}ms
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ))}
+                <div className="relative h-40 pt-5">
+                  <div className="absolute inset-0 flex items-end gap-1 pt-5">
+                    {hourlyData.map((h) => (
+                      <TooltipProvider key={h.hour}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex-1 flex flex-col items-center gap-1">
+                              <span className="text-2xs text-muted-foreground/50 font-mono h-3">
+                                {h.count > 0 ? h.count : ''}
+                              </span>
+                              <div
+                                className="w-full rounded-t-sm bg-primary/60 hover:bg-primary/80 transition-colors cursor-pointer"
+                                style={{ height: h.count > 0 ? `${Math.max((h.count / maxHourlyCount) * 104, 10)}px` : '0px' }}
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {h.hour}:00 — {h.count} 次查询 · {h.tokens.toLocaleString()} tokens · avg {h.avgMs}ms
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ))}
+                  </div>
+                  <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
+                    <polyline
+                      fill="none"
+                      points={tokenLinePoints}
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      className="text-amber-400/90"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    {hourlyData.map((h, index) => (
+                      <circle
+                        key={h.hour}
+                        cx={(index / (hourlyData.length - 1)) * 100}
+                        cy={100 - ((h.tokens || 0) / maxHourlyTokens) * 100}
+                        r="1.2"
+                        className="fill-amber-400"
+                      />
+                    ))}
+                  </svg>
                 </div>
                 <div className="flex justify-between mt-2 text-2xs text-muted-foreground/40 font-mono">
                   {[0, 6, 12, 18, 23].map((h) => <span key={h}>{h}:00</span>)}
+                </div>
+                <div className="mt-2 flex items-center justify-between text-2xs text-muted-foreground/45">
+                  <span>柱状: 查询次数</span>
+                  <span>折线: Token /h</span>
                 </div>
               </motion.div>
 
@@ -292,6 +359,8 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
                         <th className="text-right py-2 pr-4 text-muted-foreground font-medium">耗时</th>
                         <th className="text-right py-2 pr-4 text-muted-foreground font-medium">检索</th>
                         <th className="text-center py-2 text-muted-foreground font-medium">质量</th>
+                        <th className="text-right py-2 pr-4 text-muted-foreground font-medium">Token</th>
+                        <th className="text-right py-2 text-muted-foreground font-medium">费用</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -319,6 +388,23 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
                               {log.quality_ok ? '✓ 通过' : '✗ 失败'}
                               {log.used_web_search && <Globe className="h-2.5 w-2.5 inline" />}
                             </span>
+                          </td>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <td className="py-2 pr-4 text-right text-muted-foreground font-mono cursor-default">
+                                  {(log as LogEntryExtended).token_count?.toLocaleString() ?? '-'}
+                                </td>
+                              </TooltipTrigger>
+                              {(log as LogEntryExtended).llm_model && (
+                                <TooltipContent>
+                                  <p className="text-2xs">{(log as LogEntryExtended).llm_model}</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                          <td className="py-2 text-right text-muted-foreground font-mono">
+                            {(log as LogEntryExtended).estimated_cost ? `¥${(log as LogEntryExtended).estimated_cost!.toFixed(4)}` : '-'}
                           </td>
                         </tr>
                       ))}

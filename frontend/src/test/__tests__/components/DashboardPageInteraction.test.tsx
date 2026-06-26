@@ -20,7 +20,7 @@ vi.mock('lucide-react', () => {
     TrendingUp: 'TrendingUp', Clock: 'Clock', CheckCircle2: 'CheckCircle2',
     XCircle: 'XCircle', HelpCircle: 'HelpCircle', AlertTriangle: 'AlertTriangle',
     Sun: 'Sun', Moon: 'Moon', Globe: 'Globe', ChevronDown: 'ChevronDown',
-    ChevronUp: 'ChevronUp', X: 'X',
+    ChevronUp: 'ChevronUp', X: 'X', DollarSign: 'DollarSign',
   }
   return Object.fromEntries(Object.keys(icons).map((n) => [n, () => <span>{n}</span>]))
 })
@@ -36,7 +36,13 @@ const defaultProps = {
 describe('DashboardPage interactions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(api.queryLogs).mockResolvedValue(mockQueryLogs)
+    vi.mocked(api.queryLogs).mockResolvedValue({
+      logs: mockQueryLogs,
+      total_cost: 0.006,
+      total_tokens: 12000,
+      total_prompt_tokens: 8000,
+      total_completion_tokens: 4000,
+    })
   })
 
   it('stat cards display correct values', async () => {
@@ -47,11 +53,17 @@ describe('DashboardPage interactions', () => {
     })
     expect(screen.getByText('平均耗时')).toBeInTheDocument()
     expect(screen.getByText('质量通过率')).toBeInTheDocument()
-    expect(screen.getByText('联网搜索率')).toBeInTheDocument()
+    expect(screen.getByText('Token 估算')).toBeInTheDocument()
   })
 
   it('empty log state shows message', async () => {
-    vi.mocked(api.queryLogs).mockResolvedValue([])
+    vi.mocked(api.queryLogs).mockResolvedValue({
+      logs: [],
+      total_cost: 0,
+      total_tokens: 0,
+      total_prompt_tokens: 0,
+      total_completion_tokens: 0,
+    })
 
     await act(async () => { render(<DashboardPage {...defaultProps} />) })
 

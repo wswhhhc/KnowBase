@@ -39,6 +39,26 @@ class _DebugState:
     retry_count: int = 0
     used_web_search: bool = False
     web_results_count: int = 0
+    token_count: int | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+
+
+def _accumulate_token_usage(update: dict, debug_state: _DebugState) -> None:
+    """Sum token usage reported by graph nodes into the per-message debug state."""
+    has_usage = any(key in update for key in ("token_count", "prompt_tokens", "completion_tokens"))
+    if not has_usage:
+        return
+
+    prompt_tokens = int(update.get("prompt_tokens") or 0)
+    completion_tokens = int(update.get("completion_tokens") or 0)
+    token_count = update.get("token_count")
+    if token_count is None:
+        token_count = prompt_tokens + completion_tokens
+
+    debug_state.prompt_tokens = (debug_state.prompt_tokens or 0) + prompt_tokens
+    debug_state.completion_tokens = (debug_state.completion_tokens or 0) + completion_tokens
+    debug_state.token_count = (debug_state.token_count or 0) + int(token_count)
 
 
 def _accumulate_node_debug(
@@ -53,6 +73,8 @@ def _accumulate_node_debug(
     Returns the debug node dict to append to debug_state.nodes, or None if no debug
     entry should be recorded.
     """
+    _accumulate_token_usage(update, debug_state)
+
     if node_name == "route_question":
         qtype = update.get("question_type", "knowledge_base")
         return {"name": node_name, "label": node_label, "elapsed_ms": elapsed_ms, "summary": f"→ {qtype}"}
@@ -140,6 +162,8 @@ def _persist_and_record(
     workspace_id: str = "",
     ttfb_ms: int = 0,
     first_token_ms: int = 0,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
 ) -> tuple[str, int]:
     """Persist conversation and metrics, returning (conv_id, assistant_msg_id)."""
     assistant_msg_id = 0
@@ -173,6 +197,9 @@ def _persist_and_record(
             debug_info=debug_info,
             ttfb_ms=ttfb_ms,
             first_token_ms=first_token_ms,
+            token_count=debug_info.token_count,
+            prompt_tokens=prompt_tokens if prompt_tokens is not None else debug_info.prompt_tokens,
+            completion_tokens=completion_tokens if completion_tokens is not None else debug_info.completion_tokens,
         )
     except Exception as exc:
         logger.exception("保存聊天记录或指标失败: %s", exc)
@@ -191,6 +218,9 @@ def _record_query_metrics(
     debug_info: DebugInfo,
     ttfb_ms: int = 0,
     first_token_ms: int = 0,
+    token_count: int | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
 ) -> None:
     """Persist the final query metrics using actual debug flags."""
     record_query_metrics(
@@ -204,6 +234,9 @@ def _record_query_metrics(
         debug_info=debug_info,
         ttfb_ms=ttfb_ms,
         first_token_ms=first_token_ms,
+        token_count=token_count,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
     )
 
 
@@ -252,14 +285,7 @@ async def chat_stream(
                     _ttfb_set = True
 
                 if mode == "updates":
-                    if first_token_time == 0:
-                        first_token_time = int((time.monotonic() - t0) * 1000)
-
                     for node_name, update in data.items():
-                        # first_token from graph update (first meaningful response data)
-                        if first_token_time == 0:
-                            first_token_time = int((time.monotonic() - t0) * 1000)
-
                         node_label = NODE_LABELS.get(node_name, node_name)
                         is_new = node_label not in seen_nodes
                         if is_new:
@@ -323,6 +349,9 @@ async def chat_stream(
                 used_web_search=debug_state.used_web_search,
                 web_results_count=debug_state.web_results_count,
                 context_sources=[ChatSource.model_validate(source) for source in final_sources if isinstance(source, dict)],
+                token_count=debug_state.token_count,
+                prompt_tokens=debug_state.prompt_tokens,
+                completion_tokens=debug_state.completion_tokens,
             )
 
             # Persist before notifying the client so sidebar refresh sees the final title.
@@ -344,6 +373,8 @@ async def chat_stream(
                 workspace_id=body.workspace_id,
                 ttfb_ms=ttfb,
                 first_token_ms=first_token,
+                prompt_tokens=debug_state.prompt_tokens,
+                completion_tokens=debug_state.completion_tokens,
             )
 
             yield {"event": "debug", "data": json.dumps(debug_info.model_dump())}

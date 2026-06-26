@@ -25,6 +25,9 @@ from config.settings import (
     SILICONFLOW_BASE_URL,
     TOP_K_RERANK,
     TOP_K_RETRIEVAL,
+    TAVILY_API_KEY,
+    _is_configured_api_key,
+    get_runtime_setting,
     require_siliconflow_api_key,
 )
 from src import graph_utils as gu
@@ -87,7 +90,11 @@ def rewrite_query(state: GraphState) -> dict:
                 rewritten = f"{rewritten} ({', '.join(terms)})"
                 used_rewrite = True
 
-    return {"rewritten_question": rewritten, "used_rewrite": used_rewrite}
+    return {
+        "rewritten_question": rewritten,
+        "used_rewrite": used_rewrite,
+        **gu.extract_token_usage(result),
+    }
 
 
 # ── History-based answers ────────────────────────────────────────────
@@ -106,7 +113,12 @@ def answer_from_history(state: GraphState) -> dict:
     ])
     result = llm.invoke(prompt.format(history=gu._format_chat_history(history), question=state["question"]))
     answer = str(result.content).strip()
-    return {"answer": answer, "sources": [], "messages": [AIMessage(content=answer)]}
+    return {
+        "answer": answer,
+        "sources": [],
+        "messages": [AIMessage(content=answer)],
+        **gu.extract_token_usage(result),
+    }
 
 
 def summarize_history(state: GraphState) -> dict:
@@ -122,7 +134,12 @@ def summarize_history(state: GraphState) -> dict:
     ])
     result = llm.invoke(prompt.format(history=gu._format_chat_history(history), question=state["question"]))
     answer = str(result.content).strip()
-    return {"answer": answer, "sources": [], "messages": [AIMessage(content=answer)]}
+    return {
+        "answer": answer,
+        "sources": [],
+        "messages": [AIMessage(content=answer)],
+        **gu.extract_token_usage(result),
+    }
 
 
 # ── Retrieval ────────────────────────────────────────────────────────
@@ -202,9 +219,10 @@ def _document_relevance_boost(doc: Document, query: str, query_terms: list[str])
 def retrieve_docs(state: GraphState, kb) -> dict:
     query = state.get("rewritten_question") or state["question"]
     strategy = state.get("search_strategy", "balanced")
-    retrieval_k = state.get("retrieval_k") or TOP_K_RETRIEVAL
+    default_retrieval_k = get_runtime_setting("top_k_retrieval", TOP_K_RETRIEVAL)
+    retrieval_k = state.get("retrieval_k") or default_retrieval_k
     if strategy == "deep":
-        retrieval_k = max(retrieval_k, TOP_K_RETRIEVAL * 3)
+        retrieval_k = max(retrieval_k, default_retrieval_k * 3)
     score_threshold = state.get("score_threshold", SCORE_THRESHOLD)
     search_filter = state.get("search_filter") or None
     pinned_ids = state.get("pinned_chunk_ids", []) or []
@@ -331,9 +349,7 @@ def _web_search_context(state: GraphState) -> dict:
 
 
 def _tavily_configured() -> bool:
-    from config.settings import TAVILY_API_KEY, _is_configured_api_key
-
-    return _is_configured_api_key(TAVILY_API_KEY)
+    return _is_configured_api_key(get_runtime_setting("tavily_api_key", TAVILY_API_KEY))
 
 
 # ── Rerank ───────────────────────────────────────────────────────────
@@ -341,6 +357,7 @@ def _tavily_configured() -> bool:
 
 def _should_rerank(state: GraphState) -> bool:
     strategy = state.get("search_strategy", "balanced")
+    top_k_rerank = get_runtime_setting("top_k_rerank", TOP_K_RERANK)
 
     if strategy == "fast":
         return False
@@ -348,7 +365,7 @@ def _should_rerank(state: GraphState) -> bool:
         return True
 
     docs = state.get("documents", [])
-    if len(docs) <= TOP_K_RERANK:
+    if len(docs) <= top_k_rerank:
         return False
 
     scores = sorted(
@@ -356,7 +373,7 @@ def _should_rerank(state: GraphState) -> bool:
         reverse=True,
     )
     if len(scores) >= 2:
-        gap = scores[0] - scores[TOP_K_RERANK - 1] if len(scores) >= TOP_K_RERANK else scores[0] - scores[-1]
+        gap = scores[0] - scores[top_k_rerank - 1] if len(scores) >= top_k_rerank else scores[0] - scores[-1]
         if gap >= RERANK_SCORE_GAP_THRESHOLD:
             return False
 
@@ -374,7 +391,8 @@ def rerank_docs(state: GraphState) -> dict:
 
     strategy = state.get("search_strategy", "balanced")
     query = state.get("rewritten_question") or state["question"]
-    top_k = TOP_K_RERANK * 3 if strategy == "deep" else TOP_K_RERANK
+    top_k_rerank = get_runtime_setting("top_k_rerank", TOP_K_RERANK)
+    top_k = top_k_rerank * 3 if strategy == "deep" else top_k_rerank
 
     if not _should_rerank(state):
         # Short entity/relation questions often have noisy top-3 vector hits.
@@ -401,9 +419,11 @@ def rerank_docs(state: GraphState) -> dict:
     try:
         result = llm.invoke(prompt.format(query=query, k=top_k, docs_text=docs_text))
         decision = gu.parse_rerank_decision(str(result.content), doc_ids)
+        token_usage = gu.extract_token_usage(result)
     except Exception as exc:
         logger.warning("LLM 精排失败，回退到原始排序: %s", exc)
         decision = RerankDecision(selected_doc_ids=[])
+        token_usage = {}
 
     by_id = {result.chunk_id: result for result in docs}
     reranked = [by_id[doc_id] for doc_id in decision.selected_doc_ids[:top_k]]
@@ -411,7 +431,13 @@ def rerank_docs(state: GraphState) -> dict:
         reranked = docs[:top_k]
 
     context, sources = gu._format_context(reranked)
-    return {"documents": reranked, "context": context, "sources": sources, "used_rerank": True}
+    return {
+        "documents": reranked,
+        "context": context,
+        "sources": sources,
+        "used_rerank": True,
+        **token_usage,
+    }
 
 
 # ── Answer generation ────────────────────────────────────────────────
@@ -462,6 +488,7 @@ def generate_answer(state: GraphState) -> dict:
         ])
         result = llm.invoke(prompt.format(context=context, question=question))
     answer = str(result.content).strip()
+
     sources = state.get("sources", [])
     if web_context:
         sources = sources + [
@@ -479,7 +506,11 @@ def generate_answer(state: GraphState) -> dict:
             }
             for i, item in enumerate(state.get("web_search_results", []), 1)
         ]
-    return {"answer": answer, "sources": sources}
+    return {
+        "answer": answer,
+        "sources": sources,
+        **gu.extract_token_usage(result),
+    }
 
 
 # ── Quality check ────────────────────────────────────────────────────
@@ -524,7 +555,8 @@ def _rule_check_quality(state: GraphState) -> dict | None:
 
 
 def check_quality(state: GraphState) -> dict:
-    if state.get("question_type") != "knowledge_base" or not ENABLE_QUALITY_CHECK:
+    enable_quality_check = get_runtime_setting("enable_quality_check", ENABLE_QUALITY_CHECK)
+    if state.get("question_type") != "knowledge_base" or not enable_quality_check:
         answer = state.get("answer", "")
         return {
             "quality_ok": True,
@@ -559,6 +591,7 @@ def check_quality(state: GraphState) -> dict:
     strategy = state.get("search_strategy", "balanced")
     web_search_available = state.get("web_search_enabled", False) and _tavily_configured()
     # 确定性采样：adler32 保证同一输入在不同进程/重启后结果一致
+    token_usage = {}
     if strategy != "high_quality" and not web_search_available and zlib.adler32((question + answer).encode("utf-8")) % 3 != 0:
         decision = QualityDecision(quality_passed=True, quality_reason="质量检查采样跳过。")
     else:
@@ -571,15 +604,18 @@ def check_quality(state: GraphState) -> dict:
         try:
             result = llm.invoke(prompt.format(question=question, context=context[:3000], answer=answer))
             decision = gu.parse_quality_decision(str(result.content))
+            token_usage = gu.extract_token_usage(result)
         except Exception as exc:
             logger.warning("LLM 质量检查失败，保守放行: %s", exc)
             decision = QualityDecision(quality_passed=True, quality_reason="质量检查调用失败，保守放行。")
+            token_usage = {}
 
     update = {
         "quality_ok": decision.quality_passed,
         "quality_reason": decision.quality_reason,
         "retry_strategy": decision.retry_strategy,
         "retry_count": retry_count + 1,
+        **token_usage,
     }
     if decision.quality_passed or retry_count + 1 >= MAX_RETRIES:
         update["messages"] = [AIMessage(content=answer)]
@@ -597,9 +633,10 @@ def check_quality(state: GraphState) -> dict:
 
     strategy = decision.retry_strategy
     if strategy == "expand_retrieval":
+        default_retrieval_k = get_runtime_setting("top_k_retrieval", TOP_K_RETRIEVAL)
         update["retrieval_k"] = min(
-            (state.get("retrieval_k") or TOP_K_RETRIEVAL) + TOP_K_RETRIEVAL,
-            TOP_K_RETRIEVAL * 4,
+            (state.get("retrieval_k") or default_retrieval_k) + default_retrieval_k,
+            default_retrieval_k * 4,
         )
         update["score_threshold"] = None
     elif strategy == "rewrite_query":

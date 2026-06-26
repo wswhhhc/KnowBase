@@ -114,6 +114,54 @@ class ConversationExtendedTests(unittest.TestCase):
         except Exception as e:
             self.fail(f"init_db raised on second call: {e}")
 
+    def test_list_bookmarks_combines_workspace_and_search(self):
+        ws_a = conversations.create_workspace("A")
+        ws_b = conversations.create_workspace("B")
+        conversations.create_bookmark(workspace_id=ws_a["id"], content="Alpha 片段", tags="alpha")
+        conversations.create_bookmark(workspace_id=ws_b["id"], content="Alpha 片段", tags="alpha")
+
+        results = conversations.list_bookmarks(workspace_id=ws_a["id"], search="Alpha")
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["workspace_id"], ws_a["id"])
+
+    def test_create_bookmark_deduplicates_workspace_chunk_pair(self):
+        ws = conversations.create_workspace("Bookmarks")
+
+        first = conversations.create_bookmark(
+            workspace_id=ws["id"],
+            chunk_id="doc.txt:0:abc",
+            content="Alpha 片段",
+            source="doc.txt",
+        )
+        second = conversations.create_bookmark(
+            workspace_id=ws["id"],
+            chunk_id="doc.txt:0:abc",
+            content="Alpha 片段",
+            source="doc.txt",
+        )
+
+        results = conversations.list_bookmarks(workspace_id=ws["id"])
+        self.assertEqual(first["id"], second["id"])
+        self.assertEqual(len(results), 1)
+
+    def test_delete_workspace_reassigns_bookmarks_to_default_workspace(self):
+        ws = conversations.create_workspace("Workspace A")
+        bookmark = conversations.create_bookmark(
+            workspace_id=ws["id"],
+            chunk_id="doc.txt:0:abc",
+            content="Alpha 片段",
+            source="doc.txt",
+        )
+
+        deleted = conversations.delete_workspace(ws["id"])
+
+        self.assertTrue(deleted)
+        reassigned = conversations.list_bookmarks(workspace_id="")
+        self.assertEqual(len(reassigned), 1)
+        self.assertEqual(reassigned[0]["id"], bookmark["id"])
+        self.assertEqual(reassigned[0]["workspace_id"], "")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,16 +7,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.routes import chat, conversations, documents, knowledge_base, metrics, workspaces, bookmarks
+from src.api.routes import chat, conversations, documents, knowledge_base, metrics, workspaces, bookmarks, settings as settings_router
 from src.conversations import init_db
 from src.api.deps import get_knowledge_base
-from config.settings import _is_configured_api_key, settings
+from config.settings import _is_configured_api_key, get_runtime_setting, settings
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    if _is_configured_api_key(settings.siliconflow_api_key):
+    api_key = get_runtime_setting("siliconflow_api_key", settings.siliconflow_api_key)
+    if _is_configured_api_key(api_key):
         try:
             kb = get_knowledge_base()
             kb.load_preset_documents()
@@ -43,6 +44,7 @@ app.include_router(knowledge_base.router, prefix="/api/knowledge-base", tags=["k
 app.include_router(workspaces.router, prefix="/api/workspaces", tags=["workspaces"])
 app.include_router(bookmarks.router, prefix="/api/bookmarks", tags=["bookmarks"])
 app.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])
+app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 
 
 @app.get("/api/health")

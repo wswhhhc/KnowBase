@@ -1,7 +1,6 @@
 """联网搜索模块 — 基于 Tavily API。"""
 
-from config.settings import TAVILY_API_KEY
-from config.settings import _is_configured_api_key
+from config.settings import TAVILY_API_KEY, _is_configured_api_key, get_runtime_setting
 
 
 def web_search(query: str, max_results: int = 5) -> tuple[list[dict], str]:
@@ -9,13 +8,14 @@ def web_search(query: str, max_results: int = 5) -> tuple[list[dict], str]:
 
     每项结果包含：title, url, content, score
     """
-    if not _is_configured_api_key(TAVILY_API_KEY):
+    api_key = get_runtime_setting("tavily_api_key", TAVILY_API_KEY)
+    if not _is_configured_api_key(api_key):
         return [], "未配置 TAVILY_API_KEY。"
 
     try:
         from tavily import TavilyClient
 
-        client = TavilyClient(api_key=TAVILY_API_KEY)
+        client = TavilyClient(api_key=api_key)
         response = client.search(
             query=query,
             search_depth="advanced",

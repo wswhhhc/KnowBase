@@ -100,6 +100,25 @@ describe('Documents API', () => {
     vi.unstubAllGlobals()
   })
 
+  it('ingestUrlStream passes version_mode when provided', async () => {
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.close()
+      },
+    })
+    const fn = vi.fn().mockResolvedValue({
+      ok: true,
+      body: { getReader: () => stream.getReader() },
+    })
+    vi.stubGlobal('fetch', fn)
+    api.ingestUrlStream('https://example.com', 'append', {})
+    expect(fn).toHaveBeenCalledWith(
+      '/api/documents/ingest-url-stream?version_mode=append',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    vi.unstubAllGlobals()
+  })
+
   it('deleteSource encodes URI component', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}), text: () => Promise.resolve(''), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
@@ -166,6 +185,20 @@ describe('Knowledge Base API', () => {
     vi.stubGlobal('fetch', fn)
     const result = await api.getKBStats()
     expect(result.chunk_count).toBe(10)
+    vi.unstubAllGlobals()
+  })
+
+  it('debugSearch sends search strategy in body', async () => {
+    const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]), text: () => Promise.resolve('[]'), headers: new Headers() })
+    vi.stubGlobal('fetch', fn)
+    await api.debugSearch('test query', 7, 'deep')
+    expect(fn).toHaveBeenCalledWith(
+      '/api/knowledge-base/debug-search',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ query: 'test query', k: 7, search_strategy: 'deep' }),
+      }),
+    )
     vi.unstubAllGlobals()
   })
 })
@@ -253,6 +286,7 @@ describe('chatStream (SSE)', () => {
 
   it('silently skips JSON parse errors in SSE', async () => {
     const onToken = vi.fn()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mockFetchSSE([
       { event: 'token', data: '{invalid json' },
     ])
@@ -265,6 +299,8 @@ describe('chatStream (SSE)', () => {
     })
     // onToken should NOT be called (parse error silently skipped)
     expect(onToken).not.toHaveBeenCalled()
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
     vi.unstubAllGlobals()
   })
 

@@ -10,7 +10,7 @@ import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import jieba
 from langchain_chroma import Chroma
@@ -32,6 +32,7 @@ from config.settings import (
     TOP_K_RETRIEVAL,
     VECTOR_CANDIDATE_K,
     require_siliconflow_api_key,
+    get_runtime_setting,
 )
 from src.kb_models import (
     RetrievalResult,
@@ -45,6 +46,10 @@ from src.kb_models import (
 )
 from src.loaders import load_document
 from src.api.models import HotspotEntry
+
+
+class EmbeddingIndexMismatchError(ValueError):
+    """Raised when the configured embedding model does not match persisted vectors."""
 
 
 def rrf_fuse(
@@ -272,9 +277,11 @@ class IngestionService:
             version_mode: "replace" or "append". Append mode sets version metadata.
             version_label: Explicit version label (e.g. "v2"). Auto-generated if empty.
         """
+        chunk_size = get_runtime_setting("chunk_size", CHUNK_SIZE)
+        chunk_overlap = get_runtime_setting("chunk_overlap", CHUNK_OVERLAP)
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=CHUNK_SIZE,
-            chunk_overlap=CHUNK_OVERLAP,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
             separators=["\n## ", "\n### ", "\n#### ", "\n\n", "\n", "。", "！", "？", ""],
         )
         splits = splitter.split_documents(docs)
@@ -309,7 +316,7 @@ class IngestionService:
                 meta["version_ingested_at"] = ingested_at
             split.metadata.update(meta)
 
-        if ENABLE_CONTEXTUAL_RETRIEVAL:
+        if get_runtime_setting("enable_contextual_retrieval", ENABLE_CONTEXTUAL_RETRIEVAL):
             for split in splits:
                 original = split.page_content
                 section = split.metadata.get("section", "")
@@ -353,10 +360,13 @@ class IngestionService:
             total += self.ingest_file(str(file_path), source_name=file_path.name)
         return total
 
-    def ingest_file(self, file_path: str, source_name: str | None = None, version_mode: str = "replace") -> int:
+    def ingest_file(self, file_path: str, source_name: str | None = None, version_mode: str = "replace", progress_callback: Callable[[str, int], None] | None = None) -> int:
         """Ingest a file and return the number of new chunks."""
+        if progress_callback:
+            progress_callback("loading", 25)
         docs = load_document(file_path, source_name=source_name)
         if source_name and version_mode == "skip":
+            self._ensure_loaded()
             src_norm = normalize_source(source_name)
             existing = any(
                 normalize_source(d.metadata.get("source", "")) == src_norm
@@ -364,6 +374,9 @@ class IngestionService:
             )
             if existing:
                 return 0
+
+        if progress_callback:
+            progress_callback("splitting", 50)
 
         if source_name and version_mode == "replace":
             self._replace_old_chunks(source_name, docs)
@@ -382,17 +395,52 @@ class IngestionService:
                 next_v += 1
             vl = f"v{next_v}"
 
+        if progress_callback:
+            progress_callback("embedding", 75)
         new_count = self._process_documents(docs, version_mode=version_mode, version_label=vl)
         return new_count
 
-    def ingest_url(self, url: str, version_mode: str = "replace") -> int:
+    def ingest_url(self, url: str, version_mode: str = "replace", progress_callback: Callable[[str, int], None] | None = None) -> int:
         """Fetch a public URL and ingest its content."""
         from src.loaders import load_url
 
+        if progress_callback:
+            progress_callback("loading", 25)
         docs = load_url(url)
-        new_count = self._process_documents(docs)
+
+        if version_mode == "skip":
+            self._ensure_loaded()
+            url_norm = normalize_source(url)
+            existing = any(
+                normalize_source(d.metadata.get("source", "")) == url_norm
+                for d in self._all_docs
+            )
+            if existing:
+                return 0
+
+        if progress_callback:
+            progress_callback("splitting", 50)
+
         if version_mode == "replace":
             self._replace_old_chunks(url, docs)
+
+        version_label = ""
+        if version_mode == "append":
+            existing_versions = set()
+            url_norm = normalize_source(url)
+            for d in self._all_docs:
+                if normalize_source(d.metadata.get("source", "")) == url_norm:
+                    version = d.metadata.get("version", "")
+                    if version:
+                        existing_versions.add(version)
+            next_v = 1
+            while f"v{next_v}" in existing_versions:
+                next_v += 1
+            version_label = f"v{next_v}"
+
+        if progress_callback:
+            progress_callback("embedding", 75)
+        new_count = self._process_documents(docs, version_mode=version_mode, version_label=version_label)
         return new_count
 
     def add_document(self, file_path: str) -> int:
@@ -486,6 +534,81 @@ class Retriever:
             )
         self._hotspots._save_hotspots()
         return results
+
+    def debug_search_breakdown(
+        self,
+        query: str,
+        k: int = TOP_K_RETRIEVAL,
+        *,
+        filter: dict | None = None,
+        vector_candidate_k: int | None = None,
+    ) -> dict[str, list[RetrievalResult]]:
+        """Return vector, BM25, and fused results for retrieval debugging."""
+        self._ingestion._ensure_loaded()
+        if vector_candidate_k is None:
+            doc_count = len(self._existing_chunk_ids)
+            candidate_k = max(k * 3, min(max(30, int(doc_count * 0.3)), 100))
+        else:
+            candidate_k = max(k, vector_candidate_k)
+
+        vector_results = self.vector_store.similarity_search_with_score(query, k=candidate_k, filter=filter)
+        vector_ranked = [(_document_chunk_id(doc), float(score)) for doc, score in vector_results]
+        vector_doc_map = {_document_chunk_id(doc): doc for doc, score in vector_results}
+
+        query_tokens = IngestionService._tokenize(query)
+        bm25_ranked: list[tuple[str, float]] = []
+        bm25_index = self._bm25_index[0]
+        if bm25_index and query_tokens:
+            raw_scores = bm25_index.get_scores(query_tokens)
+            bm25_ranked = [
+                (self._all_docs[i].metadata["chunk_id"], float(raw_scores[i]))
+                for i in range(len(self._all_docs))
+                if raw_scores[i] > 0
+            ]
+            bm25_ranked.sort(key=lambda item: item[1], reverse=True)
+
+        fused = rrf_fuse(vector_ranked, bm25_ranked, limit=candidate_k)
+
+        def _as_result(chunk_id: str, score: float, *, vector_score: float | None = None, bm25_score: float | None = None) -> RetrievalResult | None:
+            doc = vector_doc_map.get(chunk_id) or self._doc_by_id.get(chunk_id)
+            if doc is None:
+                return None
+            return RetrievalResult(
+                chunk_id=chunk_id,
+                document=doc,
+                score=score,
+                vector_score=vector_score,
+                bm25_score=bm25_score,
+            )
+
+        vector_top = [
+            result
+            for chunk_id, score in vector_ranked[:k]
+            if (result := _as_result(chunk_id, score, vector_score=score)) is not None
+        ]
+        bm25_top = [
+            result
+            for chunk_id, score in bm25_ranked[:k]
+            if (result := _as_result(chunk_id, score, bm25_score=score)) is not None
+        ]
+        fused_top = [
+            result
+            for item in fused[:k]
+            if (
+                result := _as_result(
+                    item.chunk_id,
+                    item.score,
+                    vector_score=item.vector_score,
+                    bm25_score=item.bm25_score,
+                )
+            ) is not None
+        ]
+
+        return {
+            "vector_results": vector_top,
+            "bm25_results": bm25_top,
+            "fused_results": fused_top,
+        }
 
     def get_neighbor_chunks(self, chunk_id: str, window: int = 1) -> list[Document]:
         """Return neighbor chunks around a given chunk_id from the same source."""
@@ -610,10 +733,13 @@ class KnowledgeBase:
 
     def __init__(self):
         api_key = require_siliconflow_api_key()
+        self.embedding_model = get_runtime_setting("embedding_model", EMBEDDING_MODEL)
+        self._index_meta_path = Path(DATA_DIR) / "vector_store_meta.json"
+        self._embedding_mismatch_error: str | None = None
         self.embeddings = OpenAIEmbeddings(
-            model=EMBEDDING_MODEL,
+            model=self.embedding_model,
             openai_api_key=api_key,
-            openai_api_base=SILICONFLOW_BASE_URL,
+            openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
         )
         self.vector_store = self._init_vector_store()
 
@@ -625,6 +751,7 @@ class KnowledgeBase:
         # Wrapped in a list so IngestionService and Retriever share a mutable reference to BM25 index
         self._bm25_ref: list = [None]
         self._bm25_corpus_list: List[List[str]] = []
+        self._refresh_index_metadata_state()
 
         self.hotspots = HotspotTracker(hotspot_path=Path(DATA_DIR) / "hotspots.json")
 
@@ -651,6 +778,56 @@ class KnowledgeBase:
         # Write lock serializes concurrent upload/delete/clear operations.
         self._write_lock = threading.Lock()
 
+    def _read_index_metadata(self) -> dict:
+        try:
+            if self._index_meta_path.exists():
+                with open(self._index_meta_path, encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception as exc:
+            logger.warning("向量索引元数据读取失败: %s", exc)
+        return {}
+
+    def _write_index_metadata(self) -> None:
+        try:
+            self._index_meta_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._index_meta_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "embedding_model": self.embedding_model,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    },
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+        except Exception as exc:
+            logger.warning("向量索引元数据写入失败: %s", exc)
+
+    def _refresh_index_metadata_state(self) -> None:
+        metadata = self._read_index_metadata()
+        stored_model = metadata.get("embedding_model")
+
+        if self.existing_chunk_ids:
+            if not stored_model:
+                self._write_index_metadata()
+                self._embedding_mismatch_error = None
+                return
+            if stored_model != self.embedding_model:
+                self._embedding_mismatch_error = (
+                    "当前 embedding 模型与现有向量索引不一致。"
+                    "请先清空知识库并重新导入文档，再继续检索或上传。"
+                )
+                return
+            self._embedding_mismatch_error = None
+            return
+
+        self._embedding_mismatch_error = None
+        self._write_index_metadata()
+
+    def _ensure_embedding_compatible(self) -> None:
+        if self._embedding_mismatch_error:
+            raise EmbeddingIndexMismatchError(self._embedding_mismatch_error)
+
     def _init_vector_store(self) -> Chroma:
         """Initialize the persistent vector store."""
         return Chroma(
@@ -670,9 +847,26 @@ class KnowledgeBase:
         vector_candidate_k: int | None = None,
         filter: dict | None = None,
     ) -> List[RetrievalResult]:
+        self._ensure_embedding_compatible()
         return self.retriever.hybrid_search(
             query, k=k, score_threshold=score_threshold,
             vector_candidate_k=vector_candidate_k, filter=filter,
+        )
+
+    def debug_search_breakdown(
+        self,
+        query: str,
+        k: int = TOP_K_RETRIEVAL,
+        *,
+        filter: dict | None = None,
+        vector_candidate_k: int | None = None,
+    ) -> dict[str, list[RetrievalResult]]:
+        self._ensure_embedding_compatible()
+        return self.retriever.debug_search_breakdown(
+            query,
+            k=k,
+            filter=filter,
+            vector_candidate_k=vector_candidate_k,
         )
 
     def get_neighbor_chunks(self, chunk_id: str, window: int = 1) -> List[Document]:
@@ -683,18 +877,22 @@ class KnowledgeBase:
 
     def load_preset_documents(self) -> int:
         with self._write_lock:
+            self._ensure_embedding_compatible()
             return self.ingestion.load_preset_documents()
 
-    def ingest_file(self, file_path: str, source_name: str | None = None, version_mode: str = "replace") -> int:
+    def ingest_file(self, file_path: str, source_name: str | None = None, version_mode: str = "replace", progress_callback: Callable[[str, int], None] | None = None) -> int:
         with self._write_lock:
-            return self.ingestion.ingest_file(file_path, source_name=source_name, version_mode=version_mode)
+            self._ensure_embedding_compatible()
+            return self.ingestion.ingest_file(file_path, source_name=source_name, version_mode=version_mode, progress_callback=progress_callback)
 
-    def ingest_url(self, url: str, version_mode: str = "replace") -> int:
+    def ingest_url(self, url: str, version_mode: str = "replace", progress_callback: Callable[[str, int], None] | None = None) -> int:
         with self._write_lock:
-            return self.ingestion.ingest_url(url, version_mode=version_mode)
+            self._ensure_embedding_compatible()
+            return self.ingestion.ingest_url(url, version_mode=version_mode, progress_callback=progress_callback)
 
     def add_document(self, file_path: str) -> int:
         with self._write_lock:
+            self._ensure_embedding_compatible()
             return self.ingestion.add_document(file_path)
 
     def delete_source(self, source_name: str) -> int:
@@ -708,6 +906,7 @@ class KnowledgeBase:
             self.retriever.vector_store = self.vector_store
             self.ingestion.vector_store = self.vector_store
             self.retriever.clear()
+            self._refresh_index_metadata_state()
 
     def get_hotspots(self, top_n: int = 50) -> List[dict]:
         self.retriever._ingestion._ensure_loaded()

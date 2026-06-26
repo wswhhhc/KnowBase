@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import BrowserPage from '@/components/BrowserPage'
@@ -21,7 +21,7 @@ vi.mock('lucide-react', () => {
     Search: 'Search', FileText: 'FileText', Hash: 'Hash', ExternalLink: 'ExternalLink',
     Layers: 'Layers', Sun: 'Sun', Moon: 'Moon', Flame: 'Flame', Upload: 'Upload',
     Globe: 'Globe', RefreshCw: 'RefreshCw', LayoutGrid: 'LayoutGrid', List: 'List', X: 'X',
-    Bookmark: 'Bookmark', BookmarkCheck: 'BookmarkCheck',
+    Bookmark: 'Bookmark', BookmarkCheck: 'BookmarkCheck', Bug: 'Bug', Loader2: 'Loader2',
   }
   return Object.fromEntries(Object.keys(icons).map((n) => [n, () => <span>{n}</span>]))
 })
@@ -31,9 +31,22 @@ vi.mock('@/lib/api', () => ({
   getKBSourceNames: vi.fn(),
   getKBConfig: vi.fn(),
   getKBHotspots: vi.fn(),
+  checkSource: vi.fn().mockResolvedValue({ exists: false }),
   createBookmark: vi.fn(),
-  uploadDocument: vi.fn(),
-  ingestUrl: vi.fn(),
+  uploadDocumentStream: vi.fn().mockImplementation((_file, _mode, callbacks) => {
+    callbacks.onDone?.({ chunk_count: 1, total_docs: 1, message: 'ok' })
+    return { abort: vi.fn() }
+  }),
+  ingestUrlStream: vi.fn().mockImplementation((_url, _mode, callbacks) => {
+    callbacks.onDone?.({ chunk_count: 1, total_docs: 1, message: 'ok' })
+    return { abort: vi.fn() }
+  }),
+  debugSearch: vi.fn().mockResolvedValue({
+    strategy: 'balanced',
+    vector_results: [],
+    bm25_results: [],
+    fused_results: [],
+  }),
 }))
 
 const defaultProps = {
@@ -170,5 +183,96 @@ describe('BrowserPage interactions', () => {
 
     expect(api.createBookmark).toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('uploads documents through the SSE stream API', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} />) })
+
+    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+
+    const file = new File(['browser upload'], 'browser.txt', { type: 'text/plain' })
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(input).not.toBeNull()
+
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await waitFor(() => {
+      expect(api.checkSource).toHaveBeenCalledWith('browser.txt')
+      expect(api.uploadDocumentStream).toHaveBeenCalledWith(
+        expect.any(File),
+        undefined,
+        expect.objectContaining({
+          onProgress: expect.any(Function),
+          onDone: expect.any(Function),
+          onError: expect.any(Function),
+        }),
+      )
+    })
+  })
+
+  it('prompts for version handling when the source already exists', async () => {
+    vi.mocked(api.checkSource).mockResolvedValueOnce({ exists: true })
+
+    await act(async () => { render(<BrowserPage {...defaultProps} />) })
+    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+
+    const file = new File(['browser upload'], 'browser.txt', { type: 'text/plain' })
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await waitFor(() => {
+      expect(screen.getByText(/引用来源“browser.txt”已存在/)).toBeInTheDocument()
+    })
+    expect(api.uploadDocumentStream).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: '追加版本' }))
+
+    await waitFor(() => {
+      expect(api.uploadDocumentStream).toHaveBeenCalledWith(
+        expect.any(File),
+        'append',
+        expect.objectContaining({
+          onProgress: expect.any(Function),
+          onDone: expect.any(Function),
+          onError: expect.any(Function),
+        }),
+      )
+    })
+  })
+
+  it('ingests URLs through the SSE stream API', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} />) })
+
+    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+
+    await userEvent.type(screen.getByPlaceholderText('导入公开网页 https://…'), 'https://example.com')
+    await userEvent.click(screen.getByText('Globe'))
+
+    await waitFor(() => {
+      expect(api.ingestUrlStream).toHaveBeenCalledWith(
+        'https://example.com',
+        undefined,
+        expect.objectContaining({
+          onProgress: expect.any(Function),
+          onDone: expect.any(Function),
+          onError: expect.any(Function),
+        }),
+      )
+    })
+  })
+
+  it('passes the selected strategy to debug search', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} />) })
+
+    await waitFor(() => expect(screen.getByText('检索测试沙盒')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByText('检索测试沙盒'))
+    await userEvent.type(screen.getByPlaceholderText('输入测试查询…'), '策略测试')
+    await userEvent.click(screen.getByText('深度'))
+    await userEvent.click(screen.getByRole('button', { name: '检索' }))
+
+    await waitFor(() => {
+      expect(api.debugSearch).toHaveBeenCalledWith('策略测试', 5, 'deep')
+    })
   })
 })

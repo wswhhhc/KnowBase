@@ -6,9 +6,10 @@ import Sidebar from '@/components/Sidebar'
 import ChatArea from '@/components/ChatArea'
 import BrowserPage from '@/components/BrowserPage'
 import DashboardPage from '@/components/DashboardPage'
-import { Sparkles, BookOpen, BarChart3 } from 'lucide-react'
+import SettingsPage from '@/components/SettingsPage'
+import { Sparkles, BookOpen, BarChart3, Settings } from 'lucide-react'
 
-export type ViewType = 'chat' | 'browser' | 'dashboard'
+export type ViewType = 'chat' | 'browser' | 'dashboard' | 'settings'
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
@@ -39,6 +40,14 @@ function App() {
   useEffect(() => {
     if (isMobile) setSidebarOpen(false)
   }, [activeView, isMobile])
+
+  useEffect(() => {
+    if (activeView !== 'browser') return
+    const storedChunkId = sessionStorage.getItem('highlightChunkId')
+    if (!storedChunkId) return
+    setHighlightChunkId(storedChunkId)
+    sessionStorage.removeItem('highlightChunkId')
+  }, [activeView])
 
   const handleCitationClick = useCallback((source: Source) => {
     if (source.chunk_id) setHighlightChunkId(source.chunk_id)
@@ -120,6 +129,13 @@ function App() {
             onNavigate={setActiveView}
           />
         )}
+        {activeView === 'settings' && (
+          <SettingsPage
+            onOpenSidebar={() => setSidebarOpen(true)}
+            sidebarOpen={sidebarOpen}
+            onNavigate={setActiveView}
+          />
+        )}
 
         {/* Mobile bottom tab bar */}
         {isMobile && (
@@ -129,6 +145,7 @@ function App() {
                 { view: 'chat' as ViewType, icon: Sparkles, label: '聊天' },
                 { view: 'browser' as ViewType, icon: BookOpen, label: '工作区' },
                 { view: 'dashboard' as ViewType, icon: BarChart3, label: '指标' },
+                { view: 'settings' as ViewType, icon: Settings, label: '设置' },
               ]).map(({ view, icon: Icon, label }) => (
                 <button
                   key={view}
