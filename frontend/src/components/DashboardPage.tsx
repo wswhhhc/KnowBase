@@ -389,20 +389,22 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
                               {log.used_web_search && <Globe className="h-2.5 w-2.5 inline" />}
                             </span>
                           </td>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <td className="py-2 pr-4 text-right text-muted-foreground font-mono cursor-default">
-                                  {(log as LogEntryExtended).token_count?.toLocaleString() ?? '-'}
-                                </td>
-                              </TooltipTrigger>
-                              {(log as LogEntryExtended).llm_model && (
-                                <TooltipContent>
-                                  <p className="text-2xs">{(log as LogEntryExtended).llm_model}</p>
-                                </TooltipContent>
-                              )}
-                            </Tooltip>
-                          </TooltipProvider>
+                          <td className="py-2 pr-4 text-right text-muted-foreground font-mono">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="cursor-default">
+                                    {(log as LogEntryExtended).token_count?.toLocaleString() ?? '-'}
+                                  </span>
+                                </TooltipTrigger>
+                                {(log as LogEntryExtended).llm_model && (
+                                  <TooltipContent>
+                                    <p className="text-2xs">{(log as LogEntryExtended).llm_model}</p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
+                            </TooltipProvider>
+                          </td>
                           <td className="py-2 text-right text-muted-foreground font-mono">
                             {(log as LogEntryExtended).estimated_cost ? `¥${(log as LogEntryExtended).estimated_cost!.toFixed(4)}` : '-'}
                           </td>

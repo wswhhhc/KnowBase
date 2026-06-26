@@ -130,6 +130,26 @@ describe('DashboardPage', () => {
     expect(screen.getByText('¥0.0060')).toBeInTheDocument()
   })
 
+  it('renders query log rows with only table cells as direct children', async () => {
+    await act(async () => {
+      render(<DashboardPage {...defaultProps} />)
+    })
+
+    const costCell = await screen.findByText('¥0.0060')
+    const logRow = costCell.closest('tr')
+
+    expect(logRow).not.toBeNull()
+    expect(Array.from(logRow!.children).map((child) => child.tagName)).toEqual([
+      'TD',
+      'TD',
+      'TD',
+      'TD',
+      'TD',
+      'TD',
+      'TD',
+    ])
+  })
+
   it('back button calls onNavigate(\'chat\')', async () => {
     const onNavigate = vi.fn()
 
