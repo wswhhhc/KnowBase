@@ -86,8 +86,13 @@ describe('ChatArea interactions', () => {
     expect(screen.getByPlaceholderText('输入你的问题…')).toBeInTheDocument()
   })
 
-  it('renders 4 search strategy buttons', () => {
+  it('renders "高级选项" toggle and expands search strategy buttons', async () => {
     renderChatArea()
+    expect(screen.getByText('高级选项')).toBeInTheDocument()
+    // Strategies hidden by default
+    expect(screen.queryByText('快速')).not.toBeInTheDocument()
+    // Click to expand
+    await userEvent.click(screen.getByText('高级选项'))
     expect(screen.getByText('快速')).toBeInTheDocument()
     expect(screen.getByText('标准')).toBeInTheDocument()
     expect(screen.getByText('严谨')).toBeInTheDocument()
@@ -178,7 +183,7 @@ describe('ChatArea interactions', () => {
   it('nav pills call onNavigate', async () => {
     renderChatArea()
     // Browse nav pill
-    const browseBtn = screen.getByText('工作区')
+    const browseBtn = screen.getByText('知识库')
     await userEvent.click(browseBtn)
     expect(mockOnNavigate).toHaveBeenCalledWith('browser')
   })

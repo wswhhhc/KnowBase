@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Button, Input } from '@/components/ui'
+import { Button, Input, ConfirmDialog } from '@/components/ui'
 import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { formatTime, truncate } from '@/lib/utils'
 import * as api from '@/lib/api'
@@ -25,6 +25,8 @@ export default function ConversationList({
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false)
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -84,7 +86,7 @@ export default function ConversationList({
           </label>
         )}
         {selectedIds.size > 0 && (
-          <Button variant="destructive" size="sm" className="gap-1" onClick={handleBatchDelete}>
+          <Button variant="destructive" size="sm" className="gap-1" onClick={() => setBatchDeleteOpen(true)}>
             <Trash2 className="h-3.5 w-3.5" />{selectedIds.size}
           </Button>
         )}
@@ -145,9 +147,9 @@ export default function ConversationList({
                 <Pencil className="h-3 w-3" />
               </button>
               <button
-                onClick={async (e) => {
+                onClick={(e) => {
                   e.stopPropagation()
-                  await onDelete(c.id)
+                  setDeleteTarget(c.id)
                 }}
                 className="opacity-0 group-hover:opacity-60 text-muted-foreground hover:text-destructive transition-all"
               >
@@ -162,6 +164,41 @@ export default function ConversationList({
       {conversations.length === 0 && !loading && (
         <p className="text-xs text-muted-foreground text-center py-6">暂无对话</p>
       )}
+
+      {/* Single delete confirm */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}
+        title="删除对话"
+        description="确定要删除此对话吗？此操作不可撤销。"
+        onConfirm={async () => {
+          if (deleteTarget) await onDelete(deleteTarget)
+          setDeleteTarget(null)
+        }}
+      />
+
+      {/* Batch delete confirm */}
+      <ConfirmDialog
+        open={batchDeleteOpen}
+        onOpenChange={setBatchDeleteOpen}
+        title="批量删除"
+        description={`确定要删除选中的 ${selectedIds.size} 个对话吗？此操作不可撤销。`}
+        onConfirm={async () => {
+          const ids = Array.from(selectedIds)
+          try {
+            await api.deleteConversations(ids)
+            if (activeId && selectedIds.has(activeId)) {
+              clearMessages()
+              setActiveId(null)
+            }
+            setSelectedIds(new Set())
+            onBatchDelete(ids)
+            toast.success(`已删除 ${ids.length} 个对话`)
+          } catch (err) {
+            toast.error('批量删除失败', { description: String(err) })
+          }
+        }}
+      />
     </div>
   )
 }

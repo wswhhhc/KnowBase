@@ -53,6 +53,7 @@ vi.mock('lucide-react', () => {
     Bug: icon('Bug'),
     ChevronDown: icon('ChevronDown'),
     ChevronRight: icon('ChevronRight'),
+    Upload: icon('Upload'),
   }
 })
 
@@ -98,5 +99,11 @@ describe('ChatArea', () => {
 
     expect(screen.getByText('工作区问答助手')).toBeInTheDocument()
     expect(screen.getByText(/上传文档或导入网页/)).toBeInTheDocument()
+  })
+
+  it('renders the browser navigation label as 知识库', () => {
+    render(<ChatArea {...defaultProps} />)
+
+    expect(screen.getByText('知识库')).toBeInTheDocument()
   })
 })

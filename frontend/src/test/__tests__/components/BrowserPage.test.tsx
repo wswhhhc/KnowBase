@@ -81,11 +81,11 @@ describe('BrowserPage', () => {
     vi.mocked(api.getKBHotspots).mockResolvedValue([])
   })
 
-  it('renders the "工作区" title', async () => {
+  it('renders the "知识库" title', async () => {
     await act(async () => {
       render(<BrowserPage {...defaultProps} />)
     })
-    expect(screen.getByText('工作区')).toBeInTheDocument()
+    expect(screen.getByText('知识库')).toBeInTheDocument()
   })
 
   it('renders chunk cards after data loads', async () => {
@@ -123,7 +123,7 @@ describe('BrowserPage', () => {
     })
   })
 
-  it('shows "工作区为空" empty state when no chunks', async () => {
+  it('shows "知识库为空" empty state when no chunks', async () => {
     vi.mocked(api.getKBChunks).mockResolvedValue({ items: [], total: 0 })
 
     await act(async () => {
@@ -131,7 +131,7 @@ describe('BrowserPage', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('工作区为空')).toBeInTheDocument()
+      expect(screen.getByText('知识库为空')).toBeInTheDocument()
     })
   })
 
@@ -156,7 +156,7 @@ describe('BrowserPage', () => {
       await Promise.resolve()
     })
 
-    expect(screen.queryByText('工作区为空')).not.toBeInTheDocument()
+    expect(screen.queryByText('知识库为空')).not.toBeInTheDocument()
     expect(screen.queryByText('这是第一段内容')).not.toBeInTheDocument()
 
     await act(async () => {
@@ -164,7 +164,7 @@ describe('BrowserPage', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('工作区为空')).toBeInTheDocument()
+      expect(screen.getByText('知识库为空')).toBeInTheDocument()
     })
   })
 

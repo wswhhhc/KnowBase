@@ -9,3 +9,4 @@ export { Dialog, DialogTrigger, DialogClose, DialogContent, DialogHeader, Dialog
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './tooltip'
 export { Progress } from './progress'
 export { Skeleton, SkeletonCard, SkeletonGrid } from './skeleton'
+export { ConfirmDialog } from './confirm-dialog'

@@ -69,7 +69,7 @@ describe('BrowserPage interactions', () => {
   it('search input calls getKBChunks with query', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
-    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
 
     const searchInput = screen.getByPlaceholderText('搜索文档内容…')
     await userEvent.type(searchInput, '年假{Enter}')
@@ -93,7 +93,7 @@ describe('BrowserPage interactions', () => {
   it('hotspot mode calls getKBHotspots', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
-    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
 
     // The hotspot toggle is the button wrapping a Flame icon — find by its test-id approach
     // The button has no text, so target the hotspot toggle button via its sibling structure
@@ -107,7 +107,7 @@ describe('BrowserPage interactions', () => {
   it('refresh button refetches data', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
-    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
 
     await userEvent.click(screen.getByText('RefreshCw'))
     expect(api.getKBChunks).toHaveBeenCalled()
@@ -115,7 +115,7 @@ describe('BrowserPage interactions', () => {
 
   it('createBookmark receives workspace_id when passed as prop', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} workspaceId="ws-1" />) })
-    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
     const bmBtns = screen.getAllByText('Bookmark')
     await userEvent.click(bmBtns[0])
     expect(api.createBookmark).toHaveBeenCalled()
@@ -126,7 +126,7 @@ describe('BrowserPage interactions', () => {
   it('only fetches the first chunk page once on initial render', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
-    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
     expect(api.getKBChunks).toHaveBeenCalledTimes(1)
     expect(api.getKBChunks).toHaveBeenNthCalledWith(1, '', '', 0, 50)
   })
@@ -169,7 +169,7 @@ describe('BrowserPage interactions', () => {
   it('does not open the detail dialog when bookmarking in slice view', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
-    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
     const sourceButtons = screen.getAllByText('doc1.txt')
     await userEvent.click(sourceButtons[0])
     await waitFor(() => expect(screen.getByText('网格视图')).toBeInTheDocument())
@@ -188,7 +188,7 @@ describe('BrowserPage interactions', () => {
   it('uploads documents through the SSE stream API', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
-    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
 
     const file = new File(['browser upload'], 'browser.txt', { type: 'text/plain' })
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
@@ -214,7 +214,7 @@ describe('BrowserPage interactions', () => {
     vi.mocked(api.checkSource).mockResolvedValueOnce({ exists: true })
 
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
-    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
 
     const file = new File(['browser upload'], 'browser.txt', { type: 'text/plain' })
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
@@ -243,7 +243,7 @@ describe('BrowserPage interactions', () => {
   it('ingests URLs through the SSE stream API', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
-    await waitFor(() => expect(screen.getByText('工作区')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
 
     await userEvent.type(screen.getByPlaceholderText('导入公开网页 https://…'), 'https://example.com')
     await userEvent.click(screen.getByText('Globe'))

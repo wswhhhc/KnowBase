@@ -33,6 +33,7 @@ vi.mock('lucide-react', () => {
     Pencil: 'Pencil', Check: 'Check', X: 'X', Upload: 'Upload', Globe: 'Globe',
     FileText: 'FileText', Loader2: 'Loader2', Sun: 'Sun', Moon: 'Moon', Settings: 'Settings',
     Bookmark: 'Bookmark', Search: 'Search', Tag: 'Tag',
+    ChevronDown: 'ChevronDown', ChevronRight: 'ChevronRight',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
@@ -83,8 +84,8 @@ describe('Sidebar interactions', () => {
     vi.clearAllMocks()
 
     vi.mocked(useWorkspaces).mockReturnValue({
-      workspaces: [{ id: 'ws-1', name: '默认工作区', description: '', created_at: '', updated_at: '' }],
-      activeWorkspaceId: 'ws-1',
+      workspaces: [{ id: '', name: '默认工作区', description: '', created_at: '', updated_at: '' }],
+      activeWorkspaceId: '',
       setActiveWorkspaceId: vi.fn(),
       create: vi.fn(),
       remove: vi.fn(),
@@ -145,7 +146,9 @@ describe('Sidebar interactions', () => {
 
     render(<Sidebar {...defaultProps} chat={{ ...defaultProps.chat, clearMessages }} />)
     const trashButtons = screen.getAllByText('Trash2')
-    await userEvent.click(trashButtons[1])
+    await userEvent.click(trashButtons[0])
+    // 确认弹窗出现，点击确认删除
+    await userEvent.click(screen.getByText('确认删除'))
     expect(remove).toHaveBeenCalled()
     await waitFor(() => {
       expect(clearMessages).toHaveBeenCalled()
@@ -181,7 +184,7 @@ describe('Sidebar interactions', () => {
   it('navigation buttons call onNavigate', async () => {
     const onNavigate = vi.fn()
     render(<Sidebar {...defaultProps} onNavigate={onNavigate} />)
-    await userEvent.click(screen.getByText('工作区'))
+    await userEvent.click(screen.getByText('知识库'))
     expect(onNavigate).toHaveBeenCalledWith('browser')
   })
 
@@ -241,6 +244,8 @@ describe('Sidebar interactions', () => {
     await userEvent.click(checkboxes[0])
     // 批量删除按钮显示已选数量，点击它
     await userEvent.click(screen.getByText('2'))
+    // 确认弹窗出现，点击确认按钮
+    await userEvent.click(screen.getByText('确认删除'))
     expect(api.deleteConversations).toHaveBeenCalledWith(['conv-1', 'conv-2'])
   })
 
@@ -251,6 +256,8 @@ describe('Sidebar interactions', () => {
     const checkboxes = screen.getAllByRole('checkbox')
     await userEvent.click(checkboxes[0])
     await userEvent.click(screen.getByText('2'))
+    // 确认弹窗出现，点击确认按钮
+    await userEvent.click(screen.getByText('确认删除'))
 
     await waitFor(() => {
       expect(sonnerToast.error).toHaveBeenCalledWith('批量删除失败', expect.anything())

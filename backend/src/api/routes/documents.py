@@ -246,4 +246,4 @@ async def delete_source(source_name: str, kb: KnowledgeBase = Depends(get_knowle
 @router.post("/clear")
 async def clear_kb(kb: KnowledgeBase = Depends(get_knowledge_base)):
     kb.clear()
-    return {"ok": True, "message": "工作区已清空"}
+    return {"ok": True, "message": "知识库已清空"}
