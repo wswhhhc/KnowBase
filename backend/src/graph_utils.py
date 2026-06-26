@@ -106,15 +106,19 @@ def _format_context(results: list[RetrievalResult]) -> tuple[str, list[dict]]:
     for index, result in enumerate(results, 1):
         doc = result.document
         source = doc.metadata.get("source", "未知来源")
-        chunk_index = doc.metadata.get("chunk_index", "")
-        page = doc.metadata.get("page", "")
+        chunk_index = doc.metadata.get("chunk_index")
+        page = doc.metadata.get("page")
         section = doc.metadata.get("section", "")
         loc_parts = [f"来源：{source}"]
         if section:
             loc_parts.append(f"章节：{section}")
-        if chunk_index != "":
+        if isinstance(chunk_index, str) and not chunk_index.strip():
+            chunk_index = None
+        if isinstance(page, str) and not page.strip():
+            page = None
+        if chunk_index is not None:
             loc_parts.append(f"分段：{chunk_index}")
-        if page:
+        if page is not None:
             loc_parts.append(f"页码：{page}")
         loc_str = "，".join(loc_parts)
         context_parts.append(
