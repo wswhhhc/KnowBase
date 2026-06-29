@@ -9,6 +9,7 @@ from src.api.models import ConversationCreate, ConversationOut, ExportOut, Messa
 from src.conversations import (
     create_conversation, list_conversations, get_conversation, update_title,
     delete_conversation, delete_conversations, get_messages, update_feedback, export_conversation,
+    load_pin_state,
     create_workspace, list_workspaces, update_workspace, delete_workspace,
 )
 
@@ -61,7 +62,23 @@ async def delete(conv_id: str):
 
 @router.get("/{conv_id}/messages")
 async def list_messages(conv_id: str) -> list[MessageOut]:
-    return [MessageOut(**m) for m in get_messages(conv_id)]
+    messages = get_messages(conv_id)
+    # Inject pin/exclude state from dedicated table into debug_info for backward compat
+    if messages:
+        conv = get_conversation(conv_id)
+        if conv:
+            pin_state = load_pin_state(conv["thread_id"])
+            pinned_ids = [ps["chunk_id"] for ps in pin_state if ps["action"] == "pin"]
+            excluded_ids = [ps["chunk_id"] for ps in pin_state if ps["action"] == "exclude"]
+            if pinned_ids or excluded_ids:
+                for m in messages:
+                    di = m.get("debug_info", {})
+                    if isinstance(di, dict):
+                        if pinned_ids:
+                            di["pinned"] = pinned_ids
+                        if excluded_ids:
+                            di["excluded"] = excluded_ids
+    return [MessageOut(**m) for m in messages]
 
 
 @router.post("/{conv_id}/messages/{msg_id}/feedback")

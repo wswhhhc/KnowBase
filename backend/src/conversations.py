@@ -6,6 +6,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from alembic.config import Config
+from alembic import command
+
 from config.settings import ROOT_DIR
 
 _DB_PATH = ROOT_DIR / "data" / "conversations.db"
@@ -18,8 +21,18 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
+def _run_migrations():
+    """Run Alembic migrations to bring the database schema up to date."""
+    ini_path = Path(__file__).resolve().parents[1] / "alembic.ini"
+    if not ini_path.exists():
+        return  # outside backend dir (e.g. tests)
+    alembic_cfg = Config(str(ini_path))
+    command.upgrade(alembic_cfg, "head")
+
+
 def init_db():
     """Create tables if they don't exist."""
+    _run_migrations()
     conn = _get_conn()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS workspaces (
@@ -61,28 +74,15 @@ def init_db():
             FOREIGN KEY (conversation_id) REFERENCES conversations(id)
         );
         CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id);
+        CREATE TABLE IF NOT EXISTS pinned_sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thread_id TEXT NOT NULL,
+            chunk_id TEXT NOT NULL,
+            action TEXT NOT NULL CHECK(action IN ('pin', 'exclude')),
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_pinned_sources_thread ON pinned_sources(thread_id, chunk_id);
     """)
-    # 兼容旧库：为已有 conversations 表添加 workspace_id 列
-    try:
-        conn.execute("ALTER TABLE conversations ADD COLUMN workspace_id TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE messages ADD COLUMN debug_info TEXT DEFAULT '{}'")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE bookmarks ADD COLUMN tags TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass  # 列已存在
-    try:
-        conn.execute("ALTER TABLE messages ADD COLUMN feedback_category TEXT DEFAULT NULL")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE messages ADD COLUMN feedback_detail TEXT DEFAULT NULL")
-    except sqlite3.OperationalError:
-        pass
     _ensure_default_workspace()
     conn.commit()
     conn.close()
@@ -449,6 +449,32 @@ def delete_bookmark(bm_id: int) -> bool:
     conn.commit()
     conn.close()
     return cursor.rowcount > 0
+
+
+# ── Pinned Sources ──
+
+
+def save_pin_state(thread_id: str, chunk_id: str, action: str) -> None:
+    """Persist a pin or exclude action for a chunk in a conversation thread."""
+    conn = _get_conn()
+    now = datetime.now(UTC).isoformat()
+    conn.execute(
+        "INSERT OR REPLACE INTO pinned_sources (thread_id, chunk_id, action, created_at) VALUES (?, ?, ?, ?)",
+        (thread_id, chunk_id, action, now),
+    )
+    conn.commit()
+    conn.close()
+
+
+def load_pin_state(thread_id: str) -> list[dict]:
+    """Return all pinned/excluded sources for a thread as list of {chunk_id, action}."""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT chunk_id, action FROM pinned_sources WHERE thread_id = ? ORDER BY id",
+        (thread_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 # ── Workspaces ──
