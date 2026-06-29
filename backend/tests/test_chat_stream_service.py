@@ -14,6 +14,7 @@ from src.api.models import ChatRequest
 
 
 class ChatStreamServiceTests(unittest.TestCase):
+    @patch("src.api.chat_stream_service.replace_pin_state")
     @patch("src.api.chat_stream_service.record_query_metrics")
     @patch("src.api.chat_stream_service.add_message", side_effect=[1, 2])
     @patch("src.api.chat_stream_service.create_conversation", return_value={"id": "conv-1"})
@@ -28,6 +29,7 @@ class ChatStreamServiceTests(unittest.TestCase):
         _mock_create_conversation,
         _mock_add_message,
         mock_record_query_metrics,
+        _mock_replace_pin_state,
     ):
         """Metrics should distinguish first SSE event time from first token time."""
 
