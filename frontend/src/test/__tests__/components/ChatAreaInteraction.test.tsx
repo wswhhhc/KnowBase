@@ -25,6 +25,7 @@ vi.mock('lucide-react', () => {
     Bug: 'Bug', ChevronDown: 'ChevronDown', ChevronRight: 'ChevronRight',
     MessageSquare: 'MessageSquare',
     Bookmark: 'Bookmark', BookmarkCheck: 'BookmarkCheck', ExternalLink: 'ExternalLink', Upload: 'Upload',
+    RefreshCw: 'RefreshCw', AlignLeft: 'AlignLeft', Paperclip: 'Paperclip', Pin: 'Pin', X: 'X',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])

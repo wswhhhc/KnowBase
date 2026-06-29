@@ -54,6 +54,15 @@ vi.mock('lucide-react', () => {
     ChevronDown: icon('ChevronDown'),
     ChevronRight: icon('ChevronRight'),
     Upload: icon('Upload'),
+    MessageSquare: icon('MessageSquare'),
+    Bookmark: icon('Bookmark'),
+    BookmarkCheck: icon('BookmarkCheck'),
+    ExternalLink: icon('ExternalLink'),
+    RefreshCw: icon('RefreshCw'),
+    AlignLeft: icon('AlignLeft'),
+    Paperclip: icon('Paperclip'),
+    Pin: icon('Pin'),
+    X: icon('X'),
   }
 })
 
