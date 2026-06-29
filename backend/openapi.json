@@ -783,6 +783,53 @@
         }
       }
     },
+    "/api/knowledge-base/chunks/{chunk_id}": {
+      "get": {
+        "tags": [
+          "knowledge-base"
+        ],
+        "summary": "Chunk By Id",
+        "operationId": "chunk_by_id_api_knowledge_base_chunks__chunk_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "chunk_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Chunk Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KBChunk"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/knowledge-base/sources": {
       "get": {
         "tags": [

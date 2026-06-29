@@ -360,6 +360,8 @@ export const getKBChunks = (source?: string, search?: string, skip = 0, limit = 
   return req<KBChunkResponse>(`/knowledge-base/chunks?${params}`)
 }
 
+export const getKBChunkById = (chunkId: string) => req<KBChunk>(`/knowledge-base/chunks/${encodeURIComponent(chunkId)}`)
+
 export const getKBSourceNames = () => req<string[]>('/knowledge-base/sources')
 
 export const getKBConfig = () => req<KBConfig>('/knowledge-base/config')

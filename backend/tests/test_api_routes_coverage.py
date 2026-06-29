@@ -22,6 +22,7 @@ class FakeKnowledgeBase:
     def __init__(self):
         self._loaded = False
         self.all_docs = []
+        self.doc_by_id = {}
 
     def _ensure_loaded(self):
         if not self._loaded:
@@ -29,6 +30,7 @@ class FakeKnowledgeBase:
             self.all_docs = [
                 Document(page_content="test", metadata={"source": "test.txt", "chunk_id": "test.txt:0:abc", "chunk_index": 0}),
             ]
+            self.doc_by_id = {doc.metadata["chunk_id"]: doc for doc in self.all_docs}
             self._loaded = True
 
     def source_counts(self):
@@ -61,6 +63,21 @@ class FakeKnowledgeBase:
     def get_hotspots(self, top_n=50):
         return [{"chunk_id": "test.txt:0:abc", "source": "test.txt", "hits": 5, "content_preview": "test"}]
 
+    def get_chunk_by_id(self, chunk_id):
+        self._ensure_loaded()
+        doc = self.doc_by_id.get(chunk_id)
+        if doc is None:
+            return None
+        return {
+            "source": doc.metadata["source"],
+            "chunk_index": doc.metadata["chunk_index"],
+            "chunk_id": chunk_id,
+            "page": doc.metadata.get("page"),
+            "content": doc.page_content,
+            "original_content": doc.metadata.get("original_content"),
+            "section": doc.metadata.get("section"),
+        }
+
     def ingest_file(self, file_path, source_name=None, version_mode="replace", progress_callback=None):
         if progress_callback:
             progress_callback("loading", 25)
@@ -80,6 +97,8 @@ class FakeKnowledgeBase:
 
     def clear(self):
         self.all_docs = []
+        self.doc_by_id = {}
+        self._loaded = False
 
 
 class APIRoutesCoverageTests(unittest.TestCase):
@@ -156,6 +175,10 @@ class APIRoutesCoverageTests(unittest.TestCase):
     def test_chunks_skip_out_of_range(self):
         response = self.client.get("/api/knowledge-base/chunks?skip=9999")
         self.assertEqual(response.status_code, 200)
+
+    def test_chunk_by_id_not_found(self):
+        response = self.client.get("/api/knowledge-base/chunks/missing-chunk")
+        self.assertEqual(response.status_code, 404)
 
     def test_hotspots_returns_list(self):
         response = self.client.get("/api/knowledge-base/hotspots")

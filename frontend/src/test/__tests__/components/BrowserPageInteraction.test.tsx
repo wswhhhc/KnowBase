@@ -21,12 +21,13 @@ vi.mock('lucide-react', () => {
     Search: 'Search', FileText: 'FileText', Hash: 'Hash', ExternalLink: 'ExternalLink',
     Layers: 'Layers', Sun: 'Sun', Moon: 'Moon', Flame: 'Flame', Upload: 'Upload',
     Globe: 'Globe', RefreshCw: 'RefreshCw', LayoutGrid: 'LayoutGrid', List: 'List', X: 'X',
-    Bookmark: 'Bookmark', BookmarkCheck: 'BookmarkCheck', Bug: 'Bug', Loader2: 'Loader2',
+    Bookmark: 'Bookmark', BookmarkCheck: 'BookmarkCheck', Bug: 'Bug', Loader2: 'Loader2', Sparkles: 'Sparkles',
   }
   return Object.fromEntries(Object.keys(icons).map((n) => [n, () => <span>{n}</span>]))
 })
 vi.mock('@/lib/api', () => ({
   getKBChunks: vi.fn(),
+  getKBChunkById: vi.fn(),
   getKBStats: vi.fn(),
   getKBSourceNames: vi.fn(),
   getKBConfig: vi.fn(),
@@ -59,7 +60,9 @@ const defaultProps = {
 describe('BrowserPage interactions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.useRealTimers()
     vi.mocked(api.getKBChunks).mockResolvedValue({ items: mockKBChunks, total: 2 })
+    vi.mocked(api.getKBChunkById).mockResolvedValue(mockKBChunks[0])
     vi.mocked(api.getKBStats).mockResolvedValue(mockKBStats)
     vi.mocked(api.getKBSourceNames).mockResolvedValue(['doc1.txt', 'doc2.md'])
     vi.mocked(api.getKBConfig).mockResolvedValue({ chunk_size: 1000, chunk_overlap: 200 })
@@ -131,7 +134,7 @@ describe('BrowserPage interactions', () => {
     expect(api.getKBChunks).toHaveBeenNthCalledWith(1, '', '', 0, 50)
   })
 
-  it('loads additional pages to reveal a highlighted chunk beyond the first page', async () => {
+  it('fetches a highlighted chunk directly by id when it is outside the loaded page', async () => {
     const pagedChunks = Array.from({ length: 60 }, (_, index) => ({
       source: 'doc-long.txt',
       chunk_index: index,
@@ -145,6 +148,7 @@ describe('BrowserPage interactions', () => {
       items: pagedChunks.slice(skip, skip + limit),
       total: pagedChunks.length,
     }))
+    vi.mocked(api.getKBChunkById).mockResolvedValue(pagedChunks[55])
     vi.mocked(api.getKBSourceNames).mockResolvedValue(['doc-long.txt'])
 
     const onHighlightConsumed = vi.fn()
@@ -163,7 +167,8 @@ describe('BrowserPage interactions', () => {
       expect(screen.getAllByText('段落 55').length).toBeGreaterThan(0)
     })
     expect(onHighlightConsumed).toHaveBeenCalled()
-    expect(vi.mocked(api.getKBChunks)).toHaveBeenCalledWith('', '', 50, 50)
+    expect(vi.mocked(api.getKBChunkById)).toHaveBeenCalledWith('doc-long.txt:55:hash')
+    expect(vi.mocked(api.getKBChunks)).toHaveBeenCalledTimes(1)
   })
 
   it('does not open the detail dialog when bookmarking in slice view', async () => {
@@ -189,25 +194,37 @@ describe('BrowserPage interactions', () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
     await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
+    vi.useFakeTimers()
 
     const file = new File(['browser upload'], 'browser.txt', { type: 'text/plain' })
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
     expect(input).not.toBeNull()
 
-    fireEvent.change(input, { target: { files: [file] } })
-
-    await waitFor(() => {
-      expect(api.checkSource).toHaveBeenCalledWith('browser.txt')
-      expect(api.uploadDocumentStream).toHaveBeenCalledWith(
-        expect.any(File),
-        undefined,
-        expect.objectContaining({
-          onProgress: expect.any(Function),
-          onDone: expect.any(Function),
-          onError: expect.any(Function),
-        }),
-      )
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } })
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
     })
+
+    expect(api.checkSource).toHaveBeenCalledWith('browser.txt')
+    expect(api.uploadDocumentStream).toHaveBeenCalledWith(
+      expect.any(File),
+      undefined,
+      expect.objectContaining({
+        onProgress: expect.any(Function),
+        onDone: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    )
+    expect(screen.getByText('文档已导入！现在去提问 →')).toBeInTheDocument()
+
+    await act(async () => {
+      vi.advanceTimersByTime(8000)
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByText('文档已导入！现在去提问 →')).not.toBeInTheDocument()
   })
 
   it('prompts for version handling when the source already exists', async () => {
@@ -259,6 +276,7 @@ describe('BrowserPage interactions', () => {
         }),
       )
     })
+    expect(screen.getByText('文档已导入！现在去提问 →')).toBeInTheDocument()
   })
 
   it('passes the selected strategy to debug search', async () => {

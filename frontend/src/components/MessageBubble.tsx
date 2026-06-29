@@ -6,7 +6,7 @@ import * as api from '@/lib/api'
 import type { Source } from '@/lib/api'
 import type { ChatMessage, PinnedSource } from '@/hooks/useChat'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle, MessageSquare, ExternalLink, Upload, Bookmark, BookmarkCheck } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle, MessageSquare, ExternalLink, Upload, Bookmark, BookmarkCheck, RefreshCw, AlignLeft, Paperclip, Pin, X } from 'lucide-react'
 
 interface CitationTextProps {
   text: string
@@ -315,13 +315,13 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                       onClick={() => onSendQuestion?.(message.originalQuestion || message.content.slice(0, 60))}
                       className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                     >
-                      🔄 重新回答
+                      <RefreshCw className="h-3 w-3" />重新回答
                     </button>
                     <button
                       onClick={() => onSendQuestion?.(`用一句话简洁回答：${message.originalQuestion || message.content.slice(0, 60)}`)}
                       className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                     >
-                      📝 更简洁
+                      <AlignLeft className="h-3 w-3" />更简洁
                     </button>
                     <button
                       onClick={() => onSendQuestion?.(`关于上面的回答，请详细解释「${message.content.slice(0, 60)}」`)}
@@ -337,7 +337,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                     onClick={() => setSourceOpen(!sourceOpen)}
                     className="mt-2 inline-flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
                   >
-                    📎 {sourceOpen ? '收起来源' : `${message.sources.length} 个来源`}
+                    <Paperclip className="h-3 w-3" /> {sourceOpen ? '收起来源' : `${message.sources.length} 个来源`}
                   </button>
                 )}
 
@@ -396,7 +396,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                                   isPinned ? 'text-primary/70' : 'text-muted-foreground/30 hover:text-muted-foreground'
                                 }`}
                               >
-                                📌 {isPinned ? '已固定' : '固定'}
+                                <Pin className={`h-3 w-3 ${isPinned ? 'fill-current' : ''}`} /> {isPinned ? '已固定' : '固定'}
                               </button>
                             )}
                             {onPinToggle && (
@@ -406,7 +406,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                                   isExcluded ? 'text-destructive/70' : 'text-muted-foreground/30 hover:text-muted-foreground'
                                 }`}
                               >
-                                ✕ {isExcluded ? '已排除' : '排除'}
+                                <X className="h-3 w-3" /> {isExcluded ? '已排除' : '排除'}
                               </button>
                             )}
                           </div>

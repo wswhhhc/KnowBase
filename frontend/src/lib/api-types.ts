@@ -248,6 +248,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge-base/chunks/{chunk_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chunk_id: string;
+            };
+            cookie?: never;
+        };
+        /** Chunk By Id */
+        get: operations["chunk_by_id_api_knowledge_base_chunks__chunk_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge-base/sources": {
         parameters: {
             query?: never;
@@ -460,6 +479,23 @@ export interface components {
             chunk_size: number;
             /** Chunk Overlap */
             chunk_overlap: number;
+        };
+        /** KBChunk */
+        KBChunk: {
+            /** Source */
+            source: string;
+            /** Chunk Index */
+            chunk_index: number;
+            /** Chunk Id */
+            chunk_id: string;
+            /** Page */
+            page?: number | null;
+            /** Content */
+            content: string;
+            /** Original Content */
+            original_content?: string | null;
+            /** Section */
+            section?: string | null;
         };
         /** KBStats */
         KBStats: {
@@ -1082,6 +1118,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chunk_by_id_api_knowledge_base_chunks__chunk_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chunk_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KBChunk"];
                 };
             };
             /** @description Validation Error */

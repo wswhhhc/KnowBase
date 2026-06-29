@@ -104,6 +104,21 @@ class FakeKnowledgeBase:
     def get_hotspots(self, top_n=50):
         return [{"chunk_id": "test.txt:0:abc", "source": "test.txt", "hits": 5, "content_preview": "测试"}]
 
+    def get_chunk_by_id(self, chunk_id):
+        self._ensure_loaded()
+        for doc in self.all_docs:
+            if doc.metadata["chunk_id"] == chunk_id:
+                return {
+                    "source": doc.metadata["source"],
+                    "chunk_index": doc.metadata["chunk_index"],
+                    "chunk_id": chunk_id,
+                    "page": doc.metadata.get("page"),
+                    "content": doc.page_content,
+                    "original_content": doc.metadata.get("original_content"),
+                    "section": doc.metadata.get("section"),
+                }
+        return None
+
     def ingest_file(self, file_path, source_name=None, version_mode="replace", progress_callback=None):
         if progress_callback:
             progress_callback("loading", 25)
@@ -309,6 +324,17 @@ class APIEndpointTests(unittest.TestCase):
     def test_kb_chunks_with_search(self):
         resp = self.client.get("/api/knowledge-base/chunks?search=测试&skip=0&limit=5")
         self.assertEqual(resp.status_code, 200)
+
+    def test_kb_chunk_by_id_happy_path(self):
+        resp = self.client.get("/api/knowledge-base/chunks/test.txt%3A0%3Aabc123")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["chunk_id"], "test.txt:0:abc123")
+        self.assertEqual(data["content"], "测试内容")
+
+    def test_kb_chunk_by_id_404(self):
+        resp = self.client.get("/api/knowledge-base/chunks/missing-chunk")
+        self.assertEqual(resp.status_code, 404)
 
     def test_kb_sources_happy_path(self):
         resp = self.client.get("/api/knowledge-base/sources")

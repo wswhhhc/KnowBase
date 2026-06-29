@@ -7,6 +7,7 @@ import ChatArea from '@/components/ChatArea'
 import BrowserPage from '@/components/BrowserPage'
 import DashboardPage from '@/components/DashboardPage'
 import SettingsPage from '@/components/SettingsPage'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import { Sparkles, BookOpen, BarChart3, Settings } from 'lucide-react'
 
 export type ViewType = 'chat' | 'browser' | 'dashboard' | 'settings'
@@ -102,6 +103,7 @@ function App() {
 
       <main className="relative flex flex-1 flex-col min-w-0 pb-safe">
         {activeView === 'chat' && (
+          <ErrorBoundary fallback={<div className="flex items-center justify-center flex-1 p-8 text-center text-muted-foreground text-sm">聊天组件异常，请刷新页面</div>}>
           <ChatArea
             chat={chat}
             onOpenSidebar={() => setSidebarOpen(true)}
@@ -111,8 +113,10 @@ function App() {
             onCitationClick={handleCitationClick}
             onSendQuestion={handleSendQuestion}
           />
+          </ErrorBoundary>
         )}
         {activeView === 'browser' && (
+          <ErrorBoundary fallback={<div className="flex items-center justify-center flex-1 p-8 text-center text-muted-foreground text-sm">知识库组件异常，请刷新页面</div>}>
           <BrowserPage
             onOpenSidebar={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
@@ -121,20 +125,25 @@ function App() {
             onHighlightConsumed={() => setHighlightChunkId(null)}
             workspaceId={activeWsId}
           />
+          </ErrorBoundary>
         )}
         {activeView === 'dashboard' && (
+          <ErrorBoundary fallback={<div className="flex items-center justify-center flex-1 p-8 text-center text-muted-foreground text-sm">指标面板异常，请刷新页面</div>}>
           <DashboardPage
             onOpenSidebar={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
             onNavigate={setActiveView}
           />
+          </ErrorBoundary>
         )}
         {activeView === 'settings' && (
+          <ErrorBoundary fallback={<div className="flex items-center justify-center flex-1 p-8 text-center text-muted-foreground text-sm">设置面板异常，请刷新页面</div>}>
           <SettingsPage
             onOpenSidebar={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
             onNavigate={setActiveView}
           />
+          </ErrorBoundary>
         )}
 
         {/* Mobile bottom tab bar */}
