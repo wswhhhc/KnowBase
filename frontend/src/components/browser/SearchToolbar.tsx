@@ -36,14 +36,14 @@ export default function SearchToolbar({
         </div>
         <div className="flex gap-1 flex-wrap flex-1">
           <button onClick={() => onSourceClick('')}
-            className={`px-2.5 py-1 text-2xs font-medium rounded-md transition-colors ${
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
               !selectedSource ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground bg-muted/50'
             }`}>
             全部
           </button>
           {sources.slice(0, 8).map((s) => (
             <button key={s} onClick={() => onSourceClick(s)}
-              className={`px-2.5 py-1 text-2xs font-medium rounded-md transition-colors max-w-[120px] truncate ${
+              className={`max-w-[120px] truncate rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 selectedSource === s ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground bg-muted/50'
               }`}>
               {s}
@@ -72,7 +72,7 @@ export default function SearchToolbar({
           </span>
           <div className="h-3 w-px bg-border mx-1" />
           <button onClick={toggleHotspotMode}
-            className={`flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-md transition-colors ${
+            className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
               hotspotMode ? 'bg-orange-500/15 text-orange-400' : 'text-muted-foreground hover:text-foreground bg-muted/30'
             }`}>
             <Flame className="h-3 w-3" />

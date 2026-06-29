@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import ChatArea from '@/components/ChatArea'
@@ -120,6 +120,36 @@ describe('ChatArea interactions', () => {
     await userEvent.click(screen.getByText('深度'))
 
     expect(localStorage.getItem('kb_web_search')).toBe('true')
+    expect(localStorage.getItem('kb_search_strategy')).toBe('deep')
+  })
+
+  it('treats search strategies as a keyboard-navigable radio group', async () => {
+    renderChatArea()
+
+    const group = screen.getByRole('radiogroup', { name: '检索策略' })
+    expect(group).toBeInTheDocument()
+
+    const balanced = screen.getByRole('radio', { name: /标准$/ })
+    const deep = screen.getByRole('radio', { name: /深度$/ })
+
+    expect(balanced).toHaveAttribute('aria-checked', 'true')
+    expect(balanced).toHaveAttribute('tabindex', '0')
+    expect(deep).toHaveAttribute('tabindex', '-1')
+
+    await act(async () => {
+      balanced.focus()
+      fireEvent.keyDown(balanced, { key: 'ArrowRight' })
+    })
+
+    expect(screen.getByRole('radio', { name: /严谨$/ })).toHaveAttribute('aria-checked', 'true')
+    expect(localStorage.getItem('kb_search_strategy')).toBe('high_quality')
+
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole('radio', { name: /严谨$/ }), { key: 'End' })
+    })
+
+    expect(deep).toHaveAttribute('aria-checked', 'true')
+    expect(deep).toHaveFocus()
     expect(localStorage.getItem('kb_search_strategy')).toBe('deep')
   })
 

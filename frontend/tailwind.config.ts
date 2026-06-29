@@ -54,7 +54,7 @@ export default {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontSize: {
-        '2xs': ['10px', { lineHeight: '14px' }],
+        '2xs': ['11px', { lineHeight: '15px' }],
       },
       keyframes: {
         'fade-in': {

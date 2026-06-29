@@ -29,7 +29,7 @@ export default function DebugPanel({ debugData }: DebugPanelProps) {
             exit={{ opacity: 0, height: 0 }}
             className="mt-1.5 overflow-hidden"
           >
-            <div className="rounded-lg border border-border/60 bg-surface/40 px-3 py-2.5 text-xs leading-relaxed">
+            <div className="rounded-lg border border-border/60 bg-surface/40 px-3 py-2.5 text-xs leading-relaxed max-h-[400px] overflow-y-auto">
               {/* Node timeline */}
               <div className="space-y-1">
                 {debugData.nodes.map((node, i) => (

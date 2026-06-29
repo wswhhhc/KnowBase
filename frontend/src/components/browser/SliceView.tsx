@@ -1,15 +1,6 @@
 import { motion } from 'framer-motion'
 import { Bookmark, BookmarkCheck, Flame } from 'lucide-react'
-
-interface KBChunk {
-  chunk_id: string
-  source: string
-  chunk_index: number
-  page?: number | null
-  content: string
-  original_content?: string | null
-  section?: string | null
-}
+import type { KBChunk } from '@/lib/api'
 
 interface SliceViewProps {
   chunks: KBChunk[]
@@ -19,7 +10,7 @@ interface SliceViewProps {
   findOverlap: (prev: string, curr: string) => number
   onChunkClick: (chunk: KBChunk) => void
   bookmarkedChunks: Set<string>
-  onBookmark: (chunk: KBChunk) => void
+  onBookmark: (chunk: KBChunk) => void | Promise<void>
 }
 
 function hotspotColor(count: number): string {

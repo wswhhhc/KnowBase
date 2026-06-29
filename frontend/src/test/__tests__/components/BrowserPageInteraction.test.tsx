@@ -228,6 +228,28 @@ describe('BrowserPage interactions', () => {
     expect(screen.queryByText('文档已导入！现在可以去提问了')).not.toBeInTheDocument()
   })
 
+  it('lets the user dismiss the upload guidance banner immediately', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} />) })
+
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
+
+    const file = new File(['browser upload'], 'browser.txt', { type: 'text/plain' })
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } })
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('文档已导入！现在可以去提问了')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '关闭提示' }))
+
+    expect(screen.queryByText('文档已导入！现在可以去提问了')).not.toBeInTheDocument()
+  })
+
   it('opens the file picker automatically when kb_trigger_upload is present on load', async () => {
     sessionStorage.setItem('kb_trigger_upload', 'true')
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})

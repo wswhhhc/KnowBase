@@ -51,7 +51,7 @@ export default function EmptyState({ onImport }: EmptyStateProps) {
           transition={{ delay: 0.6, duration: 0.3 }}
           className="mt-6"
         >
-          <Button onClick={onImport} size="lg" className="gap-2">
+          <Button onClick={onImport} size="lg" className="gap-2" aria-label="导入资料">
             <Upload className="h-4 w-4" />开始导入资料
           </Button>
         </motion.div>

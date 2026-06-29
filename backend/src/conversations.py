@@ -368,7 +368,7 @@ def export_conversation(conv_id: str, fmt: str = "markdown", include_sources: bo
     # Markdown export (default)
     parts = [f"# {conv['title']}\n\n"]
     for msg in messages:
-        role_label = "👤 用户" if msg["role"] == "user" else "🤖 助手"
+        role_label = "[用户]" if msg["role"] == "user" else "[助手]"
         parts.append(f"### {role_label}\n{msg['content']}\n")
         if include_sources and msg["sources"]:
             parts.append(f"**来源：** {', '.join(s.get('source', '?') for s in msg['sources'])}\n")
