@@ -61,6 +61,7 @@ describe('BrowserPage interactions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useRealTimers()
+    sessionStorage.clear()
     vi.mocked(api.getKBChunks).mockResolvedValue({ items: mockKBChunks, total: 2 })
     vi.mocked(api.getKBChunkById).mockResolvedValue(mockKBChunks[0])
     vi.mocked(api.getKBStats).mockResolvedValue(mockKBStats)
@@ -225,6 +226,19 @@ describe('BrowserPage interactions', () => {
     })
 
     expect(screen.queryByText('文档已导入！现在去提问 →')).not.toBeInTheDocument()
+  })
+
+  it('opens the file picker automatically when kb_trigger_upload is present on load', async () => {
+    sessionStorage.setItem('kb_trigger_upload', 'true')
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+
+    await act(async () => { render(<BrowserPage {...defaultProps} />) })
+
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
+    await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1))
+    expect(sessionStorage.getItem('kb_trigger_upload')).toBeNull()
+
+    clickSpy.mockRestore()
   })
 
   it('prompts for version handling when the source already exists', async () => {

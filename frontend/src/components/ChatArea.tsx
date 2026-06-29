@@ -37,8 +37,8 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [input, setInput] = useState('')
-  const [webSearch, setWebSearch] = useState(false)
-  const [searchStrategy, setSearchStrategy] = useState('balanced')
+  const [webSearch, setWebSearch] = useState(() => localStorage.getItem('kb_web_search') === 'true')
+  const [searchStrategy, setSearchStrategy] = useState(() => localStorage.getItem('kb_search_strategy') || 'balanced')
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
@@ -48,6 +48,10 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
   }, [chat.messages, chat.streamingNodes, isLoadingMessages])
 
   const prevLoadingRef = useRef(isLoadingMessages)
+
+  // Persist search preferences across sessions
+  useEffect(() => { localStorage.setItem('kb_web_search', String(webSearch)) }, [webSearch])
+  useEffect(() => { localStorage.setItem('kb_search_strategy', searchStrategy) }, [searchStrategy])
   useEffect(() => {
     if (prevLoadingRef.current && !isLoadingMessages) {
       requestAnimationFrame(() => {
@@ -114,6 +118,40 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
           <div className="h-4 w-px bg-border hidden md:block" />
 
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 flex-wrap">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                      <Globe className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">搜索</span>
+                      <Switch checked={webSearch} onCheckedChange={setWebSearch} />
+                    </label>
+                  </TooltipTrigger>
+                  <TooltipContent>联网搜索开关</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
+                {STRATEGIES.map(({ key, icon: Icon, label }) => (
+                  <TooltipProvider key={key}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button onClick={() => setSearchStrategy(key)}
+                          className={`inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-sm transition-colors ${
+                            searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
+                          }`}>
+                          <Icon className="h-3 w-3" />
+                          {label}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>{STRATEGY_DESC[key]}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+              </div>
+            </div>
+
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
               className="flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
@@ -124,37 +162,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
 
             {showAdvanced && (
               <div className="flex items-center gap-1 flex-wrap" onMouseDown={(e) => e.stopPropagation()}>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-                        <Globe className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">搜索</span>
-                        <Switch checked={webSearch} onCheckedChange={setWebSearch} />
-                      </label>
-                    </TooltipTrigger>
-                    <TooltipContent>联网搜索开关</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-                  {STRATEGIES.map(({ key, icon: Icon, label }) => (
-                    <TooltipProvider key={key}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button onClick={() => setSearchStrategy(key)}
-                            className={`inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-sm transition-colors ${
-                              searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
-                            }`}>
-                            <Icon className="h-3 w-3" />
-                            {label}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{STRATEGY_DESC[key]}</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ))}
-                </div>
+                {/* advanced options content */}
               </div>
             )}
           </div>

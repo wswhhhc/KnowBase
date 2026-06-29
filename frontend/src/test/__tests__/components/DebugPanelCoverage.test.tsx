@@ -90,4 +90,13 @@ describe('DebugPanel coverage', () => {
     await userEvent.click(screen.getByText('链路详情'))
     expect(screen.getByText(/证据不足/)).toBeInTheDocument()
   })
+
+  it('uses monospace only for timing and score spans', async () => {
+    render(<DebugPanel debugData={mockDebugInfo} />)
+    await userEvent.click(screen.getByText('链路详情'))
+
+    expect(screen.getByText('200ms')).toHaveClass('font-mono')
+    expect(screen.getByText('0.910')).toHaveClass('font-mono')
+    expect(screen.getByText('送入模型的段落').closest('div')).not.toHaveClass('font-mono')
+  })
 })

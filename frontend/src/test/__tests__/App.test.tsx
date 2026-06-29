@@ -10,11 +10,25 @@ vi.mock('@/components/Sidebar', () => ({
 vi.mock('@/components/ChatArea', () => ({
   default: (props: any) => <div data-testid="chatarea">ChatArea Mock</div>,
 }))
-vi.mock('@/components/BrowserPage', () => ({
-  default: (props: any) => <div data-testid="browserpage">BrowserPage Mock</div>,
-}))
+vi.mock('@/components/BrowserPage', async () => {
+  const React = await import('react')
+  return {
+    default: () => {
+      const [uploadEvents, setUploadEvents] = React.useState(0)
+      React.useEffect(() => {
+        const handleTrigger = () => setUploadEvents((count) => count + 1)
+        window.addEventListener('kb-trigger-upload', handleTrigger)
+        return () => window.removeEventListener('kb-trigger-upload', handleTrigger)
+      }, [])
+      return <div data-testid="browserpage">BrowserPage Mock upload-events:{uploadEvents}</div>
+    },
+  }
+})
 vi.mock('@/components/DashboardPage', () => ({
   default: (props: any) => <div data-testid="dashboardpage">DashboardPage Mock</div>,
+}))
+vi.mock('@/components/SettingsPage', () => ({
+  default: (props: any) => <div data-testid="settingspage">SettingsPage Mock</div>,
 }))
 
 // Mock hooks
@@ -40,11 +54,53 @@ vi.mock('@/hooks/useTheme', () => ({
 describe('App component', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    sessionStorage.clear()
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
   })
 
   it('renders Sidebar and ChatArea by default', () => {
     render(<App />)
     expect(screen.getByTestId('sidebar')).toBeInTheDocument()
     expect(screen.getByTestId('chatarea')).toBeInTheDocument()
+  })
+
+  it('dispatches the upload trigger when the mobile FAB is clicked on the browser view', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
+
+    render(<App />)
+
+    await userEvent.click(screen.getByText('知识库'))
+    expect(screen.getByTestId('browserpage')).toHaveTextContent('upload-events:0')
+
+    await userEvent.click(screen.getByTitle('上传文档'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('browserpage')).toHaveTextContent('upload-events:1')
+    })
+    expect(sessionStorage.getItem('kb_trigger_upload')).toBe('true')
   })
 })
