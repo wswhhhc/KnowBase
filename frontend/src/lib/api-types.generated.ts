@@ -21,7 +21,7 @@ export type IngestResponse = Schemas['IngestResponse']
 // Keep in sync with backend/src/api/models.py.
 //
 // When you add/change fields in the Pydantic model, update these interfaces
-// to match.  There is no automated check for this.
+// to match. They are checked by backend/tests/test_sse_type_sync.py.
 
 export interface KBChunk {
   source: string

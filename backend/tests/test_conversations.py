@@ -18,7 +18,15 @@ class ConversationEdgeCaseTests(unittest.TestCase):
 
     def tearDown(self):
         conversations._DB_PATH = self.original_path
-        self.temp_dir.cleanup()
+        try:
+            self.temp_dir.cleanup()
+        except PermissionError:
+            import time
+            time.sleep(0.1)
+            try:
+                self.temp_dir.cleanup()
+            except PermissionError:
+                pass
 
     # ── Workspace tests ──
 
@@ -86,6 +94,7 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         conv = conversations.create_conversation("删除测试")
         conversations.add_message(conv["id"], "user", "你好")
         conversations.add_message(conv["id"], "assistant", "你好！我是知识库助手。")
+        conversations.replace_pin_state(conv["thread_id"], ["doc:1"], ["doc:2"])
         messages_before = conversations.get_messages(conv["id"])
         self.assertEqual(len(messages_before), 2)
 
@@ -95,6 +104,7 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         messages_after = conversations.get_messages(conv["id"])
         self.assertEqual(len(messages_after), 0)
         self.assertIsNone(conversations.get_conversation(conv["id"]))
+        self.assertEqual(conversations.load_pin_state(conv["thread_id"]), [])
 
     def test_delete_nonexistent_conversation(self):
         self.assertFalse(conversations.delete_conversation("nonexistent-id"))
@@ -251,6 +261,9 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         conv3 = conversations.create_conversation("保留")
         conversations.add_message(conv1["id"], "user", "a")
         conversations.add_message(conv2["id"], "assistant", "b")
+        conversations.replace_pin_state(conv1["thread_id"], ["doc:1"], ["doc:2"])
+        conversations.replace_pin_state(conv2["thread_id"], ["doc:3"], [])
+        conversations.replace_pin_state(conv3["thread_id"], ["doc:4"], [])
 
         conversations.delete_conversations([conv1["id"], conv2["id"]])
 
@@ -259,6 +272,12 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         self.assertIsNotNone(conversations.get_conversation(conv3["id"]))
         self.assertEqual(conversations.get_messages(conv1["id"]), [])
         self.assertEqual(conversations.get_messages(conv2["id"]), [])
+        self.assertEqual(conversations.load_pin_state(conv1["thread_id"]), [])
+        self.assertEqual(conversations.load_pin_state(conv2["thread_id"]), [])
+        self.assertEqual(
+            conversations.load_pin_state_summary(conv3["thread_id"]),
+            {"thread_id": conv3["thread_id"], "pinned_chunk_ids": ["doc:4"], "excluded_chunk_ids": []},
+        )
 
     def test_delete_conversations_empty_list_does_nothing(self):
         before = len(conversations.list_conversations())
@@ -267,6 +286,18 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         except Exception as e:
             self.fail(f"delete_conversations([]) raised {e}")
         self.assertEqual(len(conversations.list_conversations()), before)
+
+    def test_replace_pin_state_overwrites_stale_entries(self):
+        conv = conversations.create_conversation("Pin 状态测试")
+        thread_id = conv["thread_id"]
+
+        conversations.replace_pin_state(thread_id, ["doc:1"], ["doc:2"])
+        conversations.replace_pin_state(thread_id, ["doc:3"], [])
+
+        self.assertEqual(
+            conversations.load_pin_state_summary(thread_id),
+            {"thread_id": thread_id, "pinned_chunk_ids": ["doc:3"], "excluded_chunk_ids": []},
+        )
 
 
 if __name__ == "__main__":

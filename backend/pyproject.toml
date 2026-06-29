@@ -28,6 +28,7 @@ dependencies = [
     "python-multipart>=0.0.12",
     "pandas>=3.0.3",
     "coverage>=7.14.1",
+    "alembic>=1.18.5",
 ]
 
 [tool.uv]

@@ -5,10 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.api.deps import verify_api_key
-from src.api.models import ConversationCreate, ConversationOut, ExportOut, MessageFeedback, MessageOut
+from src.api.models import ConversationCreate, ConversationOut, ExportOut, MessageFeedback, MessageOut, PinStateOut
 from src.conversations import (
     create_conversation, list_conversations, get_conversation, update_title,
     delete_conversation, delete_conversations, get_messages, update_feedback, export_conversation,
+    load_pin_state_summary,
     create_workspace, list_workspaces, update_workspace, delete_workspace,
 )
 
@@ -62,6 +63,14 @@ async def delete(conv_id: str):
 @router.get("/{conv_id}/messages")
 async def list_messages(conv_id: str) -> list[MessageOut]:
     return [MessageOut(**m) for m in get_messages(conv_id)]
+
+
+@router.get("/{conv_id}/pin-state")
+async def get_pin_state(conv_id: str) -> PinStateOut:
+    conv = get_conversation(conv_id)
+    if not conv:
+        raise HTTPException(404, "对话不存在")
+    return PinStateOut(**load_pin_state_summary(conv["thread_id"]))
 
 
 @router.post("/{conv_id}/messages/{msg_id}/feedback")

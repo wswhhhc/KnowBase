@@ -52,6 +52,7 @@ vi.mock('@/hooks/useTheme', () => ({
 
 vi.mock('@/lib/api', () => ({
   getMessages: vi.fn().mockResolvedValue([]),
+  getConversationPinState: vi.fn().mockResolvedValue({ thread_id: 'thread-1', pinned_chunk_ids: [], excluded_chunk_ids: [] }),
   uploadDocument: vi.fn(),
   uploadDocumentStream: vi.fn().mockImplementation((file, versionMode, callbacks) => {
     callbacks.onDone?.({ chunk_count: 5, existing_version: false })
@@ -110,6 +111,7 @@ describe('Sidebar interactions', () => {
       refresh: vi.fn(),
     })
     vi.mocked(api.getKBStats).mockResolvedValue(mockKBStats)
+    vi.mocked(api.getConversationPinState).mockResolvedValue({ thread_id: 'thread-1', pinned_chunk_ids: [], excluded_chunk_ids: [] })
   })
 
   it('clicking 新对话 button clears messages', async () => {
@@ -275,10 +277,12 @@ describe('Sidebar interactions', () => {
     })
 
     const loaded = loadMessages.mock.calls[0][0] as any[]
+    const pinState = loadMessages.mock.calls[0][2]
     // Each message should carry conversation.id as convId
     loaded.forEach((m: any) => {
       expect(m.convId).toBe('conv-1')
     })
+    expect(pinState).toEqual({ thread_id: 'thread-1', pinned_chunk_ids: [], excluded_chunk_ids: [] })
     // Assistant messages should have assistantMsgId from the db row id
     const assistantMsgs = loaded.filter((m: any) => m.role === 'assistant')
     assistantMsgs.forEach((m: any) => {

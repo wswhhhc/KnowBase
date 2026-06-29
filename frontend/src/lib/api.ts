@@ -29,6 +29,12 @@ export interface Message extends ApiMessage {
   role: 'user' | 'assistant'
 }
 
+export interface PinStateResponse {
+  thread_id: string
+  pinned_chunk_ids: string[]
+  excluded_chunk_ids: string[]
+}
+
 export interface KBChunkResponse {
   items: KBChunk[]
   total: number
@@ -93,6 +99,9 @@ export const renameConversation = (id: string, title: string) =>
 
 export const getMessages = (convId: string) =>
   req<Message[]>(`/conversations/${convId}/messages`)
+
+export const getConversationPinState = (convId: string) =>
+  req<PinStateResponse>(`/conversations/${convId}/pin-state`)
 
 export const updateFeedback = (convId: string, msgId: number, feedback: string, category?: string, detail?: string) =>
   req(`/conversations/${convId}/messages/${msgId}/feedback`, {

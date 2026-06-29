@@ -218,14 +218,14 @@ describe('BrowserPage interactions', () => {
         onError: expect.any(Function),
       }),
     )
-    expect(screen.getByText('文档已导入！现在去提问 →')).toBeInTheDocument()
+    expect(screen.getByText('文档已导入！现在可以去提问了')).toBeInTheDocument()
 
     await act(async () => {
       vi.advanceTimersByTime(8000)
       await Promise.resolve()
     })
 
-    expect(screen.queryByText('文档已导入！现在去提问 →')).not.toBeInTheDocument()
+    expect(screen.queryByText('文档已导入！现在可以去提问了')).not.toBeInTheDocument()
   })
 
   it('opens the file picker automatically when kb_trigger_upload is present on load', async () => {
@@ -252,7 +252,7 @@ describe('BrowserPage interactions', () => {
     fireEvent.change(input, { target: { files: [file] } })
 
     await waitFor(() => {
-      expect(screen.getByText(/引用来源“browser.txt”已存在/)).toBeInTheDocument()
+      expect(screen.getByText(/引用来源".*browser\.txt.*已存在/)).toBeInTheDocument()
     })
     expect(api.uploadDocumentStream).not.toHaveBeenCalled()
 
@@ -290,7 +290,7 @@ describe('BrowserPage interactions', () => {
         }),
       )
     })
-    expect(screen.getByText('文档已导入！现在去提问 →')).toBeInTheDocument()
+    expect(screen.getByText('文档已导入！现在可以去提问了')).toBeInTheDocument()
   })
 
   it('passes the selected strategy to debug search', async () => {
