@@ -36,9 +36,11 @@
 | 对话体验 | SSE 流式输出，支持引用编号 `[1]`、重新回答、更简洁、继续追问 |
 | 知识导入 | 支持 `.txt` / `.md` / `.pdf` / `.docx` / `.html` 上传，以及 URL 一键导入 |
 | 工作区系统 | 多工作区隔离管理，每个工作区拥有独立对话和书签 |
-| 知识浏览 | 杂志式藏书阁布局，支持分页、懒加载、热点高亮 |
+| 知识浏览 | 杂志式藏书阁布局，支持分页懒加载、热点高亮、网格/切片双视图 |
 | 可解释性 | 交互式来源标签、证据可信度解释、点击引用直达原文 |
 | 调试能力 | 内置 RAG Debug 面板，可查看召回、精排、质量检查全链路 |
+| 检索策略 | 四种策略快速/标准/严谨/深度，偏好持久化到 localStorage |
+| 移动端 | 响应式布局、底部导航栏、浮动上传按钮 |
 
 ### RAG 能力
 
@@ -51,12 +53,13 @@
 
 ### 前端体验
 
-- 杂志编辑风 React UI，已移除旧版 Streamlit 界面
+- 杂志编辑风 React UI
 - 移动端适配：抽屉侧栏 + 底部导航 + 响应式头部
 - 来源固定与排除，状态跨消息保持
-- 上传后自动生成建议问题，帮助用户快速起问
+- 上传后自动生成建议问题 + 引导 banner
 - 首次使用引导、无答案兜底、骨架屏复用、`prefers-reduced-motion` 支持
 - 浅色 / 深色主题切换
+- 组件级 Error Boundary，单视图崩溃不影响整体
 
 ## 架构速览
 
@@ -65,7 +68,7 @@
 | 前端 | React 19 + TypeScript + Vite + Tailwind，负责对话、知识浏览、调试和指标界面 |
 | 后端 | FastAPI 提供 REST API 与 SSE 流式响应 |
 | 工作流 | LangGraph 编排查询改写、检索、精排、生成、质量检查 |
-| 存储 | Chroma 本地向量库 + JSONL 查询日志 |
+| 存储 | Chroma 本地向量库 + SQLite（对话/书签/工作区/pin 状态）+ JSONL 查询日志 |
 | 检索 | 向量召回、BM25、RRF 融合、条件式重排 |
 | 外部能力 | 硅基流动 API 提供 LLM 与 Embedding；Tavily 可选兜底联网搜索 |
 
@@ -156,38 +159,10 @@ flowchart LR
 
 项目支持四种检索策略：
 
-- `fast`
-- `balanced`
-- `high_quality`
-- `deep`
-
-## 核心能力清单
-
-<details>
-<summary><strong>展开查看完整能力列表</strong></summary>
-
-- 预设知识库问答和动态上传
-- URL 一键导入网页内容
-- API Key 鉴权，前端自动附带 Authorization 头
-- 引用编号系统与交互式引用标签
-- RAG Debug 面板
-- 联网搜索兜底（可选 Tavily）
-- 热点追踪
-- 消息反馈（ThumbsUp / ThumbsDown）
-- 来源固定与排除
-- 重答与简洁模式
-- 引用直达原文
-- 上传后建议问题
-- 首次使用引导
-- 无答案兜底
-- 证据可信度解释
-- 自动生成对话标题
-- 指标面板
-- SSE 节流
-- 骨架屏复用
-- 无障碍动画控制
-
-</details>
+- `fast` — 无重排，最快响应，适合简单事实性问题
+- `balanced` — 智能判断是否需要重排，适合大多数情况
+- `high_quality` — 强制重排 + 质量检查，质量优先
+- `deep` — 扩检索 + 综合回答，需要全面覆盖时使用
 
 ## 项目结构
 
@@ -196,11 +171,17 @@ KnowBase/
 ├── backend/                    # FastAPI 后端
 │   ├── config/
 │   │   └── settings.py         # pydantic-settings 配置
+│   ├── migrations/             # Alembic 数据库迁移
+│   │   ├── versions/
+│   │   │   └── 001_initial_schema.py
+│   │   ├── env.py
+│   │   └── script.py.mako
 │   ├── src/
 │   │   ├── api/
 │   │   │   ├── main.py         # 应用入口 + CORS + lifespan
 │   │   │   ├── deps.py         # 依赖注入
 │   │   │   ├── models.py       # Pydantic 模型
+│   │   │   ├── chat_stream_service.py  # SSE 流编排 (ChatStreamService)
 │   │   │   └── routes/
 │   │   │       ├── chat.py
 │   │   │       ├── conversations.py
@@ -209,42 +190,39 @@ KnowBase/
 │   │   │       ├── metrics.py
 │   │   │       ├── workspaces.py
 │   │   │       └── bookmarks.py
-│   │   ├── graph.py
-│   │   ├── graph_nodes.py
-│   │   ├── graph_routing.py
-│   │   ├── graph_utils.py
-│   │   ├── graph_state.py
-│   │   ├── knowledge_base.py   # 门面类，内拆 IngestionService / Retriever / HotspotTracker
-│   │   ├── kb_models.py
-│   │   ├── conversations.py
-│   │   ├── loaders.py
-│   │   ├── web_search.py
-│   │   ├── metrics.py
-│   │   ├── chat_utils.py
-│   │   └── utils.py
-│   └── tests/                  # 28 个测试文件，400 个用例
-├── frontend/                   # React + Vite + Tailwind 前端
+│   │   ├── graph.py            # LangGraph 图定义
+│   │   ├── graph_nodes.py      # 工作流节点函数
+│   │   ├── graph_routing.py    # 条件路由函数
+│   │   ├── graph_utils.py      # 工作流工具函数
+│   │   ├── graph_state.py      # GraphState + Pydantic 决策模型
+│   │   ├── knowledge_base.py   # 门面类（IngestionService / Retriever / HotspotTracker）
+│   │   ├── kb_models.py        # 检索结果数据类
+│   │   ├── conversations.py    # 对话/工作区/书签/pin 状态 CRUD（SQLite）
+│   │   ├── loaders.py          # 多格式文档加载器
+│   │   ├── web_search.py       # Tavily 联网搜索
+│   │   ├── metrics.py          # 查询 JSONL 日志
+│   │   ├── chat_utils.py       # 节点标签/指标记录/标题生成
+│   │   └── utils.py            # 文件上传校验
+│   ├── alembic.ini
+│   └── tests/                  # 30+ 文件，440+ 用例
+├── frontend/                   # React 19 + Vite + Tailwind
 │   └── src/
 │       ├── components/
-│       │   ├── sidebar/
-│       │   ├── ui/
-│       │   ├── ChatArea.tsx
-│       │   ├── Sidebar.tsx
-│       │   ├── BrowserPage.tsx
+│       │   ├── browser/        # BrowserPage 拆分：GridView/SliceView/SearchToolbar 等 7 个组件
+│       │   ├── sidebar/        # ConversationList / DocumentPanel / KBSummary / DashboardSummary
+│       │   ├── ui/             # shadcn/ui（含 SkeletonCard/SkeletonGrid）
+│       │   ├── ChatArea.tsx    # 对话界面（搜索策略选择器 + 持久化）
+│       │   ├── Sidebar.tsx     # 侧栏导航（视图/工作区/主题切换）
+│       │   ├── BrowserPage.tsx # 知识库浏览（薄编排层）
 │       │   ├── DashboardPage.tsx
 │       │   ├── EmptyState.tsx
 │       │   ├── MessageBubble.tsx
 │       │   └── DebugPanel.tsx
-│       ├── hooks/
-│       │   ├── useChat.ts
-│       │   ├── useData.ts
-│       │   └── useTheme.ts
-│       └── lib/
-│           ├── api.ts
-│           ├── api-types.ts
-│           └── utils.ts
+│       ├── hooks/              # useChat / useData / useTheme
+│       └── lib/                # api.ts / api-types.ts / api-types.generated.ts
+│   ├── data/                   # chroma_db / checkpoints.db / conversations.db / logs
 ├── docs/
-│   └── tests/
+│   └── tests/                  # 12 份测试文档
 └── scripts/                    # 一键启动脚本
 ```
 
@@ -257,9 +235,10 @@ KnowBase/
 | `POST /api/chat/stream` | SSE 流式聊天（`node` / `token` / `sources` / `debug` / `done`） |
 | `GET/POST/DELETE /api/conversations` | 对话 CRUD |
 | `PATCH /api/conversations/:id` | 对话重命名 |
-| `GET /api/conversations/:id/messages` | 获取消息列表 |
+| `GET /api/conversations/:id/messages` | 获取消息列表（含 pin 状态注入） |
+| `GET /api/conversations/:id/pin-state` | 获取对话的 pin/exclude 状态 |
 | `POST /api/conversations/:id/messages/:msg_id/feedback` | 消息反馈 |
-| `GET /api/conversations/:id/export` | Markdown 导出 |
+| `GET /api/conversations/:id/export` | Markdown / JSON 导出 |
 
 ### 文档与知识库
 
@@ -271,6 +250,7 @@ KnowBase/
 | `POST /api/documents/clear` | 清空知识库 |
 | `GET /api/knowledge-base/stats` | 统计信息 |
 | `GET /api/knowledge-base/chunks` | 分页浏览知识片段 |
+| `GET /api/knowledge-base/chunks/{chunk_id}` | 单 chunk 直查 |
 | `GET /api/knowledge-base/sources` | 来源列表 |
 | `GET /api/knowledge-base/config` | 知识库配置 |
 | `GET /api/knowledge-base/hotspots` | 热点追踪 |
@@ -289,7 +269,7 @@ KnowBase/
 
 ### 后端测试
 
-Python `unittest`，共 **28 个测试文件 / 400 个用例**。
+Python `unittest`，共 **30+ 测试文件 / 441 个用例**。
 
 ```bash
 cd backend
@@ -308,7 +288,7 @@ uv run python -m unittest tests.test_routing -v
 
 ### 前端测试
 
-Vitest，共 **18 个测试文件 / 160 个用例**。
+Vitest，共 **22 测试文件 / 195 个用例**。
 
 ```bash
 cd frontend
@@ -337,13 +317,6 @@ npm run test:coverage
 | [11-e2e-test.md](docs/tests/11-e2e-test.md) | Playwright E2E 测试 |
 | [12-ci-test.md](docs/tests/12-ci-test.md) | CI 配置 |
 
-### 离线评估
-
-```bash
-cd backend
-uv run python -m src.evaluate
-```
-
 ## 技术栈
 
 | 层 | 技术 |
@@ -360,16 +333,15 @@ uv run python -m src.evaluate
 | 向量库 | Chroma（本地） |
 | 搜索引擎 | BM25（`jieba` + `rank-bm25`） |
 | 检索融合 | RRF 倒数排序融合 |
+| 数据库迁移 | Alembic |
 | 追踪 | LangSmith（可选） |
 
-## 开发说明
+## 关键设计决策
 
-- 前端目录见 [frontend/](frontend/)
-- 后端目录见 [backend/](backend/)
-- 测试文档见 [docs/tests/](docs/tests/)
-- 一键脚本见 [scripts/](scripts/)
-- 需求基线见 [docs/requirements.md](docs/requirements.md)
-- 协作约定见 [CONTRIBUTING.md](CONTRIBUTING.md)
+- **ChatStreamService** — SSE 流式编排从路由层提取为独立 Service 类，`event_generator` 闭包拆分为 `_stream_updates`、`_process_updates`、`_process_messages`、`_emit_completion`、`_persist` 等可测试方法
+- **Pin/Exclude 独立表** — 来源固定/排除状态从 `debug_info` JSON blob 迁至独立 `pinned_sources` 表，前端通过 `/pin-state` 端点获取
+- **BrowserPage 拆分** — 913 行的单体组件拆为 7 个子组件 + 1 个编排壳
+- **Alembic 迁移** — 替代原有 `try/except ALTER TABLE`，提供版本化 schema 管理
 
 ---
 
