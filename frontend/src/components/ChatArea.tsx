@@ -84,7 +84,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
     const nextIndex = (index + STRATEGIES.length) % STRATEGIES.length
     const nextStrategy = STRATEGIES[nextIndex]
     setSearchStrategy(nextStrategy.key)
-    requestAnimationFrame(() => strategyRefs.current[nextIndex]?.focus())
+    strategyRefs.current[nextIndex]?.focus()
   }
 
   const handleStrategyKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
