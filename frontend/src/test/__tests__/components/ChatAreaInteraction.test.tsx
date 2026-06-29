@@ -80,6 +80,7 @@ function renderChatArea(chatOverrides?: any, propsOverrides?: any) {
 describe('ChatArea interactions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
   })
 
   it('renders input area with placeholder', () => {
@@ -87,17 +88,39 @@ describe('ChatArea interactions', () => {
     expect(screen.getByPlaceholderText('输入你的问题…')).toBeInTheDocument()
   })
 
-  it('renders "高级选项" toggle and expands search strategy buttons', async () => {
+  it('renders "高级选项" toggle and shows search strategy buttons by default', async () => {
     renderChatArea()
     expect(screen.getByText('高级选项')).toBeInTheDocument()
-    // Strategies hidden by default
-    expect(screen.queryByText('快速')).not.toBeInTheDocument()
-    // Click to expand
-    await userEvent.click(screen.getByText('高级选项'))
+    // Strategies are now visible by default
     expect(screen.getByText('快速')).toBeInTheDocument()
     expect(screen.getByText('标准')).toBeInTheDocument()
     expect(screen.getByText('严谨')).toBeInTheDocument()
     expect(screen.getByText('深度')).toBeInTheDocument()
+    // Clicking '高级选项' toggles the chevron
+    await userEvent.click(screen.getByText('高级选项'))
+  })
+
+  it('hydrates persisted search preferences from localStorage', async () => {
+    localStorage.setItem('kb_web_search', 'true')
+    localStorage.setItem('kb_search_strategy', 'deep')
+
+    renderChatArea()
+    const input = screen.getByPlaceholderText('输入你的问题…')
+
+    await userEvent.type(input, '读取偏好')
+    await userEvent.click(screen.getByText('发送'))
+
+    expect(mockSendMessage).toHaveBeenCalledWith('读取偏好', true, 'deep')
+  })
+
+  it('persists updated search preferences to localStorage', async () => {
+    renderChatArea()
+
+    await userEvent.click(screen.getByRole('switch'))
+    await userEvent.click(screen.getByText('深度'))
+
+    expect(localStorage.getItem('kb_web_search')).toBe('true')
+    expect(localStorage.getItem('kb_search_strategy')).toBe('deep')
   })
 
   it('sends message when clicking send button', async () => {

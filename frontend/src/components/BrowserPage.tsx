@@ -7,6 +7,7 @@ import type { KBStats, KBChunk, KBConfig, DebugSearchResponse, DebugSearchHit } 
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ViewType } from '@/App'
 import { Separator, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
+const UPLOAD_TRIGGER_EVENT = 'kb-trigger-upload'
 
 interface BrowserPageProps {
   onOpenSidebar: () => void
@@ -61,6 +62,11 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   const [hasMore, setHasMore] = useState(true)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
+  const consumeUploadTrigger = () => {
+    if (sessionStorage.getItem('kb_trigger_upload') !== 'true') return
+    sessionStorage.removeItem('kb_trigger_upload')
+    requestAnimationFrame(() => fileInputRef.current?.click())
+  }
 
   // Replace chunks setter with accumulation
   const setChunksAccumulate = (items: KBChunk[], append: boolean) => {
@@ -110,11 +116,20 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     ])
       .then(([, s, srcs, cfg]) => { setStats(s); setSources(srcs); setKbConfig(cfg) })
       .catch((e) => { setError(String(e)); toast.error('加载失败', { description: String(e) }) })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        consumeUploadTrigger()
+        setLoading(false)
+      })
   }, [])
 
   useEffect(() => () => {
     if (guideTimerRef.current) clearTimeout(guideTimerRef.current)
+  }, [])
+
+  useEffect(() => {
+    const handleUploadTrigger = () => consumeUploadTrigger()
+    window.addEventListener(UPLOAD_TRIGGER_EVENT, handleUploadTrigger)
+    return () => window.removeEventListener(UPLOAD_TRIGGER_EVENT, handleUploadTrigger)
   }, [])
 
   // Resolve a chunk directly so citation lookup doesn't need to page through the list.

@@ -29,7 +29,7 @@ export default function DebugPanel({ debugData }: DebugPanelProps) {
             exit={{ opacity: 0, height: 0 }}
             className="mt-1.5 overflow-hidden"
           >
-            <div className="rounded-lg border border-border/60 bg-surface/40 px-3 py-2.5 font-mono text-xs leading-relaxed">
+            <div className="rounded-lg border border-border/60 bg-surface/40 px-3 py-2.5 text-xs leading-relaxed">
               {/* Node timeline */}
               <div className="space-y-1">
                 {debugData.nodes.map((node, i) => (
@@ -38,7 +38,7 @@ export default function DebugPanel({ debugData }: DebugPanelProps) {
                       node.elapsed_ms > 0 ? 'bg-emerald-500/60' : 'bg-muted-foreground/20'
                     }`} />
                     <span className="text-foreground/70 min-w-[64px]">{node.label}</span>
-                    <span className="text-muted-foreground/40 w-12 text-right tabular-nums">
+                    <span className="text-muted-foreground/40 w-12 text-right tabular-nums font-mono">
                       {node.elapsed_ms > 0 ? `${node.elapsed_ms}ms` : '-'}
                     </span>
                     <span className="text-muted-foreground/60 truncate">{node.summary}</span>
@@ -96,9 +96,9 @@ export default function DebugPanel({ debugData }: DebugPanelProps) {
                         <div className="flex items-center gap-2 text-2xs text-muted-foreground/60">
                           <span className="text-foreground/70">[{source.index}] {source.source}</span>
                           {source.chunk_index != null && <span>#{source.chunk_index}</span>}
-                          {typeof source.score === 'number' && <span>{source.score.toFixed(3)}</span>}
+                          {typeof source.score === 'number' && <span className="font-mono tabular-nums">{source.score.toFixed(3)}</span>}
                         </div>
-                        <div className="mt-1 text-2xs text-foreground/75 leading-relaxed line-clamp-3">
+                        <div className="mt-1 text-2xs text-foreground/75 leading-relaxed max-h-20 overflow-y-auto">
                           {source.content}
                         </div>
                       </div>

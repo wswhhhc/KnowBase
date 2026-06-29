@@ -8,9 +8,10 @@ import BrowserPage from '@/components/BrowserPage'
 import DashboardPage from '@/components/DashboardPage'
 import SettingsPage from '@/components/SettingsPage'
 import ErrorBoundary from '@/components/ErrorBoundary'
-import { Sparkles, BookOpen, BarChart3, Settings } from 'lucide-react'
+import { Sparkles, BookOpen, BarChart3, Settings, Upload } from 'lucide-react'
 
 export type ViewType = 'chat' | 'browser' | 'dashboard' | 'settings'
+const UPLOAD_TRIGGER_EVENT = 'kb-trigger-upload'
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
@@ -148,6 +149,20 @@ function App() {
 
         {/* Mobile bottom tab bar */}
         {isMobile && (
+          <>
+          {/* Upload FAB */}
+          <button
+            onClick={() => {
+              sessionStorage.setItem('kb_trigger_upload', 'true')
+              setActiveView('browser')
+              window.dispatchEvent(new Event(UPLOAD_TRIGGER_EVENT))
+              if (isMobile) setSidebarOpen(false)
+            }}
+            className="fixed bottom-20 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:bg-primary/90 transition-colors"
+            title="上传文档"
+          >
+            <Upload className="h-5 w-5" />
+          </button>
           <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-surface/90 backdrop-blur-lg safe-area-bottom">
             <div className="flex items-center justify-around h-14">
               {([
@@ -171,6 +186,7 @@ function App() {
               ))}
             </div>
           </nav>
+          </>
         )}
       </main>
 
