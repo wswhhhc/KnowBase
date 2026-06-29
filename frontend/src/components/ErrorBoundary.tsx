@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from 'react'
 
-interface Props { children: ReactNode }
+interface Props { children: ReactNode; fallback?: ReactNode }
 interface State { hasError: boolean; error?: Error }
 
 export default class ErrorBoundary extends Component<Props, State> {
@@ -16,7 +16,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
-      return (
+      return this.props.fallback != null ? this.props.fallback : (
         <div className="flex items-center justify-center h-screen bg-background">
           <div className="text-center p-8">
             <h1 className="text-2xl font-heading text-foreground mb-2">出现了意外错误</h1>

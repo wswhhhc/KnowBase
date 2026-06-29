@@ -119,6 +119,17 @@ async def chunks(
     }
 
 
+@router.get("/chunks/{chunk_id}")
+async def chunk_by_id(
+    chunk_id: str,
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+) -> KBChunk:
+    chunk = kb.get_chunk_by_id(chunk_id)
+    if chunk is None:
+        raise HTTPException(404, "Chunk not found")
+    return chunk
+
+
 @router.get("/sources")
 async def list_source_names(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[str]:
     return sorted(s for s, _c in kb.source_counts())

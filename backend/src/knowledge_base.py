@@ -913,6 +913,21 @@ class KnowledgeBase:
         raw = self.hotspots.get_hotspots(top_n, self.doc_by_id)
         return [HotspotEntry(**entry) for entry in raw]
 
+    def get_chunk_by_id(self, chunk_id: str) -> KBChunk | None:
+        """Look up a single chunk by its chunk_id from the in-memory index."""
+        doc = self.doc_by_id.get(chunk_id)
+        if doc is None:
+            return None
+        return KBChunk(
+            source=doc.metadata.get("source", ""),
+            chunk_index=doc.metadata.get("chunk_index", 0),
+            chunk_id=chunk_id,
+            page=doc.metadata.get("page"),
+            content=doc.page_content,
+            original_content=doc.metadata.get("original_content"),
+            section=doc.metadata.get("section"),
+        )
+
     @property
     def document_count(self) -> int:
         return self.retriever.document_count

@@ -156,6 +156,14 @@ describe('Knowledge Base API', () => {
     vi.unstubAllGlobals()
   })
 
+  it('getKBChunkById encodes the chunk id in the path', async () => {
+    const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}), text: () => Promise.resolve('{}'), headers: new Headers() })
+    vi.stubGlobal('fetch', fn)
+    await api.getKBChunkById('doc.txt:1:hash value')
+    expect(fn).toHaveBeenCalledWith('/api/knowledge-base/chunks/doc.txt%3A1%3Ahash%20value', expect.any(Object))
+    vi.unstubAllGlobals()
+  })
+
   it('getKBSourceNames returns list', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(['a.txt']), text: () => Promise.resolve('[]'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)

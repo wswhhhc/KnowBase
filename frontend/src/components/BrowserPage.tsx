@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useEffect, useState, useRef } from 'react'
 import { Button, Input, ScrollArea, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, SkeletonGrid } from '@/components/ui'
-import { BookOpen, PanelRightOpen, ArrowLeft, Search, FileText, Hash, ExternalLink, Layers, Flame, List, LayoutGrid, Upload, Globe, RefreshCw, Bookmark, BookmarkCheck, AlertTriangle, Bug, Loader2 } from 'lucide-react'
+import { BookOpen, PanelRightOpen, ArrowLeft, Search, FileText, Hash, ExternalLink, Layers, Flame, List, LayoutGrid, Upload, Globe, RefreshCw, Bookmark, BookmarkCheck, AlertTriangle, Bug, Loader2, Sparkles } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { KBStats, KBChunk, KBConfig, DebugSearchResponse, DebugSearchHit } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -50,6 +50,8 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
   const [debugSearching, setDebugSearching] = useState(false)
   const [debugStrategy, setDebugStrategy] = useState<'fast' | 'balanced' | 'high_quality' | 'deep'>('balanced')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const guideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [showPostUploadGuide, setShowPostUploadGuide] = useState(false)
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [bookmarkedChunks, setBookmarkedChunks] = useState<Set<string>>(new Set())
@@ -68,6 +70,12 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
       allChunksRef.current = items
     }
     setChunks([...allChunksRef.current])
+  }
+
+  const showUploadGuide = () => {
+    setShowPostUploadGuide(true)
+    if (guideTimerRef.current) clearTimeout(guideTimerRef.current)
+    guideTimerRef.current = setTimeout(() => setShowPostUploadGuide(false), 8000)
   }
 
   const handleChunkBookmark = async (chunk: KBChunk) => {
@@ -105,7 +113,11 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
       .finally(() => setLoading(false))
   }, [])
 
-  // Load additional chunk pages when a citation points beyond the first page.
+  useEffect(() => () => {
+    if (guideTimerRef.current) clearTimeout(guideTimerRef.current)
+  }, [])
+
+  // Resolve a chunk directly so citation lookup doesn't need to page through the list.
   useEffect(() => {
     if (!highlightChunkId) return
 
@@ -118,45 +130,14 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     let cancelled = false
 
     const revealHighlightedChunk = async () => {
-      setLoading(true)
-      if (selectedSource) {
-        skipNextSourceSearchRef.current = true
-        setSelectedSource('')
-      }
-      setSearchQuery('')
-
       try {
-        const loaded: KBChunk[] = []
-        let currentPage = 0
-
-        while (!cancelled) {
-          const res = await api.getKBChunks('', '', currentPage * pageSize, pageSize)
-          loaded.push(...res.items)
-
-          const found = loaded.find((chunk) => chunk.chunk_id === highlightChunkId)
-          if (found) {
-            allChunksRef.current = loaded
-            setChunks([...loaded])
-            setTotal(res.total)
-            setPage(currentPage)
-            setHasMore((currentPage + 1) * pageSize < res.total)
-            setHighlightId(highlightChunkId)
-            return
-          }
-
-          if ((currentPage + 1) * pageSize >= res.total || res.items.length === 0) {
-            break
-          }
-
-          currentPage += 1
-        }
-
+        const chunk = await api.getKBChunkById(highlightChunkId)
+        if (cancelled) return
+        setSelectedChunk(chunk)
         onHighlightConsumed?.()
       } catch (e) {
         toast.error('定位引用失败', { description: String(e) })
         onHighlightConsumed?.()
-      } finally {
-        if (!cancelled) setLoading(false)
       }
     }
 
@@ -165,7 +146,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     return () => {
       cancelled = true
     }
-  }, [highlightChunkId, onHighlightConsumed, selectedSource])
+  }, [highlightChunkId, onHighlightConsumed])
 
   useEffect(() => {
     if (!highlightId) return
@@ -327,6 +308,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
           return
         }
         await refreshData()
+        showUploadGuide()
         const message = versionMode === 'replace'
           ? '文档已替换为新版本'
           : versionMode === 'append'
@@ -396,6 +378,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
         }
         setUrlInput('')
         await refreshData()
+        showUploadGuide()
         const message = versionMode === 'replace'
           ? '网页已替换为新版本'
           : versionMode === 'append'
@@ -684,7 +667,22 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
               <p className="text-2xs text-muted-foreground/50 mb-4 max-w-xs">{error}</p>
               <Button variant="outline" size="sm" onClick={() => { setError(null); setLoading(true); window.location.reload() }}>重试</Button>
             </div>
-          ) : loading ? (
+          ) : (<>
+            {showPostUploadGuide && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="mb-4 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3"
+              >
+                <p className="text-xs text-foreground/80">文档已导入！现在去提问 →</p>
+                <Button size="sm" onClick={() => onNavigate('chat')} className="gap-1">
+                  <Sparkles className="h-3 w-3" />去提问
+                </Button>
+              </motion.div>
+            )}
+
+          {loading ? (
             <SkeletonGrid count={6} />
           ) : displayChunks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -845,6 +843,8 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
 
           {/* Infinite scroll sentinel */}
           {hasMore && !loading && <div ref={sentinelRef} className="h-4" />}
+        </>
+        )} {/* end of error/fragment ternary */}
         </div>
       </ScrollArea>
 
