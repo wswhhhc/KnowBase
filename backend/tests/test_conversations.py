@@ -18,7 +18,15 @@ class ConversationEdgeCaseTests(unittest.TestCase):
 
     def tearDown(self):
         conversations._DB_PATH = self.original_path
-        self.temp_dir.cleanup()
+        try:
+            self.temp_dir.cleanup()
+        except PermissionError:
+            import time
+            time.sleep(0.1)
+            try:
+                self.temp_dir.cleanup()
+            except PermissionError:
+                pass
 
     # ── Workspace tests ──
 

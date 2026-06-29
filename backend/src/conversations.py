@@ -22,12 +22,25 @@ def _get_conn() -> sqlite3.Connection:
 
 
 def _run_migrations():
-    """Run Alembic migrations to bring the database schema up to date."""
+    """Run Alembic migrations to bring the database schema up to date.
+
+    Skip if alembic.ini is missing (e.g. running from a temp test env).
+    """
     ini_path = Path(__file__).resolve().parents[1] / "alembic.ini"
     if not ini_path.exists():
-        return  # outside backend dir (e.g. tests)
-    alembic_cfg = Config(str(ini_path))
-    command.upgrade(alembic_cfg, "head")
+        return
+    # Only migrate the primary (non-test) database
+    current_db = str(_DB_PATH.resolve())
+    expected_dir = str(Path(__file__).resolve().parents[1] / "data")
+    if not current_db.startswith(expected_dir):
+        return
+    try:
+        alembic_cfg = Config(str(ini_path))
+        alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{_DB_PATH}")
+        command.upgrade(alembic_cfg, "head")
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Alembic migration failed: %s", exc)
 
 
 def init_db():
@@ -51,6 +64,7 @@ def init_db():
             note TEXT DEFAULT '',
             content TEXT DEFAULT '',
             source TEXT DEFAULT '',
+            tags TEXT DEFAULT '',
             created_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS conversations (
@@ -70,6 +84,8 @@ def init_db():
             quality_reason TEXT DEFAULT '',
             debug_info TEXT DEFAULT '{}',
             feedback TEXT DEFAULT NULL,
+            feedback_category TEXT DEFAULT NULL,
+            feedback_detail TEXT DEFAULT NULL,
             created_at TEXT NOT NULL,
             FOREIGN KEY (conversation_id) REFERENCES conversations(id)
         );
