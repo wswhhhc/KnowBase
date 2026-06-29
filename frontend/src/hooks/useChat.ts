@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { chatStream, type ChatStreamCallbacks, type Source, type DebugInfo } from '@/lib/api'
+import { chatStream, type ChatStreamCallbacks, type Source, type DebugInfo, type PinStateResponse } from '@/lib/api'
 
 export interface ChatMessage {
   id: string
@@ -215,17 +215,20 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
     threadIdRef.current = null
   }, [_finalizeStream])
 
-  const loadMessages = useCallback((msgs: ChatMessage[], threadId?: string) => {
+  const loadMessages = useCallback((msgs: ChatMessage[], threadId?: string, pinState?: PinStateResponse) => {
     setMessages(msgs)
     threadIdRef.current = threadId || null
-    // Populate pinnedSources for this conversation from loaded messages' debug_info
+    // Prefer the dedicated pin-state API; fall back to legacy debug_info for older data.
     if (threadId) {
+      const hasExplicitPinState = pinState !== undefined
+      const explicitPinnedIds = new Set<string>(pinState?.pinned_chunk_ids || [])
+      const explicitExcludedIds = new Set<string>(pinState?.excluded_chunk_ids || [])
       const loaded: PinnedSource[] = []
       const seen = new Set<string>()
       for (const m of msgs) {
         const dbg = m.debugData as Record<string, any> | undefined
-        const pinnedIds = new Set<string>(dbg?.pinned || [])
-        const excludedIds = new Set<string>(dbg?.excluded || [])
+        const legacyPinnedIds = new Set<string>(dbg?.pinned || [])
+        const legacyExcludedIds = new Set<string>(dbg?.excluded || [])
         for (const s of m.sources || []) {
           if (s.chunk_id && !seen.has(s.chunk_id)) {
             seen.add(s.chunk_id)
@@ -233,8 +236,8 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
               chunk_id: s.chunk_id,
               source: s.source || '',
               content: s.content || '',
-              pinned: pinnedIds.has(s.chunk_id),
-              excluded: excludedIds.has(s.chunk_id),
+              pinned: hasExplicitPinState ? explicitPinnedIds.has(s.chunk_id) : legacyPinnedIds.has(s.chunk_id),
+              excluded: hasExplicitPinState ? explicitExcludedIds.has(s.chunk_id) : legacyExcludedIds.has(s.chunk_id),
               score: s.score ?? 0,
               index: s.index ?? 0,
             })

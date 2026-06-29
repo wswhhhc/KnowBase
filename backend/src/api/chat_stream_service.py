@@ -12,7 +12,7 @@ from langchain_core.messages import AIMessageChunk
 
 from src.api.models import ChatRequest, ChatSource, DebugInfo, NodeDebug
 from src.chat_utils import NODE_LABELS, record_query_metrics, generate_title
-from src.conversations import create_conversation, add_message, get_conversation_by_thread, save_pin_state
+from src.conversations import create_conversation, add_message, get_conversation_by_thread, replace_pin_state
 from src.graph import run_query
 from src.knowledge_base import KnowledgeBase
 
@@ -331,13 +331,11 @@ class ChatStreamService:
             debug_dict["evidence_summary"] = self.final_evidence_summary
             debug_dict["outcome_category"] = self.final_outcome_category
 
-            # Persist pin/exclude to dedicated table instead of debug_info blob
-            if self.body.pinned_chunk_ids:
-                for cid in self.body.pinned_chunk_ids:
-                    save_pin_state(self.thread_id, cid, "pin")
-            if self.body.excluded_chunk_ids:
-                for cid in self.body.excluded_chunk_ids:
-                    save_pin_state(self.thread_id, cid, "exclude")
+            replace_pin_state(
+                self.thread_id,
+                pinned_chunk_ids=self.body.pinned_chunk_ids,
+                excluded_chunk_ids=self.body.excluded_chunk_ids,
+            )
 
             add_message(conv_id, "user", self.body.question)
             assistant_msg_id = add_message(

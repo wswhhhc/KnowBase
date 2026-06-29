@@ -57,6 +57,14 @@ describe('Conversations API', () => {
     vi.unstubAllGlobals()
   })
 
+  it('getConversationPinState calls correct URL', async () => {
+    const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ thread_id: 't-1', pinned_chunk_ids: [], excluded_chunk_ids: [] }), text: () => Promise.resolve('{}'), headers: new Headers() })
+    vi.stubGlobal('fetch', fn)
+    await api.getConversationPinState('conv-1')
+    expect(fn).toHaveBeenCalledWith('/api/conversations/conv-1/pin-state', expect.any(Object))
+    vi.unstubAllGlobals()
+  })
+
   it('updateFeedback sends POST', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}), text: () => Promise.resolve(''), headers: new Headers() })
     vi.stubGlobal('fetch', fn)

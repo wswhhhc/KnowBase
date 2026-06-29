@@ -1,17 +1,16 @@
 """对话历史管理 — SQLite 持久化存储。"""
 
 import json
+import logging
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from alembic.config import Config
-from alembic import command
-
 from config.settings import ROOT_DIR
 
 _DB_PATH = ROOT_DIR / "data" / "conversations.db"
+logger = logging.getLogger(__name__)
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -35,12 +34,17 @@ def _run_migrations():
     if not current_db.startswith(expected_dir):
         return
     try:
+        from alembic import command
+        from alembic.config import Config
+    except ModuleNotFoundError:
+        logger.warning("Alembic not installed; skipping migrations for %s", _DB_PATH)
+        return
+    try:
         alembic_cfg = Config(str(ini_path))
         alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{_DB_PATH}")
         command.upgrade(alembic_cfg, "head")
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("Alembic migration failed: %s", exc)
+        logger.warning("Alembic migration failed: %s", exc)
 
 
 def init_db():
@@ -188,10 +192,23 @@ def update_title(conv_id: str, title: str) -> bool:
 
 def delete_conversations(conv_ids: list[str]):
     """批量删除多个对话及其消息。"""
+    if not conv_ids:
+        return
     conn = _get_conn()
     placeholders = ",".join("?" for _ in conv_ids)
+    thread_rows = conn.execute(
+        f"SELECT thread_id FROM conversations WHERE id IN ({placeholders})",
+        conv_ids,
+    ).fetchall()
+    thread_ids = [row["thread_id"] for row in thread_rows]
     conn.execute(f"DELETE FROM messages WHERE conversation_id IN ({placeholders})", conv_ids)
     conn.execute(f"DELETE FROM conversations WHERE id IN ({placeholders})", conv_ids)
+    if thread_ids:
+        thread_placeholders = ",".join("?" for _ in thread_ids)
+        conn.execute(
+            f"DELETE FROM pinned_sources WHERE thread_id IN ({thread_placeholders})",
+            thread_ids,
+        )
     conn.commit()
     conn.close()
 
@@ -199,8 +216,11 @@ def delete_conversations(conv_ids: list[str]):
 def delete_conversation(conv_id: str) -> bool:
     """Delete a conversation and its messages."""
     conn = _get_conn()
+    conv = conn.execute("SELECT thread_id FROM conversations WHERE id = ?", (conv_id,)).fetchone()
     conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conv_id,))
     cursor = conn.execute("DELETE FROM conversations WHERE id = ?", (conv_id,))
+    if conv:
+        conn.execute("DELETE FROM pinned_sources WHERE thread_id = ?", (conv["thread_id"],))
     conn.commit()
     conn.close()
     return cursor.rowcount > 0
@@ -470,14 +490,36 @@ def delete_bookmark(bm_id: int) -> bool:
 # ── Pinned Sources ──
 
 
-def save_pin_state(thread_id: str, chunk_id: str, action: str) -> None:
-    """Persist a pin or exclude action for a chunk in a conversation thread."""
+def clear_pin_state(thread_id: str) -> None:
+    """Remove all persisted pin/exclude state for a thread."""
+    conn = _get_conn()
+    conn.execute("DELETE FROM pinned_sources WHERE thread_id = ?", (thread_id,))
+    conn.commit()
+    conn.close()
+
+
+def replace_pin_state(
+    thread_id: str,
+    pinned_chunk_ids: list[str] | None = None,
+    excluded_chunk_ids: list[str] | None = None,
+) -> None:
+    """Replace the persisted pin/exclude state for a thread."""
+    pinned_chunk_ids = list(dict.fromkeys(pinned_chunk_ids or []))
+    excluded_chunk_ids = [
+        chunk_id for chunk_id in dict.fromkeys(excluded_chunk_ids or [])
+        if chunk_id not in pinned_chunk_ids
+    ]
+
     conn = _get_conn()
     now = datetime.now(UTC).isoformat()
-    conn.execute(
-        "INSERT OR REPLACE INTO pinned_sources (thread_id, chunk_id, action, created_at) VALUES (?, ?, ?, ?)",
-        (thread_id, chunk_id, action, now),
-    )
+    conn.execute("DELETE FROM pinned_sources WHERE thread_id = ?", (thread_id,))
+    rows = [(thread_id, chunk_id, "pin", now) for chunk_id in pinned_chunk_ids]
+    rows.extend((thread_id, chunk_id, "exclude", now) for chunk_id in excluded_chunk_ids)
+    if rows:
+        conn.executemany(
+            "INSERT INTO pinned_sources (thread_id, chunk_id, action, created_at) VALUES (?, ?, ?, ?)",
+            rows,
+        )
     conn.commit()
     conn.close()
 
@@ -491,6 +533,16 @@ def load_pin_state(thread_id: str) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def load_pin_state_summary(thread_id: str) -> dict:
+    """Return compact pin/exclude state for a thread."""
+    entries = load_pin_state(thread_id)
+    return {
+        "thread_id": thread_id,
+        "pinned_chunk_ids": [entry["chunk_id"] for entry in entries if entry["action"] == "pin"],
+        "excluded_chunk_ids": [entry["chunk_id"] for entry in entries if entry["action"] == "exclude"],
+    }
 
 
 # ── Workspaces ──

@@ -179,6 +179,30 @@ describe('useChat', () => {
     expect(result.current.messages).toEqual(mockMessages)
   })
 
+  it('loadMessages prefers dedicated pin state over debug_info', () => {
+    const { result } = renderHook(() => useChat())
+
+    act(() => {
+      result.current.loadMessages(
+        [
+          {
+            id: '2',
+            role: 'assistant',
+            content: '你好！',
+            sources: [{ chunk_id: 'doc.txt:0:a', source: 'doc.txt', content: 'chunk A', score: 0.9, index: 1 }],
+            debugData: { pinned: [], excluded: ['doc.txt:0:a'] } as any,
+          },
+        ],
+        'thread-1',
+        { thread_id: 'thread-1', pinned_chunk_ids: ['doc.txt:0:a'], excluded_chunk_ids: [] },
+      )
+    })
+
+    expect(result.current.pinnedSources).toHaveLength(1)
+    expect(result.current.pinnedSources[0].pinned).toBe(true)
+    expect(result.current.pinnedSources[0].excluded).toBe(false)
+  })
+
   describe('pinned / excluded source isolation', () => {
     const sourceMsg = {
       id: 'm1', role: 'assistant' as const, content: '回答',

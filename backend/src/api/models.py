@@ -134,6 +134,12 @@ class QueryLogsResponse(BaseModel):
     total_completion_tokens: int = 0
 
 
+class PinStateOut(BaseModel):
+    thread_id: str
+    pinned_chunk_ids: list[str] = Field(default_factory=list)
+    excluded_chunk_ids: list[str] = Field(default_factory=list)
+
+
 class NodeDebug(BaseModel):
     """一个图节点的执行调试信息。"""
 

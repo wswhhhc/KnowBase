@@ -14,13 +14,13 @@ import BookmarkPanel from '@/components/sidebar/BookmarkPanel'
 import KBSummary from '@/components/sidebar/KBSummary'
 import DashboardSummary from '@/components/sidebar/DashboardSummary'
 import type { ChatMessage } from '@/hooks/useChat'
-import type { Conversation, DebugInfo } from '@/lib/api'
+import type { Conversation, DebugInfo, PinStateResponse } from '@/lib/api'
 import type { ViewType } from '@/App'
 
 interface SidebarProps {
   chat: {
     messages: ChatMessage[]
-    loadMessages: (msgs: ChatMessage[], threadId?: string) => void
+    loadMessages: (msgs: ChatMessage[], threadId?: string, pinState?: PinStateResponse) => void
     clearMessages: () => void
     sendMessage: (q: string, webSearchEnabled: boolean, searchStrategy: string) => void
   }
@@ -72,7 +72,10 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     onNavigate('chat')
     onLoadingMessages?.(true)
     try {
-      const msgs = await api.getMessages(conversation.id)
+      const [msgs, pinState] = await Promise.all([
+        api.getMessages(conversation.id),
+        api.getConversationPinState(conversation.id),
+      ])
       convs.setActiveId(conversation.id)
       chat.loadMessages(
         msgs.map((m) => ({
@@ -89,6 +92,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
           assistantMsgId: m.role === 'assistant' ? m.id : undefined,
         })),
         conversation.thread_id,
+        pinState,
       )
       if (isMobile) onClose()
     } catch (e) {

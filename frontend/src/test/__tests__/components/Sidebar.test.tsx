@@ -52,6 +52,7 @@ vi.mock('@/hooks/useTheme', () => ({
 // Mock api
 vi.mock('@/lib/api', () => ({
   getMessages: vi.fn().mockResolvedValue([]),
+  getConversationPinState: vi.fn().mockResolvedValue({ thread_id: 'thread-1', pinned_chunk_ids: [], excluded_chunk_ids: [] }),
   uploadDocument: vi.fn(),
   uploadDocumentStream: vi.fn(),
   ingestUrl: vi.fn(),

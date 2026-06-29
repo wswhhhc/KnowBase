@@ -269,6 +269,27 @@ class APIEndpointTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIsInstance(resp.json(), list)
 
+    def test_get_pin_state_happy_path(self):
+        create_resp = self.client.post("/api/conversations", json={"title": "PinState 测试"})
+        conv = create_resp.json()
+        conversations.replace_pin_state(conv["thread_id"], ["doc:1"], ["doc:2"])
+
+        resp = self.client.get(f"/api/conversations/{conv['id']}/pin-state")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json(),
+            {
+                "thread_id": conv["thread_id"],
+                "pinned_chunk_ids": ["doc:1"],
+                "excluded_chunk_ids": ["doc:2"],
+            },
+        )
+
+    def test_get_pin_state_404(self):
+        resp = self.client.get("/api/conversations/nonexistent-id/pin-state")
+        self.assertEqual(resp.status_code, 404)
+
     def test_feedback_happy_path(self):
         create_resp = self.client.post("/api/conversations", json={"title": "反馈测试"})
         conv_id = create_resp.json()["id"]
