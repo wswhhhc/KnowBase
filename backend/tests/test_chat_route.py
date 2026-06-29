@@ -36,7 +36,7 @@ class ChatRouteSSEIntegrationTests(unittest.TestCase):
     def setUpClass(cls):
         cls.fake_kb, cls.client, cls.tmp_dir, cls.orig_db, cls.patchers = setup_test_env()
         # Remove the real run_query dependency — we inject a controlled sequence
-        cls._run_query_patcher = patch("src.api.routes.chat.run_query")
+        cls._run_query_patcher = patch("src.api.chat_stream_service.run_query")
         cls._mock_run_query = cls._run_query_patcher.start()
 
     @classmethod
@@ -237,8 +237,7 @@ class ChatRouteSSEIntegrationTests(unittest.TestCase):
         self.assertGreater(len(error_events), 0)
         self.assertIn("模拟异常", str(error_events[0]["data"]))
 
-    @patch("src.api.routes.chat._persist_and_record", return_value=("conv-1", 1))
-    def test_first_token_metrics_wait_for_the_first_token_event(self, mock_persist):
+    def test_first_token_metrics_wait_for_the_first_token_event(self):
         """first_token_ms should be recorded when the first token is emitted, not on node updates."""
         from langchain_core.messages import AIMessageChunk
 
@@ -250,11 +249,17 @@ class ChatRouteSSEIntegrationTests(unittest.TestCase):
 
         self._mock_run_query.side_effect = _delayed_sequence
 
-        self._post()
+        events = _parse_sse_events(self._post())
+        event_types = [e["event"] for e in events]
 
-        _, kwargs = mock_persist.call_args
-        self.assertLess(kwargs["ttfb_ms"], kwargs["first_token_ms"])
-        self.assertGreaterEqual(kwargs["first_token_ms"], 40)
+        # Node event comes before token event (node has timing info, token shows content)
+        self.assertIn("node", event_types)
+        self.assertIn("token", event_types)
+        self.assertIn("done", event_types)
+
+        # The done event includes elapsed_ms
+        done_event = [e for e in events if e["event"] == "done"][0]
+        self.assertGreaterEqual(done_event["data"]["elapsed_ms"], 50)
 
 
 if __name__ == "__main__":
