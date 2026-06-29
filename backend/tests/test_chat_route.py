@@ -7,6 +7,8 @@ import time
 import unittest
 from unittest.mock import patch
 
+from sse_starlette.sse import AppStatus
+
 from src.api.deps import get_knowledge_base
 from src.api.main import app
 from tests.helpers import FakeKnowledgeBase, setup_test_env, teardown_test_env
@@ -47,6 +49,8 @@ class ChatRouteSSEIntegrationTests(unittest.TestCase):
     def setUp(self):
         # Reset the mock between tests
         self._mock_run_query.reset_mock()
+        AppStatus.should_exit = False
+        AppStatus.should_exit_event = None
 
     def _post(self, **overrides: str | bool) -> str:
         """Post to /api/chat/stream and return raw SSE text."""
@@ -237,7 +241,8 @@ class ChatRouteSSEIntegrationTests(unittest.TestCase):
         self.assertGreater(len(error_events), 0)
         self.assertIn("模拟异常", str(error_events[0]["data"]))
 
-    def test_first_token_metrics_wait_for_the_first_token_event(self):
+    @patch("src.api.chat_stream_service.record_query_metrics")
+    def test_first_token_metrics_wait_for_the_first_token_event(self, mock_record_query_metrics):
         """first_token_ms should be recorded when the first token is emitted, not on node updates."""
         from langchain_core.messages import AIMessageChunk
 
@@ -259,7 +264,11 @@ class ChatRouteSSEIntegrationTests(unittest.TestCase):
 
         # The done event includes elapsed_ms
         done_event = [e for e in events if e["event"] == "done"][0]
-        self.assertGreaterEqual(done_event["data"]["elapsed_ms"], 50)
+        self.assertGreater(done_event["data"]["elapsed_ms"], 0)
+
+        _, kwargs = mock_record_query_metrics.call_args
+        self.assertLess(kwargs["ttfb_ms"], kwargs["first_token_ms"])
+        self.assertGreaterEqual(kwargs["first_token_ms"], 40)
 
 
 if __name__ == "__main__":

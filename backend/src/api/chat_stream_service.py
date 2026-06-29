@@ -12,7 +12,7 @@ from langchain_core.messages import AIMessageChunk
 
 from src.api.models import ChatRequest, ChatSource, DebugInfo, NodeDebug
 from src.chat_utils import NODE_LABELS, record_query_metrics, generate_title
-from src.conversations import create_conversation, add_message, get_conversation_by_thread
+from src.conversations import create_conversation, add_message, get_conversation_by_thread, save_pin_state
 from src.graph import run_query
 from src.knowledge_base import KnowledgeBase
 
@@ -163,6 +163,9 @@ class ChatStreamService:
         self.final_evidence_summary = ""
         self.final_outcome_category = "success"
         self.debug_state = _DebugState()
+        self.answer = ""
+        self.elapsed = 0
+        self.debug_info = DebugInfo()
 
         # Timing
         self._node_t0 = time.monotonic()
@@ -259,10 +262,10 @@ class ChatStreamService:
 
     def _emit_completion(self):
         """Build debug info, persist, then yield ``debug``, ``sources``, and ``done`` events."""
-        answer = self.accumulated_answer.strip() or "抱歉，我无法回答这个问题。"
-        elapsed = int((time.monotonic() - self.t0) * 1000)
+        self.answer = self.accumulated_answer.strip() or "抱歉，我无法回答这个问题。"
+        self.elapsed = int((time.monotonic() - self.t0) * 1000)
 
-        debug_info = DebugInfo(
+        self.debug_info = DebugInfo(
             nodes=[NodeDebug(**nd) for nd in self.debug_state.nodes],
             rewritten_question=self.debug_state.rewritten_question,
             retrieval_k=self.debug_state.retrieval_k,
@@ -283,13 +286,9 @@ class ChatStreamService:
         )
 
         # Persist before notifying the client so sidebar refresh sees the final title
-        conv_id, assistant_msg_id = self._persist(
-            answer=answer,
-            debug_info=debug_info,
-            elapsed=elapsed,
-        )
+        conv_id, assistant_msg_id = self._persist()
 
-        yield {"event": "debug", "data": json.dumps(debug_info.model_dump())}
+        yield {"event": "debug", "data": json.dumps(self.debug_info.model_dump())}
 
         yield {"event": "sources", "data": json.dumps({
             "sources": self.final_sources,
@@ -303,23 +302,18 @@ class ChatStreamService:
             "thread_id": self.thread_id,
             "conv_id": conv_id or "",
             "assistant_msg_id": assistant_msg_id,
-            "answer": answer,
+            "answer": self.answer,
             "sources": self.final_sources,
             "quality_reason": self.final_quality,
             "evidence_level": self.final_evidence_level,
             "evidence_summary": self.final_evidence_summary,
             "outcome_category": self.final_outcome_category,
-            "elapsed_ms": elapsed,
+            "elapsed_ms": self.elapsed,
         })}
 
     # ── Persistence (extracted from former _persist_and_record, 0 params) ─
 
-    def _persist(
-        self,
-        answer: str,
-        debug_info: DebugInfo,
-        elapsed: int,
-    ) -> tuple[str, int]:
+    def _persist(self) -> tuple[str, int]:
         """Persist conversation and metrics, returning (conv_id, assistant_msg_id)."""
         conv_id = ""
         assistant_msg_id = 0
@@ -332,18 +326,22 @@ class ChatStreamService:
                 conv = create_conversation(title, thread_id=self.thread_id, workspace_id=self.body.workspace_id)
                 conv_id = conv["id"]
 
-            debug_dict = debug_info.model_dump()
+            debug_dict = self.debug_info.model_dump()
             debug_dict["evidence_level"] = self.final_evidence_level
             debug_dict["evidence_summary"] = self.final_evidence_summary
             debug_dict["outcome_category"] = self.final_outcome_category
+
+            # Persist pin/exclude to dedicated table instead of debug_info blob
             if self.body.pinned_chunk_ids:
-                debug_dict["pinned"] = self.body.pinned_chunk_ids
+                for cid in self.body.pinned_chunk_ids:
+                    save_pin_state(self.thread_id, cid, "pin")
             if self.body.excluded_chunk_ids:
-                debug_dict["excluded"] = self.body.excluded_chunk_ids
+                for cid in self.body.excluded_chunk_ids:
+                    save_pin_state(self.thread_id, cid, "exclude")
 
             add_message(conv_id, "user", self.body.question)
             assistant_msg_id = add_message(
-                conv_id, "assistant", answer,
+                conv_id, "assistant", self.answer,
                 sources=self.final_sources,
                 quality_reason=self.final_quality,
                 debug_info=json.dumps(debug_dict),
@@ -354,14 +352,14 @@ class ChatStreamService:
                 final_sources=self.final_sources,
                 final_quality_ok=self.final_quality_ok,
                 final_quality=self.final_quality,
-                elapsed=elapsed,
-                answer=answer,
-                debug_info=debug_info,
+                elapsed=self.elapsed,
+                answer=self.answer,
+                debug_info=self.debug_info,
                 ttfb_ms=self.ttfb,
                 first_token_ms=self.first_token,
-                token_count=debug_info.token_count,
-                prompt_tokens=debug_info.prompt_tokens if debug_info.prompt_tokens is not None else self.debug_state.prompt_tokens,
-                completion_tokens=debug_info.completion_tokens if debug_info.completion_tokens is not None else self.debug_state.completion_tokens,
+                token_count=self.debug_info.token_count,
+                prompt_tokens=self.debug_info.prompt_tokens if self.debug_info.prompt_tokens is not None else self.debug_state.prompt_tokens,
+                completion_tokens=self.debug_info.completion_tokens if self.debug_info.completion_tokens is not None else self.debug_state.completion_tokens,
             )
         except Exception as exc:
             logger.exception("保存聊天记录或指标失败: %s", exc)

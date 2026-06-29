@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from sse_starlette.sse import AppStatus
 from langchain_core.documents import Document
 from src.kb_models import RetrievalResult
 
@@ -175,6 +176,10 @@ class APIEndpointTests(unittest.TestCase):
         cls.patcher_chroma.stop()
         cls.patcher_embeddings.stop()
         cls.patcher_api_key.stop()
+
+    def setUp(self):
+        AppStatus.should_exit = False
+        AppStatus.should_exit_event = None
 
     # ---- Health ----
     def test_health_endpoint(self):

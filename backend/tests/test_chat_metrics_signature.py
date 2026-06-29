@@ -1,8 +1,8 @@
 """AST-based signature checks for chat stream persistence calls.
 
-These tests verify that the calls within ChatStreamService._persist
-pass the correct keyword arguments to record_query_metrics, ensuring
-performance metadata (ttfb_ms, first_token_ms, etc.) are always forwarded.
+These tests verify that ``ChatStreamService`` keeps persistence encapsulated:
+``_persist`` should read everything from instance state, be invoked without
+arguments, and still forward performance metadata to ``record_query_metrics``.
 """
 
 import ast
@@ -18,19 +18,52 @@ def _load_module():
 
 
 class ChatMetricsSignatureTests(unittest.TestCase):
-    def _find_record_query_metrics_call(self):
-        """Walk AST looking for the record_query_metrics() call inside _persist."""
+    def _find_method(self, class_name: str, method_name: str):
         module = _load_module()
         for node in module.body:
-            if isinstance(node, ast.ClassDef) and node.name == "ChatStreamService":
+            if isinstance(node, ast.ClassDef) and node.name == class_name:
                 for item in node.body:
-                    if isinstance(item, ast.FunctionDef) and item.name == "_persist":
-                        for child in ast.walk(item):
-                            if isinstance(child, ast.Call):
-                                func = child.func
-                                if isinstance(func, ast.Name) and func.id == "record_query_metrics":
-                                    return {kw.arg for kw in child.keywords}
+                    if isinstance(item, ast.FunctionDef) and item.name == method_name:
+                        return item
         return None
+
+    def _find_record_query_metrics_call(self):
+        """Walk AST looking for the record_query_metrics() call inside _persist."""
+        persist = self._find_method("ChatStreamService", "_persist")
+        if persist is None:
+            return None
+        for child in ast.walk(persist):
+            if isinstance(child, ast.Call):
+                func = child.func
+                if isinstance(func, ast.Name) and func.id == "record_query_metrics":
+                    return {kw.arg for kw in child.keywords}
+        return None
+
+    def _find_persist_call(self):
+        emit_completion = self._find_method("ChatStreamService", "_emit_completion")
+        if emit_completion is None:
+            return None
+        for child in ast.walk(emit_completion):
+            if isinstance(child, ast.Call):
+                func = child.func
+                if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+                    if func.value.id == "self" and func.attr == "_persist":
+                        return child
+        return None
+
+    def test_persist_method_uses_only_self(self):
+        """_persist should be a zero-arg instance method after the refactor."""
+        persist = self._find_method("ChatStreamService", "_persist")
+        self.assertIsNotNone(persist, "_persist method not found")
+        arg_names = [arg.arg for arg in persist.args.args]
+        self.assertEqual(arg_names, ["self"], f"_persist should only accept self, got {arg_names}")
+
+    def test_emit_completion_calls_persist_without_arguments(self):
+        """_emit_completion should persist from instance state instead of passing args through."""
+        persist_call = self._find_persist_call()
+        self.assertIsNotNone(persist_call, "self._persist() call not found in _emit_completion")
+        self.assertEqual(len(persist_call.args), 0, "_persist() should not receive positional arguments")
+        self.assertEqual(len(persist_call.keywords), 0, "_persist() should not receive keyword arguments")
 
     def test_record_query_metrics_accepts_perf_kwargs(self):
         """_persist calls record_query_metrics with performance kwargs."""

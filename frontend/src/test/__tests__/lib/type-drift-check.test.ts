@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import type { QueryLogEntry as ManualQueryLogEntry } from '@/lib/api'
 import type { QueryLogEntry as GeneratedQueryLogEntry } from '@/lib/api-types.generated'
 
 // The fields added manually in api.ts on top of the generated type
@@ -21,9 +22,28 @@ interface ExpectedQueryLogEntryExtensions {
   estimated_cost?: number | null
 }
 
+type Assert<T extends true> = T
+type IsEqual<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2)
+    ? ((<T>() => T extends B ? 1 : 2) extends (<T>() => T extends A ? 1 : 2) ? true : false)
+    : false
+
+type ManualOnlyQueryLogEntryKeys = Exclude<keyof ManualQueryLogEntry, keyof GeneratedQueryLogEntry>
+type GeneratedOnlyQueryLogEntryKeys = Exclude<keyof GeneratedQueryLogEntry, keyof ManualQueryLogEntry>
+
+type _generatedQueryLogEntryStaysAssignableToManual =
+  Assert<GeneratedQueryLogEntry extends ManualQueryLogEntry ? true : false>
+type _manualQueryLogEntryAddsOnlyExpectedKeys =
+  Assert<IsEqual<ManualOnlyQueryLogEntryKeys, keyof ExpectedQueryLogEntryExtensions>>
+type _manualQueryLogEntryKeepsAllGeneratedKeys =
+  Assert<IsEqual<GeneratedOnlyQueryLogEntryKeys, never>>
+type _manualQueryLogEntryExtensionShapeMatches =
+  Assert<IsEqual<Pick<ManualQueryLogEntry, ManualOnlyQueryLogEntryKeys>, ExpectedQueryLogEntryExtensions>>
+
 describe('api type drift', () => {
-  it('QueryLogEntry extension fields should be present at runtime', () => {
-    // Verify the generated type exists and has the base fields
+  it('QueryLogEntry manual extension should exactly match the generated type gap', () => {
+    // The compile-time assertions above are the real guardrail. This runtime
+    // check keeps the test visible in Vitest output and documents the intended shape.
     const entry: GeneratedQueryLogEntry = {
       timestamp: '2024-01-01',
       thread_id: '',
@@ -41,8 +61,7 @@ describe('api type drift', () => {
     expect(entry.timestamp).toBe('2024-01-01')
     expect(entry.question).toBe('test')
 
-    // Verify the extension shape is assignable
-    const ext: ExpectedQueryLogEntryExtensions = {
+    const manualOnlyFields: Pick<ManualQueryLogEntry, ManualOnlyQueryLogEntryKeys> = {
       ttfb_ms: 50,
       first_token_ms: 100,
       token_count: 500,
@@ -51,7 +70,7 @@ describe('api type drift', () => {
       llm_model: 'gpt-4',
       estimated_cost: 0.01,
     }
-    expect(ext.ttfb_ms).toBe(50)
+    expect(manualOnlyFields.ttfb_ms).toBe(50)
   })
 
   it('KBChunk type should contain all fields used by BrowserPage', () => {
