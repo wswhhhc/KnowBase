@@ -132,12 +132,15 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                 </Tooltip>
               </TooltipProvider>
 
-              <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
+              <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5" role="radiogroup" aria-label="检索策略">
                 {STRATEGIES.map(({ key, icon: Icon, label }) => (
                   <TooltipProvider key={key}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button onClick={() => setSearchStrategy(key)}
+                        <button
+                          role="radio"
+                          aria-checked={searchStrategy === key}
+                          onClick={() => setSearchStrategy(key)}
                           className={`inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-sm transition-colors ${
                             searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
                           }`}>

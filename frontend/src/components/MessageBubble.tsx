@@ -176,10 +176,10 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className={`inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full cursor-help ${
-                            message.evidence_level === 'strong' ? 'bg-emerald-500/10 text-emerald-400' :
-                            message.evidence_level === 'moderate' ? 'bg-yellow-500/10 text-yellow-400' :
-                            message.evidence_level === 'weak' ? 'bg-orange-500/10 text-orange-400' :
-                            'bg-red-500/10 text-red-400'
+                            message.evidence_level === 'strong' ? 'bg-emerald-500/20 text-emerald-300' :
+                            message.evidence_level === 'moderate' ? 'bg-yellow-500/20 text-yellow-300' :
+                            message.evidence_level === 'weak' ? 'bg-orange-500/20 text-orange-300' :
+                            'bg-red-500/20 text-red-300'
                           }`}>
                             ● {evidenceLabel(message.evidence_level)}
                           </span>

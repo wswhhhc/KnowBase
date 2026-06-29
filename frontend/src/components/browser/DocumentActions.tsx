@@ -43,9 +43,11 @@ export default function DocumentActions({
             <div className="text-2xs text-muted-foreground/60">
               {{ loading: '正在加载文档…', splitting: '正在切分段落…', embedding: '正在向量化…', done: '完成' }[uploadPhase] || '正在处理…'}
             </div>
-            <div className="mt-1 h-1 w-full rounded-full bg-muted overflow-hidden">
-              <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
-            </div>
+            {uploadPercent > 0 && (
+              <div className="mt-1 h-1 w-full rounded-full bg-muted overflow-hidden">
+                <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+              </div>
+            )}
           </div>
         )}
         <button onClick={refreshData}
