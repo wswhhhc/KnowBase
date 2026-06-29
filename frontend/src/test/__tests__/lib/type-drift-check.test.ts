@@ -9,7 +9,11 @@
 
 import { describe, it, expect } from 'vitest'
 import type { QueryLogEntry as ManualQueryLogEntry } from '@/lib/api'
-import type { QueryLogEntry as GeneratedQueryLogEntry } from '@/lib/api-types.generated'
+import type {
+  QueryLogEntry as GeneratedQueryLogEntry,
+  KBChunk as GeneratedKBChunk,
+  Source as GeneratedChatSource,
+} from '@/lib/api-types.generated'
 
 // The fields added manually in api.ts on top of the generated type
 interface ExpectedQueryLogEntryExtensions {
@@ -76,20 +80,22 @@ describe('api type drift', () => {
   it('KBChunk type should contain all fields used by BrowserPage', () => {
     // This is a compile-time check: if KBChunk is missing any field
     // used in BrowserPage, TypeScript will fail the build.
-    const chunk: import('@/lib/api-types.generated').components['schemas']['KBChunk'] = {
+    const chunk: GeneratedKBChunk = {
       source: 'doc.md',
       chunk_index: 0,
       chunk_id: 'abc123',
       content: 'test content',
+      page: null,
+      original_content: null,
+      section: null,
     }
-    // Fields that may be null
-    expect(chunk.page).toBeUndefined()
-    expect(chunk.original_content).toBeUndefined()
-    expect(chunk.section).toBeUndefined()
+    expect(chunk.page).toBeNull()
+    expect(chunk.original_content).toBeNull()
+    expect(chunk.section).toBeNull()
   })
 
   it('ChatSource should contain index field used by MessageBubble', () => {
-    const source: import('@/lib/api-types.generated').components['schemas']['ChatSource'] = {
+    const source: GeneratedChatSource = {
       source: 'doc.md',
       content: 'content',
     }

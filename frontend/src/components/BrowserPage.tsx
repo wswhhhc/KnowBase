@@ -47,6 +47,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     versionPrompted,
     setVersionPrompted,
     showPostUploadGuide,
+    setShowPostUploadGuide,
     total,
     hasMore,
     bookmarkedChunks,
@@ -66,6 +67,14 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     onHighlightConsumed,
     workspaceId,
   })
+
+  const contentStateKey = loading
+    ? 'loading'
+    : displayChunks.length === 0
+      ? 'empty'
+      : chunkView === 'slice' && selectedSource
+        ? 'slice'
+        : 'grid'
 
   return (
     <div className="flex flex-col h-full">
@@ -106,43 +115,45 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
               <Button variant="outline" size="sm" onClick={() => window.location.reload()}>重试</Button>
             </div>
           ) : (<>
-            {showPostUploadGuide && (
-              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                className="mb-4 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-                <p className="text-xs text-foreground/80">文档已导入！现在可以去提问了</p>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => onNavigate('chat')} className="gap-1"><Sparkles className="h-3 w-3" />现在去提问</Button>
-                  <button onClick={() => setShowPostUploadGuide(false)}
-                    className="p-1 rounded-md text-muted-foreground/40 hover:text-foreground hover:bg-muted/50 transition-colors"
-                    aria-label="关闭提示">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-            {loading ? <SkeletonGrid count={6} /> : (
-              <AnimatePresence mode="wait">
-                <motion.div key={displayChunks.length === 0 ? 'empty' : 'content'}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25 }}
-                >
-                {displayChunks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <BookOpen className="h-12 w-12 text-muted-foreground/20 mb-4" />
-                <p className="text-sm text-muted-foreground">知识库为空</p>
-                <p className="text-xs text-muted-foreground/50 mt-1">上传文档或导入网页后即可浏览</p>
-              </div>
-            ) : chunkView === 'slice' && selectedSource ? (
-              <SliceView chunks={displayChunks} kbConfig={kbConfig} hotspotMode={hotspotMode} hotspotCount={hotspotCount}
-                findOverlap={findOverlap} onChunkClick={setSelectedChunk} bookmarkedChunks={bookmarkedChunks} onBookmark={handleChunkBookmark} />
-            ) : (
-              <GridView chunks={displayChunks} hotspotMode={hotspotMode} hotspotCount={hotspotCount}
-                onChunkClick={setSelectedChunk} bookmarkedChunks={bookmarkedChunks} onBookmark={handleChunkBookmark} />
-            )}
+            <AnimatePresence initial={false}>
+              {showPostUploadGuide && (
+                <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                  className="mb-4 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+                  <p className="text-xs text-foreground/80">文档已导入！现在可以去提问了</p>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" onClick={() => onNavigate('chat')} className="gap-1"><Sparkles className="h-3 w-3" />现在去提问</Button>
+                    <button onClick={() => setShowPostUploadGuide(false)}
+                      className="rounded-md p-1 text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-foreground"
+                      aria-label="关闭提示">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </motion.div>
-              </AnimatePresence>
-            )}
+              )}
+            </AnimatePresence>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={contentStateKey}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25 }}
+              >
+                {loading ? <SkeletonGrid count={6} /> : displayChunks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <BookOpen className="mb-4 h-12 w-12 text-muted-foreground/20" />
+                    <p className="text-sm text-muted-foreground">知识库为空</p>
+                    <p className="mt-1 text-xs text-muted-foreground/50">上传文档或导入网页后即可浏览</p>
+                  </div>
+                ) : chunkView === 'slice' && selectedSource ? (
+                  <SliceView chunks={displayChunks} kbConfig={kbConfig} hotspotMode={hotspotMode} hotspotCount={hotspotCount}
+                    findOverlap={findOverlap} onChunkClick={setSelectedChunk} bookmarkedChunks={bookmarkedChunks} onBookmark={handleChunkBookmark} />
+                ) : (
+                  <GridView chunks={displayChunks} hotspotMode={hotspotMode} hotspotCount={hotspotCount}
+                    onChunkClick={setSelectedChunk} bookmarkedChunks={bookmarkedChunks} onBookmark={handleChunkBookmark} />
+                )}
+              </motion.div>
+            </AnimatePresence>
             {!loading && total > 0 && (
               <div className="mt-8 flex items-center justify-center gap-4">
                 <span className="text-2xs text-muted-foreground/30 font-mono">

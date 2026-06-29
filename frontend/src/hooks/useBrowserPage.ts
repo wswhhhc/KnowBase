@@ -391,6 +391,7 @@ export function useBrowserPage({
     versionPrompted,
     setVersionPrompted,
     showPostUploadGuide,
+    setShowPostUploadGuide,
     total,
     hasMore,
     bookmarkedChunks,

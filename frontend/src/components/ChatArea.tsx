@@ -26,6 +26,12 @@ const STRATEGIES = [
   { key: 'deep', icon: Search, label: '深度' },
 ] as const
 
+const DEFAULT_SEARCH_STRATEGY = 'balanced'
+
+function isStrategyKey(value: string): value is typeof STRATEGIES[number]['key'] {
+  return STRATEGIES.some(({ key }) => key === value)
+}
+
 const STRATEGY_DESC: Record<string, string> = {
   fast: '快速回答：不重排，最快响应。适合简单事实性问题',
   balanced: '标准模式：智能判断是否需要重排。适合大多数情况',
@@ -36,9 +42,13 @@ const STRATEGY_DESC: Record<string, string> = {
 export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate, isLoadingMessages, onCitationClick, onSendQuestion }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const strategyRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [input, setInput] = useState('')
   const [webSearch, setWebSearch] = useState(() => localStorage.getItem('kb_web_search') === 'true')
-  const [searchStrategy, setSearchStrategy] = useState(() => localStorage.getItem('kb_search_strategy') || 'balanced')
+  const [searchStrategy, setSearchStrategy] = useState(() => {
+    const stored = localStorage.getItem('kb_search_strategy')
+    return stored && isStrategyKey(stored) ? stored : DEFAULT_SEARCH_STRATEGY
+  })
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
@@ -68,6 +78,36 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
     if (!q || chat.isStreaming) return
     setInput('')
     chat.sendMessage(q, webSearch, searchStrategy)
+  }
+
+  const focusStrategyAtIndex = (index: number) => {
+    const nextIndex = (index + STRATEGIES.length) % STRATEGIES.length
+    const nextStrategy = STRATEGIES[nextIndex]
+    setSearchStrategy(nextStrategy.key)
+    requestAnimationFrame(() => strategyRefs.current[nextIndex]?.focus())
+  }
+
+  const handleStrategyKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        event.preventDefault()
+        focusStrategyAtIndex(index + 1)
+        break
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        event.preventDefault()
+        focusStrategyAtIndex(index - 1)
+        break
+      case 'Home':
+        event.preventDefault()
+        focusStrategyAtIndex(0)
+        break
+      case 'End':
+        event.preventDefault()
+        focusStrategyAtIndex(STRATEGIES.length - 1)
+        break
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -100,20 +140,20 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-0.5 rounded-md border border-border p-0.5">
-            <button onClick={() => onNavigate('chat')}
-              className="flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-sm bg-primary/15 text-primary">
-              <Sparkles className="h-3 w-3" />聊天
-            </button>
-            <button onClick={() => onNavigate('browser')}
-              className="flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-              <BookOpen className="h-3 w-3" />知识库
-            </button>
-            <button onClick={() => onNavigate('dashboard')}
-              className="flex items-center gap-1 px-2.5 py-1 text-2xs font-medium rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-              <BarChart3 className="h-3 w-3" />指标
-            </button>
-          </div>
+            <div className="hidden md:flex items-center gap-0.5 rounded-md border border-border p-0.5">
+              <button onClick={() => onNavigate('chat')}
+                className="flex items-center gap-1 rounded-sm bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
+                <Sparkles className="h-3 w-3" />聊天
+              </button>
+              <button onClick={() => onNavigate('browser')}
+                className="flex items-center gap-1 rounded-sm px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+                <BookOpen className="h-3 w-3" />知识库
+              </button>
+              <button onClick={() => onNavigate('dashboard')}
+                className="flex items-center gap-1 rounded-sm px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+                <BarChart3 className="h-3 w-3" />指标
+              </button>
+            </div>
 
           <div className="h-4 w-px bg-border hidden md:block" />
 
@@ -133,15 +173,18 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
               </TooltipProvider>
 
               <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5" role="radiogroup" aria-label="检索策略">
-                {STRATEGIES.map(({ key, icon: Icon, label }) => (
+                {STRATEGIES.map(({ key, icon: Icon, label }, index) => (
                   <TooltipProvider key={key}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
+                          ref={(node) => { strategyRefs.current[index] = node }}
                           role="radio"
                           aria-checked={searchStrategy === key}
+                          tabIndex={searchStrategy === key ? 0 : -1}
                           onClick={() => setSearchStrategy(key)}
-                          className={`inline-flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-sm transition-colors ${
+                          onKeyDown={(event) => handleStrategyKeyDown(event, index)}
+                          className={`inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors ${
                             searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
                           }`}>
                           <Icon className="h-3 w-3" />
@@ -157,7 +200,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
 
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              className="flex items-center gap-1 text-xs text-muted-foreground/50 transition-colors hover:text-muted-foreground"
             >
               {showAdvanced ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               高级选项
