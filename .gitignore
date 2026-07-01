@@ -21,7 +21,7 @@ data/checkpoints.db*
 data/.thread_id
 data/rag_logs/
 data/sample_*
-scripts/
+/scripts/
 .venv/
 __pycache__/
 */__pycache__/
