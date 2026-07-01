@@ -111,6 +111,28 @@
 - [uv](https://docs.astral.sh/uv/)（Python 包管理器）
 - 一个 [硅基流动](https://cloud.siliconflow.cn) API Key
 
+### 5 分钟体验
+
+```bash
+cd backend
+cp .env.example .env
+# 只填必填项 SILICONFLOW_API_KEY
+uv run python scripts/quickstart.py --reset
+```
+
+这个脚本会：
+
+- 用 `data/samples/demo/` 里的 3 份示例文档创建一个隔离的 demo 知识库
+- 把向量库和 checkpoint 写入 `backend/data/quickstart/`
+- 自动跑 3 个示例问题，验证检索和回答链路
+
+想先确认 demo 资源而不调用模型，可以运行：
+
+```bash
+cd backend
+uv run python scripts/quickstart.py --dry-run
+```
+
 ### 配置环境变量
 
 ```bash
@@ -127,10 +149,13 @@ SILICONFLOW_API_KEY=sk-你的密钥
 
 > `API_KEY` 留空时跳过 Bearer Token 鉴权，适合本地开发。
 
-### 启动
+`.env.example` 已按“必填 / 选填”分组；只想快速体验时，最少只需要配置 `SILICONFLOW_API_KEY`。
+
+### 完整启动
 
 | 方式 | 命令 |
 |------|------|
+| **Docker Compose** | `docker compose up --build` 或 `bash scripts/dev.sh --docker` |
 | **一键启动** | `bash scripts/dev.sh` 或 `scripts\dev.bat` |
 | **后端单独** | `cd backend && uv run uvicorn src.api.main:app --reload --port 8000` |
 | **前端单独** | `cd frontend && npm run dev` |
@@ -275,7 +300,8 @@ KnowBase/
 │   │   ├── web_search.py              # Tavily 联网搜索
 │   │   ├── evaluate.py                # 离线 RAG 质量评估
 │   │   └── metrics.py                 # 查询 JSONL 日志
-│   └── tests/                         # 28 个文件 · 441 用例
+│   └── tests/                         # 28 个文件 · 444 用例
+│   └── scripts/quickstart.py          # 5 分钟 demo 体验脚本
 ├── frontend/                          # React 19 + Vite + Tailwind
 │   └── src/
 │       ├── components/
@@ -293,9 +319,10 @@ KnowBase/
 │       │   ├── useChat.ts             # SSE 流式聊天 hook（委托至 chat/ 子模块）
 │       │   ├── chat/                  # 类型定义 + useChatMessages + usePinnedSourcesState
 │       │   ├── useData.ts / useTheme.ts / useBrowserPage.ts
-│       └── lib/                       # api.ts / api-types.ts
+│       └── lib/                       # api.ts / api-types.ts / api-types.openapi.ts
 │   └── data/                          # chroma_db / checkpoints / conversations
 ├── docs/tests/                        # 12 份测试文档
+├── data/samples/demo/                 # quickstart 示例文档
 └── scripts/                           # 一键启动脚本
 ```
 
@@ -345,8 +372,8 @@ KnowBase/
 
 | 层 | 框架 | 文件 | 用例 | 运行命令 |
 |----|------|------|------|---------|
-| **后端** | unittest | 28 | 441 | `cd backend && uv run python -m unittest discover -v` |
-| **前端** | vitest + @testing-library/react | 23 | 202 | `cd frontend && npm test` |
+| **后端** | pytest | 28 | 444 | `cd backend && uv run pytest --cov --tb=short -v` |
+| **前端** | vitest + @testing-library/react | 23 | 206 | `cd frontend && npm test` |
 
 覆盖策略：
 - LLM mock（`FakeLLM`），Chroma patch，SQLite tempdir 隔离
