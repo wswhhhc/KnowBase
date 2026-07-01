@@ -1,54 +1,22 @@
 /**
- * Compile-time type drift checks for manually-maintained frontend API types.
+ * Compile-time API contract smoke tests for the frontend-facing type layer.
  *
- * These tests verify that the manual extensions in api.ts (which augment
- * the auto-generated OpenAPI types) remain compatible with the actual
- * backend response shapes, catching drift between generator output and
- * hand-written type definitions.
+ * These tests ensure the generated OpenAPI schema still exposes the fields
+ * the UI relies on after schema regeneration and alias-layer refactors.
  */
 
 import { describe, it, expect } from 'vitest'
-import type { QueryLogEntry as ManualQueryLogEntry } from '@/lib/api'
 import type {
-  QueryLogEntry as GeneratedQueryLogEntry,
-  KBChunk as GeneratedKBChunk,
-  Source as GeneratedChatSource,
-} from '@/lib/api-types.generated'
+  QueryLogEntry,
+  KBChunk,
+  RuntimeSettings,
+  SettingsUpdateResult,
+  Source,
+} from '@/lib/api-types'
 
-// The fields added manually in api.ts on top of the generated type
-interface ExpectedQueryLogEntryExtensions {
-  ttfb_ms?: number
-  first_token_ms?: number
-  token_count?: number | null
-  prompt_tokens?: number | null
-  completion_tokens?: number | null
-  llm_model?: string | null
-  estimated_cost?: number | null
-}
-
-type Assert<T extends true> = T
-type IsEqual<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2)
-    ? ((<T>() => T extends B ? 1 : 2) extends (<T>() => T extends A ? 1 : 2) ? true : false)
-    : false
-
-type ManualOnlyQueryLogEntryKeys = Exclude<keyof ManualQueryLogEntry, keyof GeneratedQueryLogEntry>
-type GeneratedOnlyQueryLogEntryKeys = Exclude<keyof GeneratedQueryLogEntry, keyof ManualQueryLogEntry>
-
-type _generatedQueryLogEntryStaysAssignableToManual =
-  Assert<GeneratedQueryLogEntry extends ManualQueryLogEntry ? true : false>
-type _manualQueryLogEntryAddsOnlyExpectedKeys =
-  Assert<IsEqual<ManualOnlyQueryLogEntryKeys, keyof ExpectedQueryLogEntryExtensions>>
-type _manualQueryLogEntryKeepsAllGeneratedKeys =
-  Assert<IsEqual<GeneratedOnlyQueryLogEntryKeys, never>>
-type _manualQueryLogEntryExtensionShapeMatches =
-  Assert<IsEqual<Pick<ManualQueryLogEntry, ManualOnlyQueryLogEntryKeys>, ExpectedQueryLogEntryExtensions>>
-
-describe('api type drift', () => {
-  it('QueryLogEntry manual extension should exactly match the generated type gap', () => {
-    // The compile-time assertions above are the real guardrail. This runtime
-    // check keeps the test visible in Vitest output and documents the intended shape.
-    const entry: GeneratedQueryLogEntry = {
+describe('api type contracts', () => {
+  it('QueryLogEntry includes the metrics fields used by the dashboard', () => {
+    const entry: QueryLogEntry = {
       timestamp: '2024-01-01',
       thread_id: '',
       question: 'test',
@@ -61,11 +29,6 @@ describe('api type drift', () => {
       source_count: 0,
       answer_preview: '',
       error: '',
-    }
-    expect(entry.timestamp).toBe('2024-01-01')
-    expect(entry.question).toBe('test')
-
-    const manualOnlyFields: Pick<ManualQueryLogEntry, ManualOnlyQueryLogEntryKeys> = {
       ttfb_ms: 50,
       first_token_ms: 100,
       token_count: 500,
@@ -74,13 +37,32 @@ describe('api type drift', () => {
       llm_model: 'gpt-4',
       estimated_cost: 0.01,
     }
-    expect(manualOnlyFields.ttfb_ms).toBe(50)
+    expect(entry.estimated_cost).toBe(0.01)
+    expect(entry.first_token_ms).toBe(100)
+  })
+
+  it('RuntimeSettings exposes every field used by SettingsPage', () => {
+    const settings: RuntimeSettings = {
+      siliconflow_api_key: '',
+      siliconflow_base_url: 'https://api.siliconflow.cn/v1',
+      embedding_model: 'BAAI/bge-m3',
+      llm_model: 'deepseek-ai/DeepSeek-V4-Flash',
+      llm_temperature: 0.3,
+      tavily_api_key: '',
+      api_key: '',
+      chunk_size: 1500,
+      chunk_overlap: 50,
+      top_k_retrieval: 5,
+      top_k_rerank: 3,
+      enable_quality_check: true,
+      enable_contextual_retrieval: true,
+    }
+    expect(settings.chunk_size).toBe(1500)
+    expect(settings.enable_quality_check).toBe(true)
   })
 
   it('KBChunk type should contain all fields used by BrowserPage', () => {
-    // This is a compile-time check: if KBChunk is missing any field
-    // used in BrowserPage, TypeScript will fail the build.
-    const chunk: GeneratedKBChunk = {
+    const chunk: KBChunk = {
       source: 'doc.md',
       chunk_index: 0,
       chunk_id: 'abc123',
@@ -94,8 +76,17 @@ describe('api type drift', () => {
     expect(chunk.section).toBeNull()
   })
 
+  it('settings update responses expose both warnings and message', () => {
+    const result: SettingsUpdateResult = {
+      updated: true,
+      warnings: ['需要重新导入文档'],
+      message: '',
+    }
+    expect(result.warnings).toHaveLength(1)
+  })
+
   it('ChatSource should contain index field used by MessageBubble', () => {
-    const source: GeneratedChatSource = {
+    const source: Source = {
       source: 'doc.md',
       content: 'content',
     }

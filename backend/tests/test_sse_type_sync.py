@@ -1,6 +1,6 @@
-"""Test that SSE hand-maintained types in api-types.generated.ts stay in sync with Pydantic models.
+"""Test that SSE hand-maintained types in api-types.ts stay in sync with Pydantic models.
 
-Reads the TS interfaces from frontend/src/lib/api-types.generated.ts, extracts
+Reads the TS interfaces from frontend/src/lib/api-types.ts, extracts
 the field names of KBChunk, DebugNodeInfo, and DebugInfo, and compares them
 against the Pydantic model fields from backend/src/api/models.py.
 
@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from src.api.models import KBChunk, NodeDebug, DebugInfo
 
 # Path to the TS file relative to backend/tests/
-_TS_FILE = Path(__file__).resolve().parent.parent.parent / "frontend" / "src" / "lib" / "api-types.generated.ts"
+_TS_FILE = Path(__file__).resolve().parent.parent.parent / "frontend" / "src" / "lib" / "api-types.ts"
 
 # TS interface name → Pydantic model class
 _INTERFACE_MAP: dict[str, type[BaseModel]] = {
@@ -62,7 +62,7 @@ class TestSSETypeSync(unittest.TestCase):
     def setUpClass(cls):
         if not _TS_FILE.exists():
             raise RuntimeError(
-                f"api-types.generated.ts not found at {_TS_FILE}. "
+                f"api-types.ts not found at {_TS_FILE}. "
                 "Run tests from the project root or backend/ directory."
             )
         cls.ts_source = _TS_FILE.read_text(encoding="utf-8")
@@ -84,7 +84,7 @@ class TestSSETypeSync(unittest.TestCase):
             self.fail(
                 f"TS 接口与 Pydantic 模型不同步。\n"
                 + "\n".join(errors)
-                + "\n请同步更新 frontend/src/lib/api-types.generated.ts 中的 SSE 类型，"
+                + "\n请同步更新 frontend/src/lib/api-types.ts 中的 SSE 类型，"
                   "使其与 backend/src/api/models.py 中的 Pydantic 模型保持一致。"
             )
 

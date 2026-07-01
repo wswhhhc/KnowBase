@@ -136,6 +136,44 @@ class QueryLogsResponse(BaseModel):
     total_completion_tokens: int = 0
 
 
+class RuntimeSettingsOut(BaseModel):
+    siliconflow_api_key: str = ""
+    siliconflow_base_url: str = "https://api.siliconflow.cn/v1"
+    embedding_model: str = "BAAI/bge-m3"
+    llm_model: str = "deepseek-ai/DeepSeek-V4-Flash"
+    llm_temperature: float = 0.3
+    tavily_api_key: str = ""
+    api_key: str = ""
+    chunk_size: int = 1500
+    chunk_overlap: int = 50
+    top_k_retrieval: int = 5
+    top_k_rerank: int = 3
+    enable_quality_check: bool = True
+    enable_contextual_retrieval: bool = True
+
+
+class RuntimeSettingsUpdate(BaseModel):
+    siliconflow_api_key: str | None = None
+    siliconflow_base_url: str | None = None
+    embedding_model: str | None = None
+    llm_model: str | None = None
+    llm_temperature: float | None = None
+    tavily_api_key: str | None = None
+    api_key: str | None = None
+    chunk_size: int | None = None
+    chunk_overlap: int | None = None
+    top_k_retrieval: int | None = None
+    top_k_rerank: int | None = None
+    enable_quality_check: bool | None = None
+    enable_contextual_retrieval: bool | None = None
+
+
+class SettingsUpdateResult(BaseModel):
+    updated: bool
+    warnings: list[str] = Field(default_factory=list)
+    message: str = ""
+
+
 class PinStateOut(BaseModel):
     thread_id: str
     pinned_chunk_ids: list[str] = Field(default_factory=list)
