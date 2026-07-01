@@ -3,17 +3,6 @@ import { Button, ScrollArea } from '@/components/ui'
 import { BarChart3, PanelRightOpen, ArrowLeft, TrendingUp, Clock, CheckCircle2, XCircle, HelpCircle, AlertTriangle, Sun, Moon, Globe, ChevronDown, ChevronUp, DollarSign } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { QueryLogEntry, QueryLogsResponse } from '@/lib/api'
-
-// Extended type for runtime fields not in the auto-generated schema
-interface LogEntryExtended extends QueryLogEntry {
-  ttfb_ms?: number
-  first_token_ms?: number
-  token_count?: number
-  prompt_tokens?: number
-  completion_tokens?: number
-  llm_model?: string
-  estimated_cost?: number
-}
 import { motion } from 'framer-motion'
 import type { ViewType } from '@/App'
 import { Progress, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Separator } from '@/components/ui'
@@ -94,7 +83,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
   }
 
   // Perf metrics from log entries
-  const typedLogs = logs as LogEntryExtended[]
+  const typedLogs = logs
   const ttfbValues = typedLogs.map(l => l.ttfb_ms || 0).filter(Boolean)
   const firstTokenValues = typedLogs.map(l => l.first_token_ms || 0).filter(Boolean)
   const avgTtfb = ttfbValues.length ? Math.round(ttfbValues.reduce((a, b) => a + b, 0) / ttfbValues.length) : 0
@@ -394,19 +383,19 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span className="cursor-default">
-                                    {(log as LogEntryExtended).token_count?.toLocaleString() ?? '-'}
+                                    {log.token_count?.toLocaleString() ?? '-'}
                                   </span>
                                 </TooltipTrigger>
-                                {(log as LogEntryExtended).llm_model && (
+                                {log.llm_model && (
                                   <TooltipContent>
-                                    <p className="text-2xs">{(log as LogEntryExtended).llm_model}</p>
+                                    <p className="text-2xs">{log.llm_model}</p>
                                   </TooltipContent>
                                 )}
                               </Tooltip>
                             </TooltipProvider>
                           </td>
                           <td className="py-2 text-right text-muted-foreground font-mono">
-                            {(log as LogEntryExtended).estimated_cost ? `¥${(log as LogEntryExtended).estimated_cost!.toFixed(4)}` : '-'}
+                            {log.estimated_cost ? `¥${log.estimated_cost.toFixed(4)}` : '-'}
                           </td>
                         </tr>
                       ))}

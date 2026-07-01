@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "gen-api-types": "npx openapi-typescript ../backend/openapi.json --output src/lib/api-types.ts"
+    "gen-api-types": "node scripts/generate-api-types.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.6",

@@ -85,8 +85,9 @@ export default function SettingsPage({ onOpenSidebar, sidebarOpen }: SettingsPag
         else if (!nextApiKey) localStorage.removeItem('knowbase_api_key')
       }
       setSavedGroup(title)
-      if (res.warnings?.length) {
-        setWarnings((prev) => [...new Set([...prev, ...res.warnings])])
+      const nextWarnings = res.warnings ?? []
+      if (nextWarnings.length) {
+        setWarnings((prev) => [...new Set([...prev, ...nextWarnings])])
       }
       toast.success(`${title}已保存`)
       setTimeout(() => {

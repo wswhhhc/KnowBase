@@ -1,17 +1,8 @@
 import type {
-  Source, Conversation, ApiMessage, KBStats, QueryLogEntry as GeneratedQueryLogEntry,
-  DebugNodeInfo, DebugInfo, DocSource, HotspotEntry, KBConfig, IngestResponse,
-} from './api-types.generated'
-
-export interface QueryLogEntry extends GeneratedQueryLogEntry {
-  ttfb_ms?: number
-  first_token_ms?: number
-  token_count?: number | null
-  prompt_tokens?: number | null
-  completion_tokens?: number | null
-  llm_model?: string | null
-  estimated_cost?: number | null
-}
+  Source, Conversation, ApiMessage, KBStats, QueryLogEntry,
+  DebugNodeInfo, DebugInfo, DocSource, HotspotEntry, KBConfig, IngestResponse, KBChunk,
+  RuntimeSettings, SettingsUpdateResult,
+} from './api-types'
 
 export interface QueryLogsResponse {
   logs: QueryLogEntry[]
@@ -21,9 +12,21 @@ export interface QueryLogsResponse {
   total_completion_tokens: number
 }
 
-export type { Source, Conversation, KBStats, DebugNodeInfo, DebugInfo, DocSource, HotspotEntry, KBConfig, IngestResponse }
-import type { KBChunk } from './api-types.generated'
-export type { KBChunk }
+export type {
+  Source,
+  Conversation,
+  KBStats,
+  QueryLogEntry,
+  DebugNodeInfo,
+  DebugInfo,
+  DocSource,
+  HotspotEntry,
+  KBConfig,
+  IngestResponse,
+  KBChunk,
+  RuntimeSettings,
+  SettingsUpdateResult,
+}
 
 export interface Message extends ApiMessage {
   role: 'user' | 'assistant'
@@ -167,22 +170,6 @@ export interface DebugSearchResponse {
   vector_results: DebugSearchHit[]
   bm25_results: DebugSearchHit[]
   fused_results: DebugSearchHit[]
-}
-
-export interface RuntimeSettings {
-  siliconflow_api_key: string
-  siliconflow_base_url: string
-  embedding_model: string
-  llm_model: string
-  llm_temperature: number
-  tavily_api_key: string
-  api_key: string
-  chunk_size: number
-  chunk_overlap: number
-  top_k_retrieval: number
-  top_k_rerank: number
-  enable_quality_check: boolean
-  enable_contextual_retrieval: boolean
 }
 
 export const MASKED_SECRET_VALUE = '__KEEP_EXISTING_SECRET__'
@@ -394,7 +381,7 @@ export const getSettings = () =>
   req<RuntimeSettings>('/settings')
 
 export const updateSettings = (data: Partial<RuntimeSettings>) =>
-  req<{ updated: boolean; warnings: string[] }>('/settings', {
+  req<SettingsUpdateResult>('/settings', {
     method: 'PUT',
     body: JSON.stringify(data),
   })
