@@ -18,7 +18,7 @@ def verify_api_key(credentials: HTTPAuthorizationCredentials | None = Depends(_s
 
     If no API_KEY is configured, skip auth (local dev mode).
     """
-    api_key = get_runtime_setting("api_key", settings.api_key)
+    api_key = get_runtime_setting("api_key", settings.auth.api_key)
     if not api_key:
         return
     if credentials is None or credentials.credentials != api_key:

@@ -42,6 +42,24 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.max_upload_mb, 3)
         self.assertTrue(settings.langsmith_tracing)
 
+    def test_settings_exposes_layered_views(self):
+        settings = Settings(
+            SILICONFLOW_API_KEY="sk-1234567890",
+            SILICONFLOW_BASE_URL="https://example.com/v1",
+            EMBEDDING_MODEL="demo-embed",
+            LLM_MODEL="demo-llm",
+            TOP_K_RETRIEVAL="9",
+            ENABLE_QUALITY_CHECK="false",
+            API_KEY="local-key",
+        )
+
+        self.assertEqual(settings.llm.api_key, "sk-1234567890")
+        self.assertEqual(settings.llm.base_url, "https://example.com/v1")
+        self.assertEqual(settings.llm.model, "demo-llm")
+        self.assertEqual(settings.retrieval.top_k, 9)
+        self.assertFalse(settings.quality.enabled)
+        self.assertEqual(settings.auth.api_key, "local-key")
+
     def test_update_runtime_settings_coerces_types(self):
         settings_module.update_runtime_settings({
             "llm_temperature": "0.7",
