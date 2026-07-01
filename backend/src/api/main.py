@@ -16,7 +16,7 @@ from config.settings import _is_configured_api_key, get_runtime_setting, setting
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    api_key = get_runtime_setting("siliconflow_api_key", settings.siliconflow_api_key)
+    api_key = get_runtime_setting("siliconflow_api_key", settings.llm.api_key)
     if _is_configured_api_key(api_key):
         try:
             kb = get_knowledge_base()

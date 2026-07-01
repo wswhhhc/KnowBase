@@ -6,11 +6,73 @@ import json
 import os
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+
+
+class LLMSettings(BaseModel):
+    """Layered view for model and embedding configuration."""
+
+    api_key: str
+    base_url: str
+    embedding_model: str
+    model: str
+    temperature: float
+    max_tokens: int
+
+
+class RetrievalSettings(BaseModel):
+    """Layered view for retrieval and chunking knobs."""
+
+    contextual_retrieval_enabled: bool
+    chunk_size: int
+    chunk_overlap: int
+    top_k: int
+    rerank_top_k: int
+    vector_candidate_k: int
+    rerank_score_gap_threshold: float
+    rerank_query_length: int
+    score_threshold: float | None
+    rrf_k: int
+
+
+class QualitySettings(BaseModel):
+    """Layered view for quality gates and upload safety limits."""
+
+    enabled: bool
+    max_retries: int
+    max_upload_mb: int
+
+
+class ObservabilitySettings(BaseModel):
+    """Layered view for LangSmith tracing configuration."""
+
+    tracing_enabled: bool
+    api_key: str
+    project: str
+
+
+class ExternalServiceSettings(BaseModel):
+    """Layered view for optional external integrations."""
+
+    tavily_api_key: str
+
+
+class AuthSettings(BaseModel):
+    """Layered view for backend auth configuration."""
+
+    api_key: str
+
+
+class StorageSettings(BaseModel):
+    """Layered view for local persistence paths."""
+
+    chroma_persist_dir: Path
+    data_dir: Path
+    checkpoint_db_path: str
 
 
 class Settings(BaseSettings):
@@ -93,6 +155,64 @@ class Settings(BaseSettings):
             raise ValueError("must be greater than or equal to 0")
         return value
 
+    @property
+    def llm(self) -> LLMSettings:
+        return LLMSettings(
+            api_key=self.siliconflow_api_key,
+            base_url=self.siliconflow_base_url,
+            embedding_model=self.embedding_model,
+            model=self.llm_model,
+            temperature=self.llm_temperature,
+            max_tokens=self.llm_max_tokens,
+        )
+
+    @property
+    def retrieval(self) -> RetrievalSettings:
+        return RetrievalSettings(
+            contextual_retrieval_enabled=self.enable_contextual_retrieval,
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            top_k=self.top_k_retrieval,
+            rerank_top_k=self.top_k_rerank,
+            vector_candidate_k=self.vector_candidate_k,
+            rerank_score_gap_threshold=self.rerank_score_gap_threshold,
+            rerank_query_length=self.rerank_query_length,
+            score_threshold=self.score_threshold,
+            rrf_k=self.rrf_k,
+        )
+
+    @property
+    def quality(self) -> QualitySettings:
+        return QualitySettings(
+            enabled=self.enable_quality_check,
+            max_retries=self.max_retries,
+            max_upload_mb=self.max_upload_mb,
+        )
+
+    @property
+    def observability(self) -> ObservabilitySettings:
+        return ObservabilitySettings(
+            tracing_enabled=self.langsmith_tracing,
+            api_key=self.langsmith_api_key,
+            project=self.langsmith_project,
+        )
+
+    @property
+    def external_services(self) -> ExternalServiceSettings:
+        return ExternalServiceSettings(tavily_api_key=self.tavily_api_key)
+
+    @property
+    def auth(self) -> AuthSettings:
+        return AuthSettings(api_key=self.api_key)
+
+    @property
+    def storage(self) -> StorageSettings:
+        return StorageSettings(
+            chroma_persist_dir=self.chroma_persist_dir,
+            data_dir=self.data_dir,
+            checkpoint_db_path=self.checkpoint_db_path,
+        )
+
 
 settings = Settings()
 _RUNTIME_SETTINGS_PATH = ROOT_DIR / "data" / "runtime_settings.json"
@@ -164,9 +284,9 @@ _load_runtime_settings()
 if settings.langsmith_tracing:
     os.environ.setdefault("LANGSMITH_TRACING", "true")
     os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
-    os.environ.setdefault("LANGSMITH_PROJECT", settings.langsmith_project)
-    if settings.langsmith_api_key:
-        os.environ.setdefault("LANGSMITH_API_KEY", settings.langsmith_api_key)
+    os.environ.setdefault("LANGSMITH_PROJECT", settings.observability.project)
+    if settings.observability.api_key:
+        os.environ.setdefault("LANGSMITH_API_KEY", settings.observability.api_key)
 
 
 def _is_configured_api_key(api_key: str) -> bool:
@@ -176,7 +296,7 @@ def _is_configured_api_key(api_key: str) -> bool:
 
 def require_siliconflow_api_key() -> str:
     """Return a configured API key or raise a user-actionable error."""
-    api_key = get_runtime_setting("siliconflow_api_key", settings.siliconflow_api_key)
+    api_key = get_runtime_setting("siliconflow_api_key", settings.llm.api_key)
     if not _is_configured_api_key(api_key):
         raise ValueError(
             "缺少硅基流动 API Key。请在 .env 中配置 SILICONFLOW_API_KEY=你的密钥，"
@@ -186,29 +306,29 @@ def require_siliconflow_api_key() -> str:
 
 
 # Backwards-compatible constants for existing imports.
-SILICONFLOW_API_KEY = settings.siliconflow_api_key
-SILICONFLOW_BASE_URL = settings.siliconflow_base_url
-EMBEDDING_MODEL = settings.embedding_model
-LLM_MODEL = settings.llm_model
-LLM_TEMPERATURE = settings.llm_temperature
-LLM_MAX_TOKENS = settings.llm_max_tokens
-CHROMA_PERSIST_DIR = str(settings.chroma_persist_dir)
-DATA_DIR = str(settings.data_dir)
-CHUNK_SIZE = settings.chunk_size
-CHUNK_OVERLAP = settings.chunk_overlap
-TOP_K_RETRIEVAL = settings.top_k_retrieval
-TOP_K_RERANK = settings.top_k_rerank
-VECTOR_CANDIDATE_K = settings.vector_candidate_k
-RERANK_SCORE_GAP_THRESHOLD = settings.rerank_score_gap_threshold
-RERANK_QUERY_LENGTH = settings.rerank_query_length
-SCORE_THRESHOLD = settings.score_threshold
-RRF_K = settings.rrf_k
-ENABLE_QUALITY_CHECK = settings.enable_quality_check
-ENABLE_CONTEXTUAL_RETRIEVAL = settings.enable_contextual_retrieval
-MAX_RETRIES = settings.max_retries
-MAX_UPLOAD_MB = settings.max_upload_mb
-CHECKPOINT_DB_PATH = settings.checkpoint_db_path
-TAVILY_API_KEY = settings.tavily_api_key
-LANGSMITH_TRACING = settings.langsmith_tracing
-LANGSMITH_API_KEY = settings.langsmith_api_key
-LANGSMITH_PROJECT = settings.langsmith_project
+SILICONFLOW_API_KEY = settings.llm.api_key
+SILICONFLOW_BASE_URL = settings.llm.base_url
+EMBEDDING_MODEL = settings.llm.embedding_model
+LLM_MODEL = settings.llm.model
+LLM_TEMPERATURE = settings.llm.temperature
+LLM_MAX_TOKENS = settings.llm.max_tokens
+CHROMA_PERSIST_DIR = str(settings.storage.chroma_persist_dir)
+DATA_DIR = str(settings.storage.data_dir)
+CHUNK_SIZE = settings.retrieval.chunk_size
+CHUNK_OVERLAP = settings.retrieval.chunk_overlap
+TOP_K_RETRIEVAL = settings.retrieval.top_k
+TOP_K_RERANK = settings.retrieval.rerank_top_k
+VECTOR_CANDIDATE_K = settings.retrieval.vector_candidate_k
+RERANK_SCORE_GAP_THRESHOLD = settings.retrieval.rerank_score_gap_threshold
+RERANK_QUERY_LENGTH = settings.retrieval.rerank_query_length
+SCORE_THRESHOLD = settings.retrieval.score_threshold
+RRF_K = settings.retrieval.rrf_k
+ENABLE_QUALITY_CHECK = settings.quality.enabled
+ENABLE_CONTEXTUAL_RETRIEVAL = settings.retrieval.contextual_retrieval_enabled
+MAX_RETRIES = settings.quality.max_retries
+MAX_UPLOAD_MB = settings.quality.max_upload_mb
+CHECKPOINT_DB_PATH = settings.storage.checkpoint_db_path
+TAVILY_API_KEY = settings.external_services.tavily_api_key
+LANGSMITH_TRACING = settings.observability.tracing_enabled
+LANGSMITH_API_KEY = settings.observability.api_key
+LANGSMITH_PROJECT = settings.observability.project
