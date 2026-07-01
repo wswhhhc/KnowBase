@@ -31,8 +31,7 @@ from src.graph_routing import (
     route_after_classifier,
     route_question,
 )
-from src.graph_state import GraphState
-from src.kb_models import RetrievalResult
+from src.graph_state import GraphConfig, GraphState, GraphStateUpdate
 from src.knowledge_base import KnowledgeBase
 
 
@@ -155,28 +154,31 @@ def _initial_state(question: str) -> GraphState:
         "outcome_category": "success",
         "used_rerank": False,
         "used_rewrite": False,
+        "token_count": None,
+        "prompt_tokens": None,
+        "completion_tokens": None,
     }
 
 
-def _graph_config(thread_id: str) -> dict:
+def _graph_config(thread_id: str) -> GraphConfig:
     return {"configurable": {"thread_id": thread_id}}
 
 
-def _state_with_overrides(question: str, **overrides) -> GraphState:
+def _state_with_overrides(question: str, **overrides: object) -> GraphState:
     state = _initial_state(question)
     state.update(overrides)
     return state
 
 
-def _stream_query(question: str, thread_id: str, knowledge_base: KnowledgeBase, **state_overrides) -> Iterable[dict]:
+def _stream_query(question: str, thread_id: str, knowledge_base: KnowledgeBase, **state_overrides: object) -> Iterable[GraphStateUpdate]:
     graph = get_graph(knowledge_base)
     for update in graph.stream(_state_with_overrides(question, **state_overrides), config=_graph_config(thread_id), stream_mode="updates"):
         yield update
 
 
 def _stream_query_with_tokens(
-    question: str, thread_id: str, knowledge_base: KnowledgeBase, **state_overrides
-) -> Generator[tuple[str, dict], None, None]:
+    question: str, thread_id: str, knowledge_base: KnowledgeBase, **state_overrides: object
+) -> Generator[tuple[str, object], None, None]:
     graph = get_graph(knowledge_base)
     for mode, data in graph.stream(
         _state_with_overrides(question, **state_overrides),
@@ -197,7 +199,7 @@ def run_query(
     search_strategy: str = "balanced",
     pinned_chunk_ids: list[str] | None = None,
     excluded_chunk_ids: list[str] | None = None,
-) -> dict | Iterable[dict] | Generator[tuple[str, dict], None, None]:
+) -> GraphState | Iterable[GraphStateUpdate] | Generator[tuple[str, object], None, None]:
     overrides = {
         "web_search_enabled": web_search_enabled,
         "search_strategy": search_strategy,

@@ -78,6 +78,19 @@ def _state(**overrides) -> dict:
     return base
 
 
+class InitialStateTests(unittest.TestCase):
+    def test_initial_state_seeds_token_usage_fields_and_defaults(self):
+        state = _initial_state("默认问题")
+
+        self.assertEqual(state["question"], "默认问题")
+        self.assertEqual(state["question_type"], "knowledge_base")
+        self.assertEqual(state["search_strategy"], "balanced")
+        self.assertEqual(state["search_filter"], {})
+        self.assertIsNone(state["token_count"])
+        self.assertIsNone(state["prompt_tokens"])
+        self.assertIsNone(state["completion_tokens"])
+
+
 # =============================================================================
 # _should_rerank — 5 strategy/score/length branches
 # =============================================================================

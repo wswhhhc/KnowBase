@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import zlib
 from collections import OrderedDict
-from typing import List, Literal
+from typing import Literal, Protocol
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.documents import Document
@@ -31,12 +31,30 @@ from config.settings import (
     require_siliconflow_api_key,
 )
 from src import graph_utils as gu
-from src.graph_state import GraphState, QualityDecision, RerankDecision
+from src.graph_state import GraphSource, GraphState, GraphStateUpdate, QualityDecision, RerankDecision
 from src.kb_models import RetrievalResult, normalize_source
 from src.utils import extract_context_terms, json_from_text
 
 
 logger = logging.getLogger(__name__)
+
+
+class _VectorStoreLike(Protocol):
+    def get(self, ids: list[str], include: list[str]) -> dict[str, list[object] | None]: ...
+
+
+class _GraphKnowledgeBaseLike(Protocol):
+    vector_store: _VectorStoreLike
+
+    def hybrid_search(
+        self,
+        query: str,
+        k: int,
+        score_threshold: float | None = None,
+        filter: object | None = None,
+    ) -> list[RetrievalResult]: ...
+
+    def get_neighbor_chunks(self, chunk_id: str, window: int = 1) -> list[Document]: ...
 
 
 # ── Query rewriting ──────────────────────────────────────────────────
@@ -53,7 +71,7 @@ _rewrite_cache: OrderedDict[str, str] = OrderedDict()
 _REWRITE_CACHE_MAX = 1000
 
 
-def rewrite_query(state: GraphState) -> dict:
+def rewrite_query(state: GraphState) -> GraphStateUpdate:
     question = state["question"]
     history = gu._messages_to_turns(state.get("messages", []))
 
@@ -100,7 +118,7 @@ def rewrite_query(state: GraphState) -> dict:
 # ── History-based answers ────────────────────────────────────────────
 
 
-def answer_from_history(state: GraphState) -> dict:
+def answer_from_history(state: GraphState) -> GraphStateUpdate:
     history = gu._messages_to_turns(state.get("messages", []))
     if not history:
         answer = "当前会话里还没有可参考的历史消息，所以我无法回答这个问题。"
@@ -121,7 +139,7 @@ def answer_from_history(state: GraphState) -> dict:
     }
 
 
-def summarize_history(state: GraphState) -> dict:
+def summarize_history(state: GraphState) -> GraphStateUpdate:
     history = gu._messages_to_turns(state.get("messages", []))
     if not history:
         answer = "当前会话还没有足够内容可供总结。"
@@ -216,7 +234,7 @@ def _document_relevance_boost(doc: Document, query: str, query_terms: list[str])
     return bonus
 
 
-def retrieve_docs(state: GraphState, kb) -> dict:
+def retrieve_docs(state: GraphState, kb: _GraphKnowledgeBaseLike) -> GraphStateUpdate:
     query = state.get("rewritten_question") or state["question"]
     strategy = state.get("search_strategy", "balanced")
     default_retrieval_k = get_runtime_setting("top_k_retrieval", TOP_K_RETRIEVAL)
@@ -307,7 +325,7 @@ def route_after_rerank(state: GraphState) -> Literal["generate_answer"]:
     return "generate_answer"
 
 
-def handle_missing_context(state: GraphState) -> dict:
+def handle_missing_context(state: GraphState) -> GraphStateUpdate:
     question = state.get("rewritten_question") or state["question"]
     answer = (
         "工作区里没有找到足够相关的内容来回答这个问题。"
@@ -329,7 +347,7 @@ def handle_missing_context(state: GraphState) -> dict:
 # ── Web search ───────────────────────────────────────────────────────
 
 
-def _web_search_context(state: GraphState) -> dict:
+def _web_search_context(state: GraphState) -> GraphStateUpdate:
     from src.web_search import format_search_results, web_search as _web_search
 
     query = state.get("rewritten_question") or state["question"]
@@ -384,7 +402,7 @@ def _should_rerank(state: GraphState) -> bool:
     return True
 
 
-def rerank_docs(state: GraphState) -> dict:
+def rerank_docs(state: GraphState) -> GraphStateUpdate:
     docs = state.get("documents", [])
     if not docs:
         return {}
@@ -443,7 +461,7 @@ def rerank_docs(state: GraphState) -> dict:
 # ── Answer generation ────────────────────────────────────────────────
 
 
-def generate_answer(state: GraphState) -> dict:
+def generate_answer(state: GraphState) -> GraphStateUpdate:
     context = state.get("context", "")
     web_context = state.get("web_context", "")
     web_search_error = state.get("web_search_error", "")
@@ -516,7 +534,7 @@ def generate_answer(state: GraphState) -> dict:
 # ── Quality check ────────────────────────────────────────────────────
 
 
-def _rule_check_quality(state: GraphState) -> dict | None:
+def _rule_check_quality(state: GraphState) -> GraphStateUpdate | None:
     answer = state.get("answer", "")
     context = state.get("context", "")
     web_context = state.get("web_context", "")
@@ -554,7 +572,7 @@ def _rule_check_quality(state: GraphState) -> dict | None:
     return None
 
 
-def check_quality(state: GraphState) -> dict:
+def check_quality(state: GraphState) -> GraphStateUpdate:
     enable_quality_check = get_runtime_setting("enable_quality_check", ENABLE_QUALITY_CHECK)
     if state.get("question_type") != "knowledge_base" or not enable_quality_check:
         answer = state.get("answer", "")
@@ -698,7 +716,7 @@ def _compute_evidence(state: GraphState) -> tuple[str, str, str]:
     return "weak", "weak_evidence", f"检索到 {local_count} 个相关片段，但证据不够充分"
 
 
-def finalize(state: GraphState) -> dict:
+def finalize(state: GraphState) -> GraphStateUpdate:
     evidence_level, outcome_category, evidence_summary = _compute_evidence(state)
     return {
         "evidence_level": evidence_level,
