@@ -45,7 +45,7 @@ from src.kb_models import (
     document_chunk_id as _document_chunk_id,
 )
 from src.loaders import load_document
-from src.api.models import HotspotEntry
+from src.api.models import HotspotEntry, KBChunk
 
 
 class EmbeddingIndexMismatchError(ValueError):
