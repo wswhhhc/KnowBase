@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import List, Literal
+from typing import Literal
 
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -18,7 +18,7 @@ from config.settings import (
     SILICONFLOW_BASE_URL,
     require_siliconflow_api_key,
 )
-from src.graph_state import GraphState, RouteDecision
+from src.graph_state import GraphState, GraphStateUpdate, QuestionType, RouteDecision, SearchFilter
 from src import graph_utils as gu
 from src.utils import json_from_text
 
@@ -46,7 +46,7 @@ _SCOPE_RULES: list[tuple[tuple[str, ...], str]] = [
 ]
 
 
-def detect_question_type(question: str, chat_history: List[tuple[str, str]]) -> str:
+def detect_question_type(question: str, chat_history: list[tuple[str, str]]) -> QuestionType:
     """Regex-based question routing (fallback when LLM classifier is unavailable)."""
     normalized = re.sub(r"\s+", "", question.lower())
 
@@ -59,7 +59,7 @@ def detect_question_type(question: str, chat_history: List[tuple[str, str]]) -> 
     return "knowledge_base"
 
 
-def _route_search_scope(question: str, question_type: str) -> dict:
+def _route_search_scope(question: str, question_type: QuestionType) -> SearchFilter:
     """Route to a search filter based on question content and type."""
     if question_type != "knowledge_base":
         return {}
@@ -70,7 +70,7 @@ def _route_search_scope(question: str, question_type: str) -> dict:
     return {}
 
 
-def route_question(state: GraphState) -> dict:
+def route_question(state: GraphState) -> GraphStateUpdate:
     """Classify question: run rules first, LLM only for ambiguous cases."""
     history = gu._messages_to_turns(state.get("messages", []))
 
@@ -130,7 +130,7 @@ def route_after_classifier(
     return "rewrite_query"
 
 
-def handle_clarification(state: GraphState) -> dict:
+def handle_clarification(state: GraphState) -> GraphStateUpdate:
     """Handle ambiguous or greeting-type queries that need human clarification."""
     question = state["question"]
     answer = (
