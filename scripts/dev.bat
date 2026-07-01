@@ -2,6 +2,11 @@
 chcp 65001 >nul
 cd /d "%~dp0.."
 
+if /I "%~1"=="--docker" (
+  docker compose up --build
+  goto :eof
+)
+
 echo ===========================================
 echo   KnowBase 开发环境启动
 echo ===========================================
