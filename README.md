@@ -32,7 +32,7 @@
     <img src="https://img.shields.io/badge/TypeScript-Vite-3178C6?style=for-the-badge&logo=typescript&logoColor=3178C6" height="28" alt="TypeScript" />
     <img src="https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=06B6D4" height="28" alt="Tailwind CSS" />
     <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=3776AB" height="28" alt="Python" />
-    <img src="https://img.shields.io/badge/tests-643%20passing-22C55E?style=for-the-badge&logo=vitest&logoColor=22C55E" height="28" alt="643 tests passing" />
+    <img src="https://img.shields.io/badge/tests-650%20passing-22C55E?style=for-the-badge&logo=vitest&logoColor=22C55E" height="28" alt="650 tests passing" />
   </p>
 
   <br>
@@ -106,7 +106,7 @@
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.11+（推荐 3.12，与 CI 一致）
 - Node.js 20+
 - [uv](https://docs.astral.sh/uv/)（Python 包管理器）
 - 一个 [硅基流动](https://cloud.siliconflow.cn) API Key
@@ -161,6 +161,16 @@ SILICONFLOW_API_KEY=sk-你的密钥
 | **前端单独** | `cd frontend && npm run dev` |
 
 打开 [http://localhost:5173](http://localhost:5173)
+
+### 常用命令
+
+| 场景 | 命令 |
+|------|------|
+| **后端测试（推荐）** | `cd backend && uv run pytest --cov --tb=short -v` |
+| **后端测试（CI 兼容）** | `cd backend && uv run python -m unittest discover -v` |
+| **前端测试** | `cd frontend && npm test` |
+| **前端构建** | `cd frontend && npm run build` |
+| **类型生成** | `cd frontend && npm run gen-api-types` |
 
 ### 使用流程
 
@@ -300,7 +310,7 @@ KnowBase/
 │   │   ├── web_search.py              # Tavily 联网搜索
 │   │   ├── evaluate.py                # 离线 RAG 质量评估
 │   │   └── metrics.py                 # 查询 JSONL 日志
-│   └── tests/                         # 28 个文件 · 444 用例
+│   ├── tests/                         # 28 个文件 · 444 用例
 │   └── scripts/quickstart.py          # 5 分钟 demo 体验脚本
 ├── frontend/                          # React 19 + Vite + Tailwind
 │   └── src/
@@ -372,8 +382,14 @@ KnowBase/
 
 | 层 | 框架 | 文件 | 用例 | 运行命令 |
 |----|------|------|------|---------|
-| **后端** | pytest | 28 | 444 | `cd backend && uv run pytest --cov --tb=short -v` |
+| **后端（本地推荐）** | pytest | 28 | 444 | `cd backend && uv run pytest --cov --tb=short -v` |
+| **后端（GitHub CI）** | unittest discover | 28 | 444 | `cd backend && uv run python -m unittest discover -v` |
 | **前端** | vitest + @testing-library/react | 23 | 206 | `cd frontend && npm test` |
+
+说明：
+- GitHub Actions 当前执行后端 `unittest discover` 与前端 `npm test`。
+- 接口、OpenAPI 或前端 API 契约变更后，额外执行 `cd frontend && npm run gen-api-types`。
+- 提交前建议再跑 `cd frontend && npm run build`，因为构建检查不会被 `npm test` 覆盖。
 
 覆盖策略：
 - LLM mock（`FakeLLM`），Chroma patch，SQLite tempdir 隔离
@@ -419,6 +435,14 @@ KnowBase/
 | **LLM / Embedding** | 硅基流动 OpenAI-compatible API |
 | **联网搜索** | Tavily（可选） |
 | **追踪** | LangSmith（可选） |
+
+<br>
+
+---
+
+## Contributing
+
+贡献流程、提交前检查、API 类型生成和模块拆分约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 <br>
 
