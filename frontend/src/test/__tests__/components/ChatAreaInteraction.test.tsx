@@ -19,6 +19,7 @@ vi.mock('lucide-react', () => {
   const icons: Record<string, string> = {
     PanelRightOpen: 'PanelRightOpen', Square: 'Square', Sparkles: 'Sparkles',
     Search: 'Search', Globe: 'Globe', Zap: 'Zap', Scale: 'Scale', FileSearch: 'FileSearch', RotateCcw: 'RotateCcw',
+    SlidersHorizontal: 'SlidersHorizontal',
     Download: 'Download', ThumbsUp: 'ThumbsUp', ThumbsDown: 'ThumbsDown',
     BookOpen: 'BookOpen', BarChart3: 'BarChart3', FileDown: 'FileDown',
     Sun: 'Sun', Moon: 'Moon', Copy: 'Copy', CheckCircle: 'CheckCircle',
@@ -26,6 +27,7 @@ vi.mock('lucide-react', () => {
     MessageSquare: 'MessageSquare',
     Bookmark: 'Bookmark', BookmarkCheck: 'BookmarkCheck', ExternalLink: 'ExternalLink', Upload: 'Upload',
     RefreshCw: 'RefreshCw', AlignLeft: 'AlignLeft', Paperclip: 'Paperclip', Pin: 'Pin', X: 'X',
+    ArrowRight: 'ArrowRight', LibraryBig: 'LibraryBig',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
@@ -72,6 +74,12 @@ function renderChatArea(chatOverrides?: any, propsOverrides?: any) {
       sidebarOpen={true}
       onNavigate={mockOnNavigate}
       isLoadingMessages={false}
+      workspaceSummary={{
+        workspaceName: '默认工作区',
+        documentCount: 0,
+        conversationCount: 0,
+      }}
+      isMobile={false}
       {...propsOverrides}
     />
   )
@@ -189,6 +197,11 @@ describe('ChatArea interactions', () => {
         sidebarOpen={true}
         onNavigate={mockOnNavigate}
         isLoadingMessages={true}
+        workspaceSummary={{
+          workspaceName: '默认工作区',
+          documentCount: 0,
+          conversationCount: 0,
+        }}
       />)
     // Skeleton elements have a class or role — look for multiple skeleton divs
     const skeletons = document.querySelectorAll('.animate-pulse')
@@ -198,6 +211,13 @@ describe('ChatArea interactions', () => {
   it('renders welcome message when no messages', () => {
     renderChatArea()
     expect(screen.getByText('工作区问答助手')).toBeInTheDocument()
+  })
+
+  it('shows a compact strategy trigger instead of the full strategy group on mobile', () => {
+    renderChatArea(undefined, { isMobile: true })
+
+    expect(screen.queryByRole('radiogroup', { name: '检索策略' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /检索与策略/i })).toBeInTheDocument()
   })
 
   it('renders messages with citations', () => {

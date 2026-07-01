@@ -83,7 +83,7 @@ async def feedback(conv_id: str, msg_id: int, body: MessageFeedback):
 @router.get("/{conv_id}/export")
 async def export(
     conv_id: str,
-    format: str = Query("markdown", regex="^(markdown|json)$"),
+    format: str = Query("markdown", pattern="^(markdown|json)$"),
     include_sources: bool = Query(True),
     include_debug: bool = Query(False),
 ) -> ExportOut:
@@ -91,7 +91,7 @@ async def export(
     if format == "json":
         if not result:
             raise HTTPException(404, "对话不存在")
-        return ExportOut(json=result)
+        return ExportOut(export_json=result)
     if not result:
         raise HTTPException(404, "对话不存在")
     return ExportOut(markdown=result)

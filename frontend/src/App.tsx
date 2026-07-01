@@ -9,6 +9,7 @@ import DashboardPage from '@/components/DashboardPage'
 import SettingsPage from '@/components/SettingsPage'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { Sparkles, BookOpen, BarChart3, Settings, Upload } from 'lucide-react'
+import type { WorkspaceSummary } from '@/types/workspace-summary'
 
 export type ViewType = 'chat' | 'browser' | 'dashboard' | 'settings'
 const UPLOAD_TRIGGER_EVENT = 'kb-trigger-upload'
@@ -33,6 +34,11 @@ function App() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [highlightChunkId, setHighlightChunkId] = useState<string | null>(null)
   const [activeWsId, setActiveWsId] = useState<string>('')
+  const [workspaceSummary, setWorkspaceSummary] = useState<WorkspaceSummary>({
+    workspaceName: '默认工作区',
+    documentCount: 0,
+    conversationCount: 0,
+  })
   const chat = useChat((threadId) => {
     setActiveThreadId(threadId)
     setConvRefreshKey((k) => k + 1)
@@ -99,6 +105,7 @@ function App() {
           activeThreadId={activeThreadId}
           onLoadingMessages={setIsLoadingMessages}
           onWorkspaceChange={syncWsId}
+          onWorkspaceSummaryChange={setWorkspaceSummary}
         />
       </div>
 
@@ -113,6 +120,8 @@ function App() {
             isLoadingMessages={isLoadingMessages}
             onCitationClick={handleCitationClick}
             onSendQuestion={handleSendQuestion}
+            workspaceSummary={workspaceSummary}
+            isMobile={isMobile}
           />
           </ErrorBoundary>
         )}
@@ -150,19 +159,20 @@ function App() {
         {/* Mobile bottom tab bar */}
         {isMobile && (
           <>
-          {/* Upload FAB */}
-          <button
-            onClick={() => {
-              sessionStorage.setItem('kb_trigger_upload', 'true')
-              setActiveView('browser')
-              window.dispatchEvent(new Event(UPLOAD_TRIGGER_EVENT))
-              if (isMobile) setSidebarOpen(false)
-            }}
-            className="fixed bottom-20 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:bg-primary/90 transition-colors"
-            title="上传文档"
-          >
-            <Upload className="h-5 w-5" />
-          </button>
+          {activeView === 'browser' && (
+            <button
+              onClick={() => {
+                sessionStorage.setItem('kb_trigger_upload', 'true')
+                setActiveView('browser')
+                window.dispatchEvent(new Event(UPLOAD_TRIGGER_EVENT))
+                if (isMobile) setSidebarOpen(false)
+              }}
+              className="fixed bottom-20 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:bg-primary/90 transition-colors"
+              title="上传文档"
+            >
+              <Upload className="h-5 w-5" />
+            </button>
+          )}
           <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-surface/90 backdrop-blur-lg safe-area-bottom">
             <div className="flex items-center justify-around h-14">
               {([

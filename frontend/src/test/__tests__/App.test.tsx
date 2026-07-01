@@ -103,4 +103,24 @@ describe('App component', () => {
     })
     expect(sessionStorage.getItem('kb_trigger_upload')).toBe('true')
   })
+
+  it('hides the mobile upload FAB outside the browser view', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
+
+    render(<App />)
+
+    expect(screen.queryByTitle('上传文档')).not.toBeInTheDocument()
+  })
 })

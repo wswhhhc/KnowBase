@@ -16,6 +16,7 @@ import DashboardSummary from '@/components/sidebar/DashboardSummary'
 import type { ChatMessage } from '@/hooks/useChat'
 import type { Conversation, DebugInfo, PinStateResponse } from '@/lib/api'
 import type { ViewType } from '@/App'
+import type { WorkspaceSummary } from '@/types/workspace-summary'
 
 interface SidebarProps {
   chat: {
@@ -31,6 +32,7 @@ interface SidebarProps {
   activeThreadId: string | null
   onLoadingMessages?: (loading: boolean) => void
   onWorkspaceChange?: (wsId: string) => void
+  onWorkspaceSummaryChange?: (summary: WorkspaceSummary) => void
   isMobile?: boolean
 }
 
@@ -43,7 +45,7 @@ const NAV_ITEMS: { view: ViewType; icon: React.ComponentType<{ className?: strin
 
 const DEFAULT_WORKSPACE_SELECT_VALUE = '__default_workspace__'
 
-export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages, onWorkspaceChange, isMobile = false }: SidebarProps) {
+export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages, onWorkspaceChange, onWorkspaceSummaryChange, isMobile = false }: SidebarProps) {
   const theme = useTheme()
   const wss = useWorkspaces()
   const convs = useConversations(wss.activeWorkspaceId || undefined)
@@ -67,6 +69,21 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
       })
     }
   }, [activeThreadId, convRefreshKey])
+
+  useEffect(() => {
+    const activeWorkspace = wss.workspaces.find((ws) => ws.id === wss.activeWorkspaceId)
+    onWorkspaceSummaryChange?.({
+      workspaceName: activeWorkspace?.name || '默认工作区',
+      documentCount: srcs.sources.length,
+      conversationCount: convs.conversations.length,
+    })
+  }, [
+    convs.conversations.length,
+    onWorkspaceSummaryChange,
+    srcs.sources.length,
+    wss.activeWorkspaceId,
+    wss.workspaces,
+  ])
 
   const switchConversation = async (conversation: Conversation) => {
     onNavigate('chat')

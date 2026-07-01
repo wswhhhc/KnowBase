@@ -14,12 +14,12 @@ from src.api.models import ChatRequest
 
 
 class ChatStreamServiceTests(unittest.TestCase):
-    @patch("src.api.chat_stream_service.replace_pin_state")
+    @patch("src.api.chat_persistence.replace_pin_state")
     @patch("src.api.chat_stream_service.record_query_metrics")
-    @patch("src.api.chat_stream_service.add_message", side_effect=[1, 2])
-    @patch("src.api.chat_stream_service.create_conversation", return_value={"id": "conv-1"})
-    @patch("src.api.chat_stream_service.generate_title", return_value="测试标题")
-    @patch("src.api.chat_stream_service.get_conversation_by_thread", return_value=None)
+    @patch("src.api.chat_persistence.add_message", side_effect=[1, 2])
+    @patch("src.api.chat_persistence.create_conversation", return_value={"id": "conv-1"})
+    @patch("src.api.chat_persistence.generate_title", return_value="测试标题")
+    @patch("src.api.chat_persistence.get_conversation_by_thread", return_value=None)
     @patch("src.api.chat_stream_service.run_query")
     def test_first_token_metrics_are_persisted_after_the_first_token(
         self,
