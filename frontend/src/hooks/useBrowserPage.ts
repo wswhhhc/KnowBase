@@ -13,6 +13,15 @@ interface UseBrowserPageArgs {
   workspaceId?: string
 }
 
+function dedupeChunksById(items: KBChunk[]): KBChunk[] {
+  const seen = new Set<string>()
+  return items.filter((chunk) => {
+    if (seen.has(chunk.chunk_id)) return false
+    seen.add(chunk.chunk_id)
+    return true
+  })
+}
+
 export function useBrowserPage({
   highlightChunkId,
   onHighlightConsumed,
@@ -58,7 +67,7 @@ export function useBrowserPage({
   const browserWsId = workspaceId || ''
 
   const setChunksAccumulate = (items: KBChunk[], append: boolean) => {
-    allChunksRef.current = append ? [...allChunksRef.current, ...items] : items
+    allChunksRef.current = dedupeChunksById(append ? [...allChunksRef.current, ...items] : items)
     setChunks([...allChunksRef.current])
   }
 
@@ -320,7 +329,7 @@ export function useBrowserPage({
       try {
         const chunk = await api.getKBChunkById(highlightChunkId)
         if (cancelled) return
-        allChunksRef.current = [chunk, ...allChunksRef.current]
+        allChunksRef.current = dedupeChunksById([chunk, ...allChunksRef.current])
         setChunks([...allChunksRef.current])
         setSelectedChunk(chunk)
         onHighlightConsumed?.()
