@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import { evidenceLabel } from '@/lib/utils'
 import DebugPanel from './DebugPanel'
 import * as api from '@/lib/api'
 import type { Source } from '@/lib/api'
 import type { ChatMessage, PinnedSource } from '@/hooks/useChat'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle, MessageSquare, ExternalLink, Upload, Bookmark, BookmarkCheck, RefreshCw, AlignLeft, Paperclip, Pin, X } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle, MessageSquare, ExternalLink, Upload, Bookmark, BookmarkCheck, RefreshCw, AlignLeft, Paperclip, Pin, X, MoreHorizontal } from 'lucide-react'
 
 interface CitationTextProps {
   text: string
@@ -82,6 +82,7 @@ interface MessageBubbleProps {
 export default function MessageBubble({ message, prevMessage, threadId, onCitationClick, onSendQuestion, onNavigateBrowser, pinnedSources, onPinToggle, workspaceId }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const [sourceOpen, setSourceOpen] = useState(false)
+  const [actionsOpen, setActionsOpen] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [feedbackCategory, setFeedbackCategory] = useState<string | null>(null)
@@ -94,8 +95,6 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
   const [bookmarked, setBookmarked] = useState(false)
   const [bookmarkNote, setBookmarkNote] = useState('')
   const [bookmarkOpen, setBookmarkOpen] = useState(false)
-
-  const isFirstAssistant = !isUser && prevMessage?.role === 'user'
 
   const handleBookmarkToggle = () => {
     if (bookmarked) return
@@ -194,6 +193,11 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
+                  )}
+                  {message.sources && message.sources.length > 0 && (
+                    <span className="text-2xs text-muted-foreground/70">
+                      {message.sources.length} 个来源 · 可点击验证
+                    </span>
                   )}
                   {message.outcome_category === 'no_docs' && (
                     <span className="inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 工作区中未找到</span>
@@ -308,37 +312,95 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                   </div>
                 )}
 
-                {/* Reroll / concise / follow-up */}
                 {message.outcome_category === 'success' && !message.streaming && message.content && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      onClick={() => onSendQuestion?.(message.originalQuestion || message.content.slice(0, 60))}
-                      className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                    >
-                      <RefreshCw className="h-3 w-3" />重新回答
-                    </button>
-                    <button
-                      onClick={() => onSendQuestion?.(`用一句话简洁回答：${message.originalQuestion || message.content.slice(0, 60)}`)}
-                      className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                    >
-                      <AlignLeft className="h-3 w-3" />更简洁
-                    </button>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {message.sources && message.sources.length > 0 && (
+                      <button
+                        onClick={() => setSourceOpen(!sourceOpen)}
+                        className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-2xs font-medium text-primary/80 transition-colors hover:bg-primary/10 hover:text-primary"
+                      >
+                        <Paperclip className="h-3 w-3" /> {sourceOpen ? '收起来源' : `${message.sources.length} 个来源`}
+                      </button>
+                    )}
                     <button
                       onClick={() => onSendQuestion?.(`关于上面的回答，请详细解释「${message.content.slice(0, 60)}」`)}
-                      className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                      className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
                     >
                       <MessageSquare className="h-3 w-3" />继续追问
                     </button>
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          setActionsOpen((open) => !open)
+                          setExportOpen(false)
+                        }}
+                        aria-label="更多操作"
+                        className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
+                      >
+                        <MoreHorizontal className="h-3 w-3" />更多
+                      </button>
+                      {actionsOpen && (
+                        <div className="absolute left-0 top-full z-50 mt-2 w-56 rounded-xl border border-border bg-surface p-2 shadow-xl">
+                          <div className="space-y-1">
+                            <button
+                              onClick={() => {
+                                setActionsOpen(false)
+                                onSendQuestion?.(message.originalQuestion || message.content.slice(0, 60))
+                              }}
+                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted/50"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />重新回答
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActionsOpen(false)
+                                onSendQuestion?.(`用一句话简洁回答：${message.originalQuestion || message.content.slice(0, 60)}`)
+                              }}
+                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted/50"
+                            >
+                              <AlignLeft className="h-3.5 w-3.5" />更简洁
+                            </button>
+                            <button
+                              onClick={() => setExportOpen((open) => !open)}
+                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted/50"
+                            >
+                              <FileDown className="h-3.5 w-3.5" />导出对话
+                            </button>
+                            {exportOpen && (
+                              <div className="rounded-lg border border-border/70 bg-background/70 p-2.5">
+                                <div className="space-y-1.5">
+                                  <label className="flex items-center gap-2 text-2xs">
+                                    <input type="radio" name={`export-fmt-${message.id}`} checked={exportFormat === 'markdown'} onChange={() => setExportFormat('markdown')} className="accent-primary" />
+                                    Markdown
+                                  </label>
+                                  <label className="flex items-center gap-2 text-2xs">
+                                    <input type="radio" name={`export-fmt-${message.id}`} checked={exportFormat === 'json'} onChange={() => setExportFormat('json')} className="accent-primary" />
+                                    JSON
+                                  </label>
+                                  <label className="flex items-center gap-2 text-2xs">
+                                    <input type="checkbox" checked={exportSources} onChange={(e) => setExportSources(e.target.checked)} className="accent-primary" />
+                                    包含来源
+                                  </label>
+                                  <label className="flex items-center gap-2 text-2xs">
+                                    <input type="checkbox" checked={exportDebug} onChange={(e) => setExportDebug(e.target.checked)} className="accent-primary" />
+                                    包含调试信息
+                                  </label>
+                                  <button
+                                    onClick={handleExport}
+                                    disabled={exporting || !(message.convId || threadId)}
+                                    className="mt-1 flex w-full items-center justify-center gap-1 rounded-md bg-primary/10 px-3 py-1.5 text-2xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    <FileDown className="h-3 w-3" />
+                                    {exporting ? '导出中…' : '确认导出'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-
-                {message.sources && message.sources.length > 0 && (
-                  <button
-                    onClick={() => setSourceOpen(!sourceOpen)}
-                    className="mt-2 inline-flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
-                  >
-                    <Paperclip className="h-3 w-3" /> {sourceOpen ? '收起来源' : `${message.sources.length} 个来源`}
-                  </button>
                 )}
 
                 <AnimatePresence>
@@ -415,43 +477,6 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                     </motion.div>
                   )}
                 </AnimatePresence>
-
-                {isFirstAssistant && (
-                  <div className="relative mt-2">
-                    <button onClick={() => setExportOpen(!exportOpen)} disabled={exporting}
-                      className="inline-flex items-center gap-1 text-2xs text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-                      <FileDown className="h-3 w-3" />
-                      {exporting ? '导出中…' : '导出对话'}
-                    </button>
-                    {exportOpen && (
-                      <div className="mt-1.5 rounded-lg border border-border bg-surface shadow-lg p-2.5 w-56">
-                        <div className="space-y-1.5">
-                          <label className="flex items-center gap-2 text-xs">
-                            <input type="radio" name="export-fmt" checked={exportFormat === 'markdown'} onChange={() => setExportFormat('markdown')} className="accent-primary" />
-                            Markdown
-                          </label>
-                          <label className="flex items-center gap-2 text-xs">
-                            <input type="radio" name="export-fmt" checked={exportFormat === 'json'} onChange={() => setExportFormat('json')} className="accent-primary" />
-                            JSON（含结构化数据）
-                          </label>
-                          <div className="border-t border-border my-1" />
-                          <label className="flex items-center gap-2 text-xs">
-                            <input type="checkbox" checked={exportSources} onChange={(e) => setExportSources(e.target.checked)} className="accent-primary" />
-                            包含来源
-                          </label>
-                          <label className="flex items-center gap-2 text-xs">
-                            <input type="checkbox" checked={exportDebug} onChange={(e) => setExportDebug(e.target.checked)} className="accent-primary" />
-                            包含调试信息
-                          </label>
-                          <button onClick={handleExport}
-                            className="w-full mt-1 rounded bg-primary/10 text-primary text-2xs font-medium py-1.5 hover:bg-primary/20 transition-colors">
-                            确认导出
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {message.debugData && (
                   <DebugPanel debugData={message.debugData} />

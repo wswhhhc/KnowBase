@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState } from 'react'
-import { Button, ScrollArea, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Skeleton } from '@/components/ui'
+import { useRef, useEffect, useState, useMemo } from 'react'
+import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, ScrollArea, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Skeleton } from '@/components/ui'
 import { useChat } from '@/hooks/useChat'
 import type { PinnedSource } from '@/hooks/useChat'
 import EmptyState from './EmptyState'
@@ -7,7 +7,8 @@ import type { Source } from '@/lib/api'
 import MessageBubble from './MessageBubble'
 import type { ViewType } from '@/App'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3, Sun, Moon, Globe, Zap, Scale, FileSearch, Search } from 'lucide-react'
+import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3, Globe, SlidersHorizontal, Zap, Scale, FileSearch, Search } from 'lucide-react'
+import type { WorkspaceSummary } from '@/types/workspace-summary'
 
 interface ChatAreaProps {
   chat: ReturnType<typeof useChat>
@@ -17,6 +18,8 @@ interface ChatAreaProps {
   isLoadingMessages?: boolean
   onCitationClick?: (source: Source) => void
   onSendQuestion?: (q: string) => void
+  workspaceSummary: WorkspaceSummary
+  isMobile?: boolean
 }
 
 const STRATEGIES = [
@@ -39,12 +42,13 @@ const STRATEGY_DESC: Record<string, string> = {
   deep: '深度检索：扩检索+综合回答。需要全面覆盖时使用',
 }
 
-export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate, isLoadingMessages, onCitationClick, onSendQuestion }: ChatAreaProps) {
+export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate, isLoadingMessages, onCitationClick, onSendQuestion, workspaceSummary, isMobile = false }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const strategyRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [input, setInput] = useState('')
   const [webSearch, setWebSearch] = useState(() => localStorage.getItem('kb_web_search') === 'true')
+  const [strategyDialogOpen, setStrategyDialogOpen] = useState(false)
   const [searchStrategy, setSearchStrategy] = useState(() => {
     const stored = localStorage.getItem('kb_search_strategy')
     return stored && isStrategyKey(stored) ? stored : DEFAULT_SEARCH_STRATEGY
@@ -113,6 +117,10 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
+  const focusComposer = () => {
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.style.height = 'auto'
@@ -121,6 +129,11 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
   }, [input])
 
   const isEmpty = chat.messages.length === 0
+  const emptyStateMode = useMemo(() => {
+    if (workspaceSummary.documentCount <= 0) return 'onboarding' as const
+    if (workspaceSummary.conversationCount > 0) return 'returning' as const
+    return 'first-question' as const
+  }, [workspaceSummary.conversationCount, workspaceSummary.documentCount])
   const activeTitle = !isEmpty && chat.messages[0]?.role === 'user'
     ? chat.messages[0].content.slice(0, 28)
     : 'KnowBase'
@@ -135,7 +148,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
               <PanelRightOpen className="h-4 w-4" />
             </Button>
           )}
-          <h1 className="font-heading text-lg text-foreground tracking-tight">{activeTitle}</h1>
+          <h1 className={`font-heading text-lg text-foreground tracking-tight ${isMobile ? 'max-w-[11rem] truncate' : ''}`}>{activeTitle}</h1>
         </div>
 
         <div className="flex items-center gap-3">
@@ -157,7 +170,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
           <div className="h-4 w-px bg-border hidden md:block" />
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap justify-end">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -171,30 +184,84 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                 </Tooltip>
               </TooltipProvider>
 
-              <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5" role="radiogroup" aria-label="检索策略">
-                {STRATEGIES.map(({ key, icon: Icon, label }, index) => (
-                  <TooltipProvider key={key}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          ref={(node) => { strategyRefs.current[index] = node }}
-                          role="radio"
-                          aria-checked={searchStrategy === key}
-                          tabIndex={searchStrategy === key ? 0 : -1}
-                          onClick={() => setSearchStrategy(key)}
-                          onKeyDown={(event) => handleStrategyKeyDown(event, index)}
-                          className={`inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors ${
-                            searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
-                          }`}>
-                          <Icon className="h-3 w-3" />
-                          {label}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>{STRATEGY_DESC[key]}</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ))}
-              </div>
+              {isMobile ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setStrategyDialogOpen(true)}
+                    aria-label="检索与策略"
+                    className="gap-1 px-2"
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    {STRATEGIES.find(({ key }) => key === searchStrategy)?.label}
+                  </Button>
+                  <Dialog open={strategyDialogOpen} onOpenChange={setStrategyDialogOpen}>
+                    <DialogContent className="max-w-sm">
+                      <DialogHeader>
+                        <DialogTitle>检索与策略</DialogTitle>
+                        <DialogDescription>按问题复杂度选择检索强度，移动端默认收起以保留主任务空间。</DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 pt-2">
+                        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">联网搜索</p>
+                            <p className="text-xs text-muted-foreground">需要最新信息时开启</p>
+                          </div>
+                          <Switch checked={webSearch} onCheckedChange={setWebSearch} />
+                        </div>
+                        <div className="grid gap-2">
+                          {STRATEGIES.map(({ key, icon: Icon, label }) => (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                setSearchStrategy(key)
+                                setStrategyDialogOpen(false)
+                              }}
+                              className={`rounded-lg border px-3 py-3 text-left transition-colors ${
+                                searchStrategy === key
+                                  ? 'border-primary/30 bg-primary/10 text-primary'
+                                  : 'border-border text-foreground hover:bg-muted/40'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 text-sm font-medium">
+                                <Icon className="h-4 w-4" />
+                                {label}
+                              </div>
+                              <p className="mt-1 text-xs text-muted-foreground">{STRATEGY_DESC[key]}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </>
+              ) : (
+                <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5" role="radiogroup" aria-label="检索策略">
+                  {STRATEGIES.map(({ key, icon: Icon, label }, index) => (
+                    <TooltipProvider key={key}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            ref={(node) => { strategyRefs.current[index] = node }}
+                            role="radio"
+                            aria-checked={searchStrategy === key}
+                            tabIndex={searchStrategy === key ? 0 : -1}
+                            onClick={() => setSearchStrategy(key)}
+                            onKeyDown={(event) => handleStrategyKeyDown(event, index)}
+                            className={`inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors ${
+                              searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
+                            }`}>
+                            <Icon className="h-3 w-3" />
+                            {label}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{STRATEGY_DESC[key]}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -203,7 +270,16 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
       {/* Messages */}
       <ScrollArea ref={scrollRef} className="flex-1">
         <div className="mx-auto max-w-3xl px-5 py-8">
-          {isLoadingMessages ? <MessageSkeleton /> : isEmpty ? <EmptyState onImport={() => onNavigate('browser')} /> : (
+          {isLoadingMessages ? <MessageSkeleton /> : isEmpty ? (
+            <EmptyState
+              mode={emptyStateMode}
+              workspaceName={workspaceSummary.workspaceName}
+              documentCount={workspaceSummary.documentCount}
+              conversationCount={workspaceSummary.conversationCount}
+              onPrimaryAction={emptyStateMode === 'onboarding' ? () => onNavigate('browser') : focusComposer}
+              onSecondaryAction={emptyStateMode === 'onboarding' ? undefined : () => onNavigate('browser')}
+            />
+          ) : (
             <div className="space-y-6">
               {chat.messages.map((msg, idx) => (
                 <motion.div

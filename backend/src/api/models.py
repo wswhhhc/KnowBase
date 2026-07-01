@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ChatRequest(BaseModel):
@@ -63,8 +63,10 @@ class MessageFeedback(BaseModel):
 
 
 class ExportOut(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     markdown: str = ""
-    json: dict = Field(default_factory=dict)
+    export_json: dict = Field(default_factory=dict, alias="json", serialization_alias="json")
 
 
 class IngestResponse(BaseModel):

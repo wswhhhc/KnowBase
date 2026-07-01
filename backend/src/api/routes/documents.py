@@ -82,7 +82,7 @@ async def check_source(source_name: str, kb: KnowledgeBase = Depends(get_knowled
 @router.post("/upload-stream")
 async def upload_file_stream(
     file: UploadFile = File(...),
-    version_mode: str | None = Query(None, regex="^(replace|append|skip)$"),
+    version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ):
     """SSE streaming upload — sends progress events during ingestion."""
@@ -132,7 +132,7 @@ async def upload_file_stream(
 @router.post("/ingest-url-stream")
 async def ingest_url_stream(
     body: URLIngestRequest,
-    version_mode: str | None = Query(None, regex="^(replace|append|skip)$"),
+    version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ):
     """SSE streaming URL ingestion — sends progress events."""
@@ -173,7 +173,7 @@ async def ingest_url_stream(
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    version_mode: str | None = Query(None, regex="^(replace|append|skip)$"),
+    version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse:
     try:
@@ -207,7 +207,7 @@ async def upload_file(
 @router.post("/ingest-url")
 async def ingest_url(
     body: URLIngestRequest,
-    version_mode: str | None = Query(None, regex="^(replace|append|skip)$"),
+    version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse:
     try:

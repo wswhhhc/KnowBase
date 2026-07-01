@@ -48,6 +48,7 @@ vi.mock('lucide-react', () => {
     FileDown: icon('FileDown'),
     Sun: icon('Sun'),
     Moon: icon('Moon'),
+    SlidersHorizontal: icon('SlidersHorizontal'),
     Copy: icon('Copy'),
     CheckCircle: icon('CheckCircle'),
     Bug: icon('Bug'),
@@ -63,6 +64,8 @@ vi.mock('lucide-react', () => {
     Paperclip: icon('Paperclip'),
     Pin: icon('Pin'),
     X: icon('X'),
+    ArrowRight: icon('ArrowRight'),
+    LibraryBig: icon('LibraryBig'),
   }
 })
 
@@ -85,8 +88,13 @@ describe('ChatArea', () => {
     onOpenSidebar: vi.fn(),
     sidebarOpen: true,
     onNavigate: vi.fn(),
-    theme: { theme: 'dark' as const, toggle: vi.fn() },
+    workspaceSummary: {
+      workspaceName: '默认工作区',
+      documentCount: 0,
+      conversationCount: 0,
+    },
     isLoadingMessages: false,
+    isMobile: false,
   }
 
   it('renders the input area with placeholder', () => {
@@ -108,6 +116,22 @@ describe('ChatArea', () => {
 
     expect(screen.getByText('工作区问答助手')).toBeInTheDocument()
     expect(screen.getByText(/上传文档或导入网页/)).toBeInTheDocument()
+  })
+
+  it('shows a return-user prompt when the workspace already has documents and conversations', () => {
+    render(
+      <ChatArea
+        {...defaultProps}
+        workspaceSummary={{
+          workspaceName: '默认工作区',
+          documentCount: 5,
+          conversationCount: 3,
+        }}
+      />,
+    )
+
+    expect(screen.getByText('继续当前工作区')).toBeInTheDocument()
+    expect(screen.getByText('继续提问')).toBeInTheDocument()
   })
 
   it('renders the browser navigation label as 知识库', () => {
