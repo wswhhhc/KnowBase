@@ -28,8 +28,17 @@ dependencies = [
     "python-multipart>=0.0.12",
     "pandas>=3.0.3",
     "coverage>=7.14.1",
+    "pytest>=8.4.0",
+    "pytest-cov>=7.0.0",
     "alembic>=1.18.5",
 ]
 
 [tool.uv]
 package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*", "*Tests"]
+python_functions = ["test_*"]
+addopts = "-ra --tb=short"
