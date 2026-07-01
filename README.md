@@ -32,7 +32,7 @@
     <img src="https://img.shields.io/badge/TypeScript-Vite-3178C6?style=for-the-badge&logo=typescript&logoColor=3178C6" height="28" alt="TypeScript" />
     <img src="https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=06B6D4" height="28" alt="Tailwind CSS" />
     <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=3776AB" height="28" alt="Python" />
-    <img src="https://img.shields.io/badge/tests-636%20passing-22C55E?style=for-the-badge&logo=vitest&logoColor=22C55E" height="28" alt="636 tests passing" />
+    <img src="https://img.shields.io/badge/tests-643%20passing-22C55E?style=for-the-badge&logo=vitest&logoColor=22C55E" height="28" alt="643 tests passing" />
   </p>
 
   <br>
@@ -67,9 +67,9 @@
 | 回答没有依据 | 只返回一段文本 | 引用编号 `[1]` 直达原文，展示证据可信度 |
 | 检索是黑盒 | 看不到过程 | 内置 Debug 面板，展示召回→精排→质量检查全链路 |
 | 不清楚质量 | 全靠 LLM 自己 | 规则层 + LLM 双重质量检查，不合格自动重试 |
-| 策略一成不变 | 固定检索方式 | 四种策略（快速/标准/严谨/深度），按需切换 |
+| 策略一成不变 | 固定检索方式 | 四种策略（快速/标准/严谨/深度），按需切换，移动端收进弹层 |
 | 不支持来源管理 | 无法控制 | 来源固定/排除持久化，跨消息保持 |
-| 没有产品感 | 只是 API 或命令行 | 深色/浅色双主题、响应式移动端、流式输出 |
+| 没有产品感 | 只是 API 或命令行 | 深色/浅色双主题、响应式移动端、流式输出；移动端上传 FAB 仅在知识库页显示 |
 
 ### 核心 RAG 能力
 
@@ -254,13 +254,15 @@ uv run python -m src.evaluate
 
 ```
 KnowBase/
-├── backend/                           # FastAPI 后端（29 源文件）
+├── backend/                           # FastAPI 后端（31 源文件）
 │   ├── config/settings.py             # pydantic-settings 配置
 │   ├── migrations/                    # Alembic 数据库迁移
 │   ├── src/
-│   │   ├── api/                       # 路由层 + ChatStreamService
+│   │   ├── api/                       # 路由层 + ChatStreamService（调试/持久化独立模块）
 │   │   │   ├── routes/                # 7 个路由文件（平均 <50 行）
-│   │   │   ├── chat_stream_service.py # SSE 流编排（320 行）
+│   │   │   ├── chat_stream_service.py # SSE 流编排（~190 行）
+│   │   │   ├── chat_debug.py          # DebugState + 节点调试信息累加
+│   │   │   ├── chat_persistence.py    # 对话持久化 + debug payload 序列化
 │   │   │   └── deps.py                # API Key 鉴权
 │   │   ├── graph.py                   # LangGraph 图定义
 │   │   ├── graph_nodes.py             # 工作流节点函数
@@ -273,20 +275,24 @@ KnowBase/
 │   │   ├── web_search.py              # Tavily 联网搜索
 │   │   ├── evaluate.py                # 离线 RAG 质量评估
 │   │   └── metrics.py                 # 查询 JSONL 日志
-│   └── tests/                         # 22 个文件 · 441 用例
+│   └── tests/                         # 28 个文件 · 441 用例
 ├── frontend/                          # React 19 + Vite + Tailwind
 │   └── src/
 │       ├── components/
 │       │   ├── browser/               # 7 个子组件（Grid/Slice/ChunkDetail 等）
 │       │   ├── sidebar/               # 4 个侧边栏组件
 │       │   └── ui/                    # 10 个 shadcn/ui 组件
-│       │   ├── ChatArea.tsx           # 对话界面（搜索策略 + localStorage）
+│       │   ├── ChatArea.tsx           # 对话界面（动态 EmptyState、策略按钮/弹层、localStorage）
 │       │   ├── BrowserPage.tsx        # 知识库浏览（杂志式布局）
-│       │   ├── MessageBubble.tsx      # 消息气泡（引用/反馈/复制/导出）
+│       │   ├── MessageBubble.tsx      # 消息气泡（操作主次分层 + 更多菜单）
+│       │   ├── EmptyState.tsx         # 三种空状态：onboarding / first-question / returning
 │       │   ├── DebugPanel.tsx         # RAG 全链路调试面板
 │       │   ├── DashboardPage.tsx      # 使用统计看板
 │       │   └── ErrorBoundary.tsx      # 组件级错误边界
-│       ├── hooks/                     # useChat / useData / useTheme
+│       ├── hooks/
+│       │   ├── useChat.ts             # SSE 流式聊天 hook（委托至 chat/ 子模块）
+│       │   ├── chat/                  # 类型定义 + useChatMessages + usePinnedSourcesState
+│       │   ├── useData.ts / useTheme.ts / useBrowserPage.ts
 │       └── lib/                       # api.ts / api-types.ts
 │   └── data/                          # chroma_db / checkpoints / conversations
 ├── docs/tests/                        # 12 份测试文档
@@ -339,8 +345,8 @@ KnowBase/
 
 | 层 | 框架 | 文件 | 用例 | 运行命令 |
 |----|------|------|------|---------|
-| **后端** | unittest | 22 | 441 | `cd backend && uv run python -m unittest discover -v` |
-| **前端** | vitest + @testing-library/react | 13 | 195 | `cd frontend && npm test` |
+| **后端** | unittest | 28 | 441 | `cd backend && uv run python -m unittest discover -v` |
+| **前端** | vitest + @testing-library/react | 23 | 202 | `cd frontend && npm test` |
 
 覆盖策略：
 - LLM mock（`FakeLLM`），Chroma patch，SQLite tempdir 隔离
@@ -394,9 +400,9 @@ KnowBase/
 ## Key Design Decisions
 
 <details>
-<summary><strong>ChatStreamService</strong> — 从闭包到可测试类</summary>
+<summary><strong>ChatStreamService 两次拆分</strong> — 从闭包到 3 个独立模块</summary>
 
-SSE 流式编排从路由层提取为独立 Service 类。原 160 行 `event_generator` 闭包拆分为 `_stream_updates`、`_process_updates`、`_process_messages`、`_emit_completion`、`_persist` 五个可独立测试的方法。路由层仅保留 27 行编排代码。
+第一轮：SSE 流式编排从路由层提取为独立 Service 类（`chat_stream_service.py`），5 个可测试方法。第二轮：调试逻辑和持久化逻辑进一步拆至 `chat_debug.py`（`DebugState` + 节点信息累加）和 `chat_persistence.py`（对话持久化 + debug payload），`ChatStreamService._persist` 缩减为纯编排代码。路由层持 27 行不变。
 </details>
 
 <details>
@@ -415,6 +421,18 @@ SSE 流式编排从路由层提取为独立 Service 类。原 160 行 `event_gen
 <summary><strong>Alembic 迁移</strong> — 数据库版本管理</summary>
 
 替代原有的 `try/except ALTER TABLE` 模式，提供版本化 schema 管理。初始迁移捕获当前全量 schema，后续修改通过迁移脚本而非运行时兼容代码。
+</details>
+
+<details>
+<summary><strong>聊天状态拆分</strong> — useChat 职责瘦身 + types 独立</summary>
+
+`useChat` 中的消息列表管理、来源固定/排除状态管理分别提取为 `useChatMessages` 和 `usePinnedSourcesState`，hook 返回的属性和方法通过委托调用子模块。消息类型 `ChatMessage` 和 `PinnedSource` 迁至独立 `chat/types.ts`，减少 `useChat.ts` 的接口暴露面。
+</details>
+
+<details>
+<summary><strong>动态 EmptyState</strong> — 三种场景按工作区渲染</summary>
+
+聊天首页不再固定显示"上传文档"，而是根据工作区的文档数和对话数动态展示三种模式：`onboarding`（无文档→引导导入）、`first-question`（有文档无对话→鼓励提问）、`returning`（有对话→继续追问），提升首次使用和回访体验。
 </details>
 
 <details>
