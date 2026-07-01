@@ -5,6 +5,19 @@ import BrowserPage from '@/components/BrowserPage'
 import * as api from '@/lib/api'
 import { mockKBStats, mockKBChunks, mockHotspotData } from '@/test/mocks/data'
 
+function createChunk(overrides: Partial<typeof mockKBChunks[number]> = {}) {
+  return {
+    source: 'doc1.txt',
+    chunk_index: 0,
+    chunk_id: 'doc1.txt:0:abc',
+    page: null,
+    content: '默认段落',
+    original_content: '默认段落',
+    section: null,
+    ...overrides,
+  }
+}
+
 vi.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: any) => {
@@ -170,6 +183,108 @@ describe('BrowserPage interactions', () => {
     expect(onHighlightConsumed).toHaveBeenCalled()
     expect(vi.mocked(api.getKBChunkById)).toHaveBeenCalledWith('doc-long.txt:55:hash')
     expect(vi.mocked(api.getKBChunks)).toHaveBeenCalledTimes(1)
+  })
+
+  it('deduplicates repeated chunk ids returned in the same page', async () => {
+    const duplicateChunk = createChunk({
+      chunk_id: 'sample_ai.txt:0:a7a7ff8a6f195188',
+      content: '重复段落',
+      original_content: '重复段落',
+    })
+    const uniqueChunk = createChunk({
+      chunk_id: 'sample_ai.txt:1:unique',
+      chunk_index: 1,
+      content: '唯一段落',
+      original_content: '唯一段落',
+    })
+    vi.mocked(api.getKBChunks).mockResolvedValue({
+      items: [duplicateChunk, duplicateChunk, uniqueChunk],
+      total: 3,
+    })
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await act(async () => {
+      render(<BrowserPage {...defaultProps} />)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('重复段落')).toBeInTheDocument()
+      expect(screen.getByText('唯一段落')).toBeInTheDocument()
+    })
+
+    expect(document.querySelectorAll('[id="chunk-sample_ai.txt:0:a7a7ff8a6f195188"]')).toHaveLength(1)
+    expect(
+      consoleErrorSpy.mock.calls.some((call) =>
+        call.some((arg) => typeof arg === 'string' && arg.includes('Encountered two children with the same key')),
+      ),
+    ).toBe(false)
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('does not duplicate a highlighted chunk when the direct fetch resolves after the initial page', async () => {
+    const highlightedChunk = createChunk({
+      chunk_id: 'doc-race.txt:0:same',
+      source: 'doc-race.txt',
+      content: '竞态段落',
+      original_content: '竞态段落',
+    })
+    const siblingChunk = createChunk({
+      chunk_id: 'doc-race.txt:1:other',
+      source: 'doc-race.txt',
+      chunk_index: 1,
+      content: '其他段落',
+      original_content: '其他段落',
+    })
+
+    let resolveChunks: ((value: { items: typeof mockKBChunks; total: number } | { items: [typeof highlightedChunk, typeof siblingChunk]; total: number }) => void) | undefined
+    let resolveHighlighted: ((value: typeof highlightedChunk) => void) | undefined
+
+    vi.mocked(api.getKBChunks).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveChunks = resolve
+        }) as ReturnType<typeof api.getKBChunks>,
+    )
+    vi.mocked(api.getKBChunkById).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveHighlighted = resolve
+        }) as ReturnType<typeof api.getKBChunkById>,
+    )
+    vi.mocked(api.getKBSourceNames).mockResolvedValue(['doc-race.txt'])
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await act(async () => {
+      render(
+        <BrowserPage
+          {...defaultProps}
+          highlightChunkId="doc-race.txt:0:same"
+        />,
+      )
+    })
+
+    await act(async () => {
+      resolveChunks?.({ items: [highlightedChunk, siblingChunk], total: 2 })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('竞态段落')).toBeInTheDocument()
+      expect(screen.getByText('其他段落')).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      resolveHighlighted?.(highlightedChunk)
+    })
+
+    expect(document.querySelectorAll('[id="chunk-doc-race.txt:0:same"]')).toHaveLength(1)
+    expect(
+      consoleErrorSpy.mock.calls.some((call) =>
+        call.some((arg) => typeof arg === 'string' && arg.includes('Encountered two children with the same key')),
+      ),
+    ).toBe(false)
+
+    consoleErrorSpy.mockRestore()
   })
 
   it('does not open the detail dialog when bookmarking in slice view', async () => {
