@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import List
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_openai import ChatOpenAI
@@ -18,7 +17,7 @@ from config.settings import (
     require_siliconflow_api_key,
     get_runtime_setting,
 )
-from src.graph_state import RerankDecision, QualityDecision
+from src.graph_state import GraphSource, QualityDecision, RerankDecision
 from src.kb_models import RetrievalResult
 from src.utils import json_from_text
 
@@ -26,7 +25,7 @@ from src.utils import json_from_text
 logger = logging.getLogger(__name__)
 
 
-def _get_llm():
+def _get_llm() -> ChatOpenAI:
     return ChatOpenAI(
         model=get_runtime_setting("llm_model", LLM_MODEL),
         temperature=get_runtime_setting("llm_temperature", LLM_TEMPERATURE),
@@ -70,8 +69,8 @@ def extract_token_usage(result: object) -> dict[str, int]:
 
 
 def _messages_to_turns(
-    messages: List[BaseMessage], exclude_last_human: bool = True
-) -> List[tuple[str, str]]:
+    messages: list[BaseMessage], exclude_last_human: bool = True
+) -> list[tuple[str, str]]:
     """Extract (question, answer) turns from a flat message list."""
     relevant = list(messages)
     if exclude_last_human and relevant and isinstance(relevant[-1], HumanMessage):
@@ -89,7 +88,7 @@ def _messages_to_turns(
 
 
 def _format_chat_history(
-    history: List[tuple[str, str]], limit: int = 6
+    history: list[tuple[str, str]], limit: int = 6
 ) -> str:
     """Format recent chat history turns into a prompt string."""
     recent_turns = history[-limit:]
@@ -99,7 +98,7 @@ def _format_chat_history(
     )
 
 
-def _format_context(results: list[RetrievalResult]) -> tuple[str, list[dict]]:
+def _format_context(results: list[RetrievalResult]) -> tuple[str, list[GraphSource]]:
     """Format retrieval results into context string and source list."""
     context_parts = []
     sources = []
