@@ -5,10 +5,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.deps import verify_api_key, get_knowledge_base
+from src.api.models import RuntimeSettingsOut, RuntimeSettingsUpdate, SettingsUpdateResult
 from config.settings import (
     MASKED_SECRET_VALUE,
     _SECRET_SETTINGS,
-    _USER_FACING_SETTINGS,
     get_public_settings,
     update_runtime_settings,
 )
@@ -17,22 +17,22 @@ router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 @router.get("")
-async def get_settings() -> dict:
+async def get_settings() -> RuntimeSettingsOut:
     """Return all user-facing configuration settings."""
-    return get_public_settings()
+    return RuntimeSettingsOut.model_validate(get_public_settings())
 
 
 @router.put("")
-async def update_settings(body: dict) -> dict:
+async def update_settings(body: RuntimeSettingsUpdate) -> SettingsUpdateResult:
     """Update runtime configuration. Only known keys are accepted."""
-    filtered = {k: v for k, v in body.items() if k in _USER_FACING_SETTINGS}
+    filtered = body.model_dump(exclude_unset=True)
     filtered = {
         key: value
         for key, value in filtered.items()
         if not (key in _SECRET_SETTINGS and value == MASKED_SECRET_VALUE)
     }
     if not filtered:
-        return {"updated": False, "message": "没有有效的配置项"}
+        return SettingsUpdateResult(updated=False, message="没有有效的配置项")
     try:
         update_runtime_settings(filtered)
     except ValueError as exc:
@@ -48,4 +48,4 @@ async def update_settings(body: dict) -> dict:
     if {"embedding_model", "siliconflow_base_url", "siliconflow_api_key"} & set(filtered):
         get_knowledge_base.cache_clear()
 
-    return {"updated": True, "warnings": warnings}
+    return SettingsUpdateResult(updated=True, warnings=warnings)

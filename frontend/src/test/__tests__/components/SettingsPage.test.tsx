@@ -46,7 +46,7 @@ describe('SettingsPage', () => {
       enable_quality_check: true,
       enable_contextual_retrieval: true,
     } as any)
-    vi.mocked(api.updateSettings).mockResolvedValue({ updated: true, warnings: [] })
+    vi.mocked(api.updateSettings).mockResolvedValue({ updated: true, warnings: [], message: '' })
   })
 
   it('shows provider information derived from current model settings', async () => {
