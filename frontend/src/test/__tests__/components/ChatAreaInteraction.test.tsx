@@ -88,16 +88,12 @@ describe('ChatArea interactions', () => {
     expect(screen.getByPlaceholderText('输入你的问题…')).toBeInTheDocument()
   })
 
-  it('renders "高级选项" toggle and shows search strategy buttons by default', async () => {
+  it('shows search strategy buttons by default', async () => {
     renderChatArea()
-    expect(screen.getByText('高级选项')).toBeInTheDocument()
-    // Strategies are now visible by default
     expect(screen.getByText('快速')).toBeInTheDocument()
     expect(screen.getByText('标准')).toBeInTheDocument()
     expect(screen.getByText('严谨')).toBeInTheDocument()
     expect(screen.getByText('深度')).toBeInTheDocument()
-    // Clicking '高级选项' toggles the chevron
-    await userEvent.click(screen.getByText('高级选项'))
   })
 
   it('hydrates persisted search preferences from localStorage', async () => {

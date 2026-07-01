@@ -7,7 +7,7 @@ import type { Source } from '@/lib/api'
 import MessageBubble from './MessageBubble'
 import type { ViewType } from '@/App'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3, Sun, Moon, Globe, Zap, Scale, FileSearch, Search, ChevronDown, ChevronRight } from 'lucide-react'
+import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3, Sun, Moon, Globe, Zap, Scale, FileSearch, Search } from 'lucide-react'
 
 interface ChatAreaProps {
   chat: ReturnType<typeof useChat>
@@ -49,7 +49,6 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
     const stored = localStorage.getItem('kb_search_strategy')
     return stored && isStrategyKey(stored) ? stored : DEFAULT_SEARCH_STRATEGY
   })
-  const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -197,20 +196,6 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                 ))}
               </div>
             </div>
-
-            <button
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-1 text-xs text-muted-foreground/50 transition-colors hover:text-muted-foreground"
-            >
-              {showAdvanced ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-              高级选项
-            </button>
-
-            {showAdvanced && (
-              <div className="flex items-center gap-1 flex-wrap" onMouseDown={(e) => e.stopPropagation()}>
-                {/* advanced options content */}
-              </div>
-            )}
           </div>
         </div>
       </header>
