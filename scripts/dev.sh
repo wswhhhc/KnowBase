@@ -7,6 +7,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_PID=""
 FRONTEND_PID=""
 
+if [ "${1:-}" = "--docker" ]; then
+  cd "$ROOT"
+  exec docker compose up --build
+fi
+
 kill_port() {
   local port="$1"
   if command -v lsof >/dev/null 2>&1; then
