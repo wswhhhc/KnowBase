@@ -54,7 +54,7 @@ cd backend && uv run python -m src.evaluate
 ### 关键约定
 
 - **包管理**: `uv`（非 pip），`.env` 放 `backend/.env`，启动用 `uv run`
-- **配置**: `backend/config/settings.py`（pydantic-settings），`CHROMA_API_KEY` 回退为 `SILICONFLOW_API_KEY`
+- **配置**: `backend/src/config/settings.py`（pydantic-settings），`CHROMA_API_KEY` 回退为 `SILICONFLOW_API_KEY`
 - **LLM/Embedding**: 全部走硅基流动 OpenAI-compatible API
 - **持久化**: Chroma → `data/chroma_db/`，对话 → `data/conversations.db`（Alembic），checkpoints → `data/checkpoints.db`
 - **鉴权**: `deps.py:verify_api_key`，`API_KEY` 为空时本地开发跳过
@@ -81,13 +81,18 @@ cd backend && uv run python -m src.evaluate
 | `api/chat_debug.py` | DebugState dataclass + 节点调试信息累加 |
 | `api/chat_persistence.py` | 对话持久化 + debug payload 序列化 |
 | `api/routes/` | 路由层（7 个路由文件，平均 <50 行） |
-| `graph.py` | LangGraph 图定义 |
-| `graph_nodes.py` | 工作流节点函数（rewrite/retrieve/rerank/generate/check） |
-| `graph_routing.py` | 条件路由函数 |
-| `graph_state.py` | GraphState TypedDict + Pydantic 决策模型 |
-| `knowledge_base.py` | 门面类（IngestionService + Retriever + HotspotTracker） |
+| `graph/graph.py` | LangGraph 图定义 |
+| `graph/nodes.py` | 工作流节点函数（rewrite/retrieve/rerank/generate/check） |
+| `graph/routing.py` | 条件路由函数 |
+| `graph/state.py` | GraphState TypedDict + Pydantic 决策模型 |
+| `graph/utils.py` | 图工作流通用工具（LLM/上下文格式化/解析） |
+| `rag/knowledge_base.py` | 门面类（IngestionService + Retriever + HotspotTracker） |
+| `rag/models.py` | 检索结果数据类 + 来源归一化 |
+| `rag/loaders.py` | 多格式文档加载器（含 SSRF 防护 IP 检测） |
+| `rag/web_search.py` | Tavily 联网搜索 |
 | `conversations.py` | 对话/工作区/书签/pin CRUD（SQLite + Alembic） |
-| `loaders.py` | 多格式文档加载器（含 SSRF 防护 IP 检测） |
+| `metrics.py` | 查询 JSONL 日志 |
+| `config/settings.py` | pydantic-settings 配置 |
 
 **前端**:
 

@@ -1,12 +1,12 @@
 # Contributing
 
-本仓库后端使用 `uv` 管理 Python 依赖，前端使用 `npm`。提交前请保持改动范围清晰，并在行为、接口或启动方式变化时同步更新文档。
+本仓库后端使用 `uv` 管理 Python 依赖，前端使用 `npm`。提交前请保持改动范围清晰，并在行为、接口、测试流程或启动方式变化时同步更新文档。
 
 ## 开发环境
 
 ### 前置要求
 
-- Python 3.11+（推荐 3.12）
+- Python 3.11+（推荐 3.12，GitHub CI 也使用 3.12）
 - Node.js 20+
 - `uv`
 
@@ -57,11 +57,32 @@ cd frontend
 npm run dev
 ```
 
+Docker 开发环境：
+
+```bash
+docker compose up --build
+```
+
+或：
+
+```bash
+bash scripts/dev.sh --docker
+```
+
 ## 测试要求
 
-至少运行覆盖你改动范围的测试。
+至少运行覆盖你改动范围的测试。涉及接口、OpenAPI、类型生成、启动方式或跨平台兼容时，建议跑完整矩阵。
 
 ### 后端
+
+```bash
+cd backend
+uv run pytest --cov --tb=short -v
+```
+
+### 后端（CI 兼容检查）
+
+GitHub Actions 当前仍执行 `unittest discover`，因此以下命令在改动测试发现逻辑、路径断言或跨平台行为时也应补跑：
 
 ```bash
 cd backend
@@ -82,15 +103,16 @@ cd frontend
 npm run build
 ```
 
-类型检查（`tsc -b`）和 Vite 打包一并执行，失败则 PR 不会被合入。
+类型检查（`tsc -b`）和 Vite 打包一并执行。这是提交前应完成的本地检查；当前 CI 默认执行前端单测，不替代构建自检。
 
 ## 协作规则
 
 - 后端接口变化后，要同步更新前端生成的 API 类型。
 - 启动方式、配置项、产品行为或架构假设变化后，要同步更新 `README.md`、`CLAUDE.md`、`docs/requirements.md` 或相关文档。
 - 新增配置项已经体现在 `backend/.env.example`。
-- 不要提交密钥、本地数据库、覆盖率产物或运行期生成文件。
+- 不要提交密钥、本地数据库、覆盖率产物（如 `backend/.coverage`）或运行期生成文件。
 - 尽量保持 PR 小而明确，一个 PR 解决一个清晰问题。
+- 跨平台测试不要写死 Windows 或 POSIX 路径分隔符，优先用 `pathlib.Path`、`os.path` 或前端等价方式构造路径断言。
 
 ## API 类型更新
 
@@ -100,6 +122,12 @@ npm run build
 cd frontend
 npm run gen-api-types
 ```
+
+同时确认生成物已同步：
+
+- `frontend/src/lib/api-types.openapi.ts`
+- `frontend/src/lib/api-types.ts`
+- 任何依赖这些类型的测试或消费代码
 
 ## 模块拆分约定
 
@@ -113,6 +141,7 @@ npm run gen-api-types
 
 - 改动目标和原因清晰。
 - 后端 + 前端测试已在本地通过。
+- 如果改动会影响 GitHub CI，已补跑 `uv run python -m unittest discover -v`。
 - `npm run build` 无报错。
+- 如果接口或 OpenAPI 变更，`npm run gen-api-types` 已执行并提交生成物。
 - 如果接口、行为或配置变更，文档已同步更新。
-
