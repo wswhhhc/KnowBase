@@ -67,9 +67,9 @@
 | 回答没有依据 | 只返回一段文本 | 引用编号 `[1]` 直达原文，展示证据可信度 |
 | 检索是黑盒 | 看不到过程 | 内置 Debug 面板，展示召回→精排→质量检查全链路 |
 | 不清楚质量 | 全靠 LLM 自己 | 规则层 + LLM 双重质量检查，不合格自动重试 |
-| 策略一成不变 | 固定检索方式 | 四种策略（快速/标准/严谨/深度），按需切换，移动端收进弹层 |
+| 策略一成不变 | 固定检索方式 | 四种策略（快速/标准/严谨/深度），按需切换 |
 | 不支持来源管理 | 无法控制 | 来源固定/排除持久化，跨消息保持 |
-| 没有产品感 | 只是 API 或命令行 | 深色/浅色双主题、响应式移动端、流式输出；移动端上传 FAB 仅在知识库页显示 |
+| 没有产品感 | 只是 API 或命令行 | 深色/浅色双主题、响应式移动端、流式输出 |
 
 ### 核心 RAG 能力
 
@@ -78,11 +78,7 @@
 - **条件精排** — LLM 精排按需触发（差距大 / 短问题 / 策略 `fast` 时跳过），减少不必要的成本
 - **自适应召回** — 按文档规模动态调整候选数（30 ~ 100），小库不浪费、大库不遗漏
 - **上下文补全** — 邻居 chunk 拼接 + 标题链追踪，回答更连贯
-- **质量兜底** — 三重机制：规则层过滤 → LLM 审核 → 不合格后联网搜索或扩检索重试（最多 `MAX_RETRIES` 次）
-
-### 前端体验
-
-杂志编辑风 UI、全局噪声纹理、深色/浅色双主题平滑过渡、来源固定与排除跨消息保持、上传后自动生成建议问题与引导 banner、首次使用引导和骨架屏复用、`prefers-reduced-motion` 无障碍动画控制、组件级 Error Boundary——单视图崩溃不影响整体。
+- **质量兜底** — 规则层过滤 → LLM 审核 → 不合格后联网搜索或扩检索重试（最多 `MAX_RETRIES` 次）
 
 <br>
 
@@ -241,9 +237,7 @@ flowchart LR
 
 ## Evaluation
 
-KnowBase 内置了离线评估框架（`src/evaluate.py`），支持启发式指标和 LLM-as-Judge 两种评估方式。
-
-### 评估指标
+KnowBase 内置离线评估框架（`src/evaluate.py`），支持启发式指标和 LLM-as-Judge 两种评估方式。
 
 | 指标 | 说明 | 方式 |
 |------|------|------|
@@ -254,32 +248,12 @@ KnowBase 内置了离线评估框架（`src/evaluate.py`），支持启发式指
 | `faithfulness` | 回答是否忠于上下文不编造 | LLM-as-Judge |
 | `answer_relevance_llm` | 回答是否真正回答了问题 | LLM-as-Judge |
 
-### 最新评测结果
-
-```json
-{
-  "total_cases": 3,
-  "passed_cases": 3,
-  "avg_elapsed_ms": 32645,
-  "metrics": {
-    "retrieval_relevance": { "avg_score": 1.00, "pass_rate": 100% },
-    "groundedness":         { "avg_score": 0.33, "pass_rate": 33%  },
-    "answer_relevance":     { "avg_score": 0.33, "pass_rate": 33%  },
-    "correctness":          { "avg_score": 0.00, "pass_rate": 0%   }
-  }
-}
-```
-
-> **解读：** 检索召回率 100%，但 answer_relevance 和 correctness 偏低，主要原因是样本文档内容与问题覆盖度不足。这暴露了一个常见问题——**知识库的文档质量直接决定回答质量**，而非检索管道本身。`kb_unknown` 用例（知识库无相关内容）被正确识别并拒绝回答，说明系统的拒绝机制有效。
-
-### 运行你自己的评测
-
 ```bash
 cd backend
 uv run python -m src.evaluate
 ```
 
-报告输出到 `data/eval_reports/`，包含每个用例的分数、耗时和人工可读的评估理由。
+报告输出到 `data/eval_reports/`。
 
 <br>
 
@@ -325,20 +299,26 @@ KnowBase/
 │       │   ├── browser/               # 7 个子组件（Grid/Slice/ChunkDetail 等）
 │       │   ├── sidebar/               # 4 个侧边栏组件
 │       │   └── ui/                    # 10 个 shadcn/ui 组件
-│       │   ├── ChatArea.tsx           # 对话界面（动态 EmptyState、策略按钮/弹层、localStorage）
-│       │   ├── BrowserPage.tsx        # 知识库浏览（杂志式布局）
-│       │   ├── MessageBubble.tsx      # 消息气泡（操作主次分层 + 更多菜单）
-│       │   ├── EmptyState.tsx         # 三种空状态：onboarding / first-question / returning
-│       │   ├── DebugPanel.tsx         # RAG 全链路调试面板
-│       │   ├── DashboardPage.tsx      # 使用统计看板
-│       │   └── ErrorBoundary.tsx      # 组件级错误边界
 │       ├── hooks/
 │       │   ├── useChat.ts             # SSE 流式聊天 hook（委托至 chat/ 子模块）
 │       │   ├── chat/                  # 类型定义 + useChatMessages + usePinnedSourcesState
 │       │   ├── useData.ts / useTheme.ts / useBrowserPage.ts
-│       │   └── lib/                   # api.ts / api-types.ts / api-types.openapi.ts
+│       │   └── lib/                   # api.ts / api-types.ts
+│       └── pages/                     # 主页面组件
+│           ├── ChatArea.tsx
+│           ├── BrowserPage.tsx
+│           ├── DebugPanel.tsx
+│           ├── DashboardPage.tsx
+│           ├── EmptyState.tsx
+│           ├── MessageBubble.tsx
+│           └── ErrorBoundary.tsx
+├── docker/                            # Docker 构建文件
+│   ├── Dockerfile.backend
+│   ├── Dockerfile.frontend
+│   └── .dockerignore
+├── docker-compose.yml                 # 容器编排（docker compose up）
 ├── docs/tests/                        # 12 份测试文档
-├── scripts/                           # 一键启动脚本
+├── scripts/                           # 一键启动脚本（dev.sh / dev.bat）
 └── data/samples/demo/                 # quickstart 示例文档
 ```
 

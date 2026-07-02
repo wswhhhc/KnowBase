@@ -54,9 +54,9 @@ cd backend && uv run python -m src.evaluate
 ### 关键约定
 
 - **包管理**: `uv`（非 pip），`.env` 放 `backend/.env`，启动用 `uv run`
-- **配置**: `backend/src/config/settings.py`（pydantic-settings），`CHROMA_API_KEY` 回退为 `SILICONFLOW_API_KEY`
-- **LLM/Embedding**: 全部走硅基流动 OpenAI-compatible API
+- **容器化**: `docker compose up --build`，Dockerfile 在 `docker/`
 - **持久化**: Chroma → `data/chroma_db/`，对话 → `data/conversations.db`（Alembic），checkpoints → `data/checkpoints.db`
+- **配置**: `backend/src/config/settings.py`（pydantic-settings），`CHROMA_API_KEY` 回退为 `SILICONFLOW_API_KEY`
 - **鉴权**: `deps.py:verify_api_key`，`API_KEY` 为空时本地开发跳过
 - **搜索策略**: `fast`(无 rerank)、`balanced`(条件 rerank)、`high_quality`(必 rerank)、`deep`(扩检索)，偏好存 `localStorage`。移动端收进弹层
 - **SSE 流**: `backend/src/api/chat_stream_service.py`（ChatStreamService），`chat.py` 路由仅 27 行。调试逻辑拆至 `chat_debug.py`，持久化拆至 `chat_persistence.py`
@@ -68,8 +68,8 @@ cd backend && uv run python -m src.evaluate
 
 | 层 | 框架 | 文件 | 用例 | 策略 |
 |---|---|---|---|---|
-| 后端 | unittest | 28 | 441 | LLM mock(FakeLLM)，Chroma patch，SQLite tempdir 隔离。SSE 类型漂移检测、AST 签名校验 |
-| 前端 | vitest + @testing-library/react | 23 | 202 | ReadableStream 模拟 SSE (含 CRLF)，mock 数据在 `src/test/mocks/data.ts`。hooks/组件/API/类型漂移全覆盖 |
+| 后端 | unittest | 28 | 444 | LLM mock(FakeLLM)，Chroma patch，SQLite tempdir 隔离。SSE 类型漂移检测、AST 签名校验 |
+| 前端 | vitest + @testing-library/react | 23 | 206 | ReadableStream 模拟 SSE (含 CRLF)，mock 数据在 `src/test/mocks/data.ts`。hooks/组件/API/类型漂移全覆盖 |
 
 ### 关键模块
 
