@@ -7,8 +7,8 @@ from functools import lru_cache
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from src.knowledge_base import KnowledgeBase
-from config.settings import settings, get_runtime_setting
+from src.rag.knowledge_base import KnowledgeBase
+from src.config.settings import settings, get_runtime_setting
 
 _security = HTTPBearer(auto_error=False)
 

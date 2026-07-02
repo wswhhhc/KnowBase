@@ -18,10 +18,10 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
-from config.settings import ROOT_DIR, require_siliconflow_api_key, SILICONFLOW_BASE_URL, LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS
+from src.config.settings import ROOT_DIR, require_siliconflow_api_key, SILICONFLOW_BASE_URL, LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from src.knowledge_base import KnowledgeBase
+from src.rag.knowledge_base import KnowledgeBase
 from src.graph import run_query
 from src.metrics import log_query
 from src.utils import json_from_text

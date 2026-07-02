@@ -77,9 +77,9 @@ class FakeKnowledgeBase:
 class FastAPISmokeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.patcher_chroma = patch("src.knowledge_base.Chroma")
-        cls.patcher_embeddings = patch("src.knowledge_base.OpenAIEmbeddings")
-        cls.patcher_api_key = patch("src.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
+        cls.patcher_chroma = patch("src.rag.knowledge_base.Chroma")
+        cls.patcher_embeddings = patch("src.rag.knowledge_base.OpenAIEmbeddings")
+        cls.patcher_api_key = patch("src.rag.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
 
         cls.patcher_chroma.start()
         cls.patcher_embeddings.start()

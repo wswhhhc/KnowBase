@@ -10,11 +10,11 @@ from src.graph import (
     run_query,
     _initial_state,
 )
-from src.graph_utils import (
+from src.graph.utils import (
     parse_rerank_decision,
     parse_quality_decision,
 )
-from src.knowledge_base import RetrievalResult
+from src.rag.knowledge_base import RetrievalResult
 
 
 class FakeResponse:

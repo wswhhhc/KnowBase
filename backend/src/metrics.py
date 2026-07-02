@@ -11,7 +11,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from config.settings import ROOT_DIR
+from src.config.settings import ROOT_DIR
 
 
 _LOG_DIR = ROOT_DIR / "data" / "rag_logs"

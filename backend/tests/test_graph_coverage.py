@@ -12,11 +12,11 @@ from src.graph import (
     get_graph,
     _initial_state,
 )
-from src.graph_routing import (
+from src.graph.routing import (
     _route_search_scope,
     route_question,
 )
-from src.graph_nodes import (
+from src.graph.nodes import (
     _should_rerank,
     _rule_check_quality,
     _compute_evidence,
@@ -27,8 +27,8 @@ from src.graph_nodes import (
     generate_answer,
     finalize,
 )
-from src.graph_state import GraphState
-from src.knowledge_base import KnowledgeBase, RetrievalResult
+from src.graph.state import GraphState
+from src.rag.knowledge_base import KnowledgeBase, RetrievalResult
 
 
 class FakeResponse:
@@ -173,18 +173,18 @@ class RewriteQueryTests(unittest.TestCase):
         )
         # First call → LLM invoked, result cached
         llm1 = FakeLLM(["缓存的改写结果"])
-        with patch("src.graph_utils._get_llm", return_value=llm1):
+        with patch("src.graph.utils._get_llm", return_value=llm1):
             first = rewrite_query(state)
 
         # Second call — should hit cache, no LLM call
-        with patch("src.graph_utils._get_llm") as mock_llm:
+        with patch("src.graph.utils._get_llm") as mock_llm:
             second = rewrite_query(state)
             mock_llm.assert_not_called()
 
         self.assertEqual(second["rewritten_question"], "缓存的改写结果")
         self.assertTrue(second["used_rewrite"])
 
-    @patch("src.graph_nodes.extract_context_terms", return_value=["年假", "政策"])
+    @patch("src.graph.nodes.extract_context_terms", return_value=["年假", "政策"])
     def test_entity_expansion_for_short_rewrite(self, mock_terms):
         """When LLM returns short answer (< 15 chars), entity expansion kicks in."""
         question = "这个呢"
@@ -194,7 +194,7 @@ class RewriteQueryTests(unittest.TestCase):
         )
         # LLM returns a short rewrite
         fake_llm = FakeLLM(["测试"])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = rewrite_query(state)
 
         self.assertIn("测试", result["rewritten_question"])
@@ -215,7 +215,7 @@ class RewriteQueryTests(unittest.TestCase):
                 usage_metadata={"input_tokens": 11, "output_tokens": 7},
             )
         ])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = rewrite_query(state)
 
         self.assertEqual(result["token_count"], 18)
@@ -275,7 +275,7 @@ class RerankDocsTests(unittest.TestCase):
         → fall back to docs[:top_k]."""
         docs = [_doc(0.9, "a:0:1"), _doc(0.8, "a:0:2")]
         fake_llm = FakeLLM(["not valid json at all"])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = rerank_docs(_state(
                 search_strategy="high_quality",
                 documents=docs,
@@ -288,7 +288,7 @@ class RerankDocsTests(unittest.TestCase):
         """LLM returns valid JSON but chunk_ids don't exist."""
         docs = [_doc(0.9, "a:0:1"), _doc(0.8, "a:0:2")]
         fake_llm = FakeLLM(['{"selected_doc_ids":["missing:1"],"reason":"x"}'])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = rerank_docs(_state(
                 search_strategy="high_quality",
                 documents=docs,
@@ -428,7 +428,7 @@ class CheckQualityTests(unittest.TestCase):
         self.assertTrue(result["quality_ok"])
 
     def test_skip_when_quality_check_disabled(self):
-        with patch("src.graph_nodes.get_runtime_setting", return_value=False):
+        with patch("src.graph.nodes.get_runtime_setting", return_value=False):
             result = check_quality(_state(question_type="knowledge_base"))
         self.assertTrue(result["quality_ok"])
 
@@ -445,7 +445,7 @@ class CheckQualityTests(unittest.TestCase):
         self.assertTrue(result["quality_ok"])
 
     def test_rule_insufficient_triggers_web_search(self):
-        with patch("src.graph_nodes._tavily_configured", return_value=True):
+        with patch("src.graph.nodes._tavily_configured", return_value=True):
             result = check_quality(_state(
                 question_type="knowledge_base",
                 documents=[],
@@ -467,9 +467,9 @@ class CheckQualityTests(unittest.TestCase):
                 usage_metadata={"input_tokens": 9, "output_tokens": 4},
             )
         ])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
-            with patch("src.graph_nodes._tavily_configured", return_value=False):
-                with patch("src.graph_nodes.hash") as mock_hash:
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            with patch("src.graph.nodes._tavily_configured", return_value=False):
+                with patch("src.graph.nodes.hash") as mock_hash:
                     mock_hash.return_value = 0  # so hash % 3 == 0 → skip LLM
                     result = check_quality(_state(
                         question_type="knowledge_base",
@@ -492,9 +492,9 @@ class CheckQualityTests(unittest.TestCase):
 
     def test_llm_quality_fails_triggers_web_search(self):
         fake_llm = FakeLLM(['{"quality_passed":false,"quality_reason":"bad","retry_strategy":"expand_retrieval"}'])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
-            with patch("src.graph_nodes._tavily_configured", return_value=True):
-                with patch("src.graph_nodes.hash") as mock_hash:
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            with patch("src.graph.nodes._tavily_configured", return_value=True):
+                with patch("src.graph.nodes.hash") as mock_hash:
                     mock_hash.return_value = 0  # skip the sampling branch
                     result = check_quality(_state(
                         question_type="knowledge_base",
@@ -511,8 +511,8 @@ class CheckQualityTests(unittest.TestCase):
 
     def test_llm_quality_fails_expand_retrieval(self):
         fake_llm = FakeLLM(['{"quality_passed":false,"quality_reason":"need more","retry_strategy":"expand_retrieval"}'])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
-            with patch("src.graph_nodes._tavily_configured", return_value=False):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            with patch("src.graph.nodes._tavily_configured", return_value=False):
                 result = check_quality(_state(
                     question_type="knowledge_base",
                     documents=[_doc(0.9)],
@@ -534,7 +534,7 @@ class GenerateAnswerTests(unittest.TestCase):
 
     def test_deep_strategy_sets_comprehensive_prompt(self):
         fake_llm = FakeLLM(["这是一个综合答案。"])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = generate_answer(_state(
                 search_strategy="deep",
                 context="some docs",
@@ -558,7 +558,7 @@ class GenerateAnswerTests(unittest.TestCase):
 
     def test_with_history_includes_history_in_prompt(self):
         fake_llm = FakeLLM(["history-based answer"])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = generate_answer(_state(
                 context="some docs",
                 web_context="",
@@ -569,7 +569,7 @@ class GenerateAnswerTests(unittest.TestCase):
 
     def test_web_sources_appended_to_sources(self):
         fake_llm = FakeLLM(["answer with web citation [1]"])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = generate_answer(_state(
                 context="some docs",
                 web_context="web results",
@@ -592,7 +592,7 @@ class GenerateAnswerTests(unittest.TestCase):
             "answer",
             usage_metadata={"input_tokens": 11, "output_tokens": 7},
         )
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = generate_answer(_state(
                 context="some docs",
                 question="token test?",
@@ -615,7 +615,7 @@ class RouteQuestionTests(unittest.TestCase):
         fake_llm = FakeLLM([
             '{"question_type":"knowledge_base","reason":"factual question"}'
         ])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = route_question(_state(
                 question="云计算是什么",
                 messages=[HumanMessage(content="hi"), AIMessage(content="hello")],
@@ -628,7 +628,7 @@ class RouteQuestionTests(unittest.TestCase):
             raise RuntimeError("API down")
         mock_llm = unittest.mock.MagicMock()
         mock_llm.invoke = thrower
-        with patch("src.graph_utils._get_llm", return_value=mock_llm):
+        with patch("src.graph.utils._get_llm", return_value=mock_llm):
             result = route_question(_state(
                 question="年假怎么算",
                 messages=[HumanMessage(content="hi"), AIMessage(content="hello")],
@@ -712,12 +712,12 @@ class RerankDecisionEdgeTests(unittest.TestCase):
     we cover empty and non-JSON inputs."""
 
     def test_empty_text_returns_empty_decision(self):
-        from src.graph_utils import parse_rerank_decision
+        from src.graph.utils import parse_rerank_decision
         decision = parse_rerank_decision("", {"a", "b"})
         self.assertEqual(decision.selected_doc_ids, [])
 
     def test_non_json_returns_empty_decision(self):
-        from src.graph_utils import parse_rerank_decision
+        from src.graph.utils import parse_rerank_decision
         decision = parse_rerank_decision("just plain text", {"a", "b"})
         self.assertEqual(decision.selected_doc_ids, [])
 
@@ -730,17 +730,17 @@ class QualityDecisionEdgeTests(unittest.TestCase):
     """parse_quality_decision: PASS literal, empty, malformed JSON."""
 
     def test_pass_literal_returns_true(self):
-        from src.graph_utils import parse_quality_decision
+        from src.graph.utils import parse_quality_decision
         decision = parse_quality_decision("PASS")
         self.assertTrue(decision.quality_passed)
 
     def test_empty_text_returns_not_passed(self):
-        from src.graph_utils import parse_quality_decision
+        from src.graph.utils import parse_quality_decision
         decision = parse_quality_decision("")
         self.assertFalse(decision.quality_passed)
 
     def test_malformed_json_falls_back_to_natural_language(self):
-        from src.graph_utils import parse_quality_decision
+        from src.graph.utils import parse_quality_decision
         decision = parse_quality_decision('{"broken": no quotes}')
         # Falls to natural language parsing — negative marker "无" may match
         # depending on the content. If no clear positive/negative, returns False.

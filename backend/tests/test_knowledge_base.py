@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, patch, call
 
 from langchain_core.documents import Document
 
-from src.knowledge_base import (
+from src.rag.knowledge_base import (
     EmbeddingIndexMismatchError,
     IngestionService,
     KnowledgeBase,
     rrf_fuse,
 )
-from src.kb_models import (
+from src.rag.models import (
     compute_content_hash as _content_hash,
     document_chunk_id as _document_chunk_id,
     infer_source_type as _infer_source_type,
@@ -23,9 +23,9 @@ from src.kb_models import (
 
 class NeighborChunksTests(unittest.TestCase):
     def setUp(self):
-        patcher1 = patch("src.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
-        patcher2 = patch("src.knowledge_base.OpenAIEmbeddings")
-        patcher3 = patch("src.knowledge_base.Chroma")
+        patcher1 = patch("src.rag.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
+        patcher2 = patch("src.rag.knowledge_base.OpenAIEmbeddings")
+        patcher3 = patch("src.rag.knowledge_base.Chroma")
         self.addCleanup(patcher1.stop)
         self.addCleanup(patcher2.stop)
         self.addCleanup(patcher3.stop)
@@ -95,9 +95,9 @@ class NeighborChunksTests(unittest.TestCase):
 
 class ClearTests(unittest.TestCase):
     def setUp(self):
-        patcher1 = patch("src.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
-        patcher2 = patch("src.knowledge_base.OpenAIEmbeddings")
-        patcher3 = patch("src.knowledge_base.Chroma")
+        patcher1 = patch("src.rag.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
+        patcher2 = patch("src.rag.knowledge_base.OpenAIEmbeddings")
+        patcher3 = patch("src.rag.knowledge_base.Chroma")
         self.addCleanup(patcher1.stop)
         self.addCleanup(patcher2.stop)
         self.addCleanup(patcher3.stop)
@@ -425,9 +425,9 @@ class _BaseKBMockTest(unittest.TestCase):
     """Base class for tests needing a mocked KnowledgeBase with loaded state."""
 
     def setUp(self):
-        patcher1 = patch("src.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
-        patcher2 = patch("src.knowledge_base.OpenAIEmbeddings")
-        patcher3 = patch("src.knowledge_base.Chroma")
+        patcher1 = patch("src.rag.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
+        patcher2 = patch("src.rag.knowledge_base.OpenAIEmbeddings")
+        patcher3 = patch("src.rag.knowledge_base.Chroma")
         self.addCleanup(patcher1.stop)
         self.addCleanup(patcher2.stop)
         self.addCleanup(patcher3.stop)
@@ -753,7 +753,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
         fake_docs = [
             Document(page_content="test", metadata={"source": "test.txt"}),
         ]
-        with patch("src.knowledge_base.load_document", return_value=fake_docs) as mock_load:
+        with patch("src.rag.knowledge_base.load_document", return_value=fake_docs) as mock_load:
             with patch.object(self.kb.ingestion, "_process_documents", return_value=1) as mock_process:
                 result = self.kb.ingest_file("/fake/path/test.txt")
 
@@ -765,7 +765,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
         fake_docs = [
             Document(page_content="test", metadata={"source": "custom.txt"}),
         ]
-        with patch("src.knowledge_base.load_document", return_value=fake_docs) as mock_load:
+        with patch("src.rag.knowledge_base.load_document", return_value=fake_docs) as mock_load:
             with patch.object(self.kb.ingestion, "_process_documents", return_value=2) as mock_process:
                 result = self.kb.ingest_file("/fake/path/doc.pdf", source_name="my_doc.pdf")
 
@@ -777,7 +777,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
             Document(page_content="test", metadata={"source": "custom.txt"}),
         ]
         progress = []
-        with patch("src.knowledge_base.load_document", return_value=fake_docs):
+        with patch("src.rag.knowledge_base.load_document", return_value=fake_docs):
             with patch.object(self.kb.ingestion, "_process_documents", return_value=2):
                 self.kb.ingest_file(
                     "/fake/path/doc.pdf",
@@ -792,7 +792,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
             Document(page_content="test", metadata={"source": "https://example.com"}),
         ]
         progress = []
-        with patch("src.loaders.load_url", return_value=fake_docs):
+        with patch("src.rag.loaders.load_url", return_value=fake_docs):
             with patch.object(self.kb.ingestion, "_process_documents", return_value=1):
                 self.kb.ingest_url(
                     "https://example.com",
@@ -822,7 +822,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
             Document(page_content="全新的文档内容" * 100, metadata={"source": "replaced.txt"}),
         ]
 
-        with patch("src.knowledge_base.load_document", return_value=fake_docs):
+        with patch("src.rag.knowledge_base.load_document", return_value=fake_docs):
             result = self.kb.ingest_file("/fake/path/replaced.txt", source_name="replaced.txt")
 
         self.assertGreater(result, 0)
@@ -855,7 +855,7 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
             Document(page_content="全" * 200, metadata={"source": "https://bar.com/docs/index.html"}),
         ]
 
-        with patch("src.knowledge_base.load_document", return_value=url_b_docs):
+        with patch("src.rag.knowledge_base.load_document", return_value=url_b_docs):
             self.kb.ingest_file("/fake/path/page.html", source_name="https://bar.com/docs/index.html")
 
         # foo.com chunk must still be present

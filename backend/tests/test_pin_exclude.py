@@ -3,9 +3,9 @@ from unittest.mock import MagicMock
 
 from langchain_core.documents import Document
 
-from src.graph_nodes import retrieve_docs
-from src.graph_state import GraphState
-from src.kb_models import RetrievalResult
+from src.graph.nodes import retrieve_docs
+from src.graph.state import GraphState
+from src.rag.models import RetrievalResult
 
 
 def _make_doc(chunk_id: str, content: str = "doc content") -> Document:

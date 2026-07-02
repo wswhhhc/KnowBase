@@ -9,7 +9,7 @@ from pathlib import Path
 
 import jieba
 
-from config.settings import MAX_UPLOAD_MB
+from src.config.settings import MAX_UPLOAD_MB
 
 
 ALLOWED_UPLOAD_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".html", ".htm"}

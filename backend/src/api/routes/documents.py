@@ -13,8 +13,8 @@ from sse_starlette.sse import EventSourceResponse
 from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import IngestResponse, URLIngestRequest, SourceOut
 from src.chat_utils import generate_suggested_questions
-from src.kb_models import normalize_source
-from src.knowledge_base import KnowledgeBase
+from src.rag.models import normalize_source
+from src.rag.knowledge_base import KnowledgeBase
 from src.utils import save_uploaded_file
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])

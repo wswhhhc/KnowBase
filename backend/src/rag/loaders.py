@@ -22,7 +22,7 @@ from urllib3.connection import HTTPConnection, HTTPSConnection
 from urllib3.poolmanager import PoolManager
 
 
-from src.kb_models import normalize_source
+from src.rag.models import normalize_source
 
 
 def load_document(file_path: str, source_name: str | None = None) -> List[Document]:

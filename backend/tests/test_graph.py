@@ -7,19 +7,19 @@ from langchain_core.documents import Document
 from src.graph import (
     run_query,
 )
-from src.graph_routing import (
+from src.graph.routing import (
     detect_question_type,
     route_after_classifier,
 )
-from src.graph_utils import (
+from src.graph.utils import (
     parse_quality_decision,
     parse_rerank_decision,
 )
-from src.graph_nodes import (
+from src.graph.nodes import (
     route_after_rerank,
     route_after_retrieval,
 )
-from src.knowledge_base import RetrievalResult
+from src.rag.knowledge_base import RetrievalResult
 
 
 class FakeResponse:
@@ -139,7 +139,7 @@ class GraphRoutingTests(unittest.TestCase):
         run_query(question="第一轮问什么", thread_id=thread_id, knowledge_base=kb)
 
         fake_llm = FakeLLM(["你上一轮问的是：第一轮问什么。"])
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = run_query(
                 question="我刚刚问了什么",
                 thread_id=thread_id,
@@ -149,7 +149,7 @@ class GraphRoutingTests(unittest.TestCase):
         self.assertIn("第一轮问什么", result["answer"])
 
     def test_run_query_retries_with_expanded_retrieval_when_quality_fails(self):
-        from src.graph import _GRAPH_CACHE
+        from src.graph.graph import _GRAPH_CACHE
         _GRAPH_CACHE.clear()
         kb = OneDocKnowledgeBase()
         # route_question uses detect_question_type (rule-based, no LLM), so:
@@ -164,7 +164,7 @@ class GraphRoutingTests(unittest.TestCase):
             '{"quality_passed":true,"quality_reason":"PASS","retry_strategy":"none"}',
         ])
 
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
             result = run_query(
                 question="LangGraph 如何记忆对话？",
                 thread_id=str(uuid4()),
@@ -188,10 +188,10 @@ class GraphRoutingTests(unittest.TestCase):
             }
         ]
 
-        with patch("src.graph_routing.route_question", return_value={"question_type": "knowledge_base"}):
-            with patch("src.graph_utils._get_llm", return_value=fake_llm):
-                with patch("src.graph_nodes._tavily_configured", return_value=True):
-                    with patch("src.web_search.web_search", return_value=(web_results, "")):
+        with patch("src.graph.routing.route_question", return_value={"question_type": "knowledge_base"}):
+            with patch("src.graph.utils._get_llm", return_value=fake_llm):
+                with patch("src.graph.nodes._tavily_configured", return_value=True):
+                    with patch("src.rag.web_search.web_search", return_value=(web_results, "")):
                         result = run_query(
                             question="李白简介",
                             thread_id=str(uuid4()),

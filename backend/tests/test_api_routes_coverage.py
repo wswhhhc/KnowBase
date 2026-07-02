@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from langchain_core.documents import Document
-from src.kb_models import RetrievalResult
+from src.rag.models import RetrievalResult
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app

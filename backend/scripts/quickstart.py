@@ -59,7 +59,7 @@ def _configure_demo_env(reset: bool) -> None:
 def _load_demo_documents() -> tuple[object, int]:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-    from src.knowledge_base import KnowledgeBase
+    from src.rag.knowledge_base import KnowledgeBase
 
     kb = KnowledgeBase()
     total = 0
@@ -103,7 +103,7 @@ def main() -> int:
     _configure_demo_env(reset=args.reset)
     sys.path.insert(0, str(BACKEND_ROOT))
 
-    from config.settings import require_siliconflow_api_key
+    from src.config.settings import require_siliconflow_api_key
 
     require_siliconflow_api_key()
 

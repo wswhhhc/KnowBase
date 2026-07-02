@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 
-from config.settings import (
+from src.config.settings import (
     ENABLE_QUALITY_CHECK,
     LLM_MAX_TOKENS,
     LLM_MODEL,
@@ -30,9 +30,9 @@ from config.settings import (
     get_runtime_setting,
     require_siliconflow_api_key,
 )
-from src import graph_utils as gu
-from src.graph_state import GraphSource, GraphState, GraphStateUpdate, QualityDecision, RerankDecision
-from src.kb_models import RetrievalResult, normalize_source
+from src.graph import utils as gu
+from src.graph.state import GraphSource, GraphState, GraphStateUpdate, QualityDecision, RerankDecision
+from src.rag.models import RetrievalResult, normalize_source
 from src.utils import extract_context_terms, json_from_text
 
 
@@ -348,7 +348,7 @@ def handle_missing_context(state: GraphState) -> GraphStateUpdate:
 
 
 def _web_search_context(state: GraphState) -> GraphStateUpdate:
-    from src.web_search import format_search_results, web_search as _web_search
+    from src.rag.web_search import format_search_results, web_search as _web_search
 
     query = state.get("rewritten_question") or state["question"]
     results, error = _web_search(query, max_results=5)

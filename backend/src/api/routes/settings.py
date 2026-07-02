@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.deps import verify_api_key, get_knowledge_base
 from src.api.models import RuntimeSettingsOut, RuntimeSettingsUpdate, SettingsUpdateResult
-from config.settings import (
+from src.config.settings import (
     MASKED_SECRET_VALUE,
     _SECRET_SETTINGS,
     get_public_settings,

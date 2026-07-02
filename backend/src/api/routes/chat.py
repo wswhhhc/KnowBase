@@ -11,7 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 from src.api.chat_stream_service import ChatStreamService
 from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import ChatRequest
-from src.knowledge_base import KnowledgeBase
+from src.rag.knowledge_base import KnowledgeBase
 
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
