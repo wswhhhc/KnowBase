@@ -34,8 +34,20 @@ def content_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
+def normalize_workspace_id(workspace_id: str | None) -> str:
+    return workspace_id or ""
+
+
 def chunk_id(source: str, chunk_index: int, content_hash: str) -> str:
     return f"{normalize_source(source)}:{chunk_index}:{content_hash[:16]}"
+
+
+def workspace_chunk_id(workspace_id: str | None, source: str, chunk_index: int, content_hash: str) -> str:
+    base_chunk_id = chunk_id(source, chunk_index, content_hash)
+    normalized_workspace_id = normalize_workspace_id(workspace_id)
+    if not normalized_workspace_id:
+        return base_chunk_id
+    return f"{normalized_workspace_id}::{base_chunk_id}"
 
 
 def normalize_source(source: str) -> str:
@@ -74,20 +86,26 @@ def infer_source_type(source: str) -> str:
     return "local_file"
 
 
+def metadata_workspace_id(metadata: dict, default: str = "") -> str:
+    return normalize_workspace_id(metadata.get("workspace_id", default))
+
+
 def document_chunk_id(doc: Document) -> str:
     existing = doc.metadata.get("chunk_id")
-    if existing and not any(key in doc.metadata for key in ("source", "chunk_index", "url", "content_hash")):
+    if existing and not any(key in doc.metadata for key in ("source", "chunk_index", "url", "content_hash", "workspace_id")):
         return str(existing)
     source = canonical_source_from_metadata(doc.metadata)
     chunk_index = int(doc.metadata.get("chunk_index", 0))
     c_hash = doc.metadata.get("content_hash") or content_hash(doc.page_content)
-    expected_prefix = f"{source}:{chunk_index}:"
+    workspace_id = metadata_workspace_id(doc.metadata)
+    expected_prefix = f"{workspace_id}::{source}:{chunk_index}:" if workspace_id else f"{source}:{chunk_index}:"
     if existing and str(existing).startswith(expected_prefix):
         return str(existing)
     if existing:
         doc.metadata.setdefault("legacy_chunk_id", str(existing))
-    cid = chunk_id(source, chunk_index, c_hash)
+    cid = workspace_chunk_id(workspace_id, source, chunk_index, c_hash)
     doc.metadata["source"] = source
+    doc.metadata["workspace_id"] = workspace_id
     doc.metadata.setdefault("chunk_index", chunk_index)
     doc.metadata.setdefault("content_hash", c_hash)
     doc.metadata["chunk_id"] = cid

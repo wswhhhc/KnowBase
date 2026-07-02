@@ -145,6 +145,7 @@ def _initial_state(question: str) -> GraphState:
         "web_search_error": "",
         "used_web_search": False,
         "web_search_enabled": False,
+        "workspace_id": "",
         "search_strategy": "balanced",
         "search_filter": {},
         "pinned_chunk_ids": [],
@@ -197,12 +198,14 @@ def run_query(
     stream_tokens: bool = False,
     web_search_enabled: bool = False,
     search_strategy: str = "balanced",
+    workspace_id: str = "",
     pinned_chunk_ids: list[str] | None = None,
     excluded_chunk_ids: list[str] | None = None,
 ) -> GraphState | Iterable[GraphStateUpdate] | Generator[tuple[str, object], None, None]:
     overrides = {
         "web_search_enabled": web_search_enabled,
         "search_strategy": search_strategy,
+        "workspace_id": workspace_id,
     }
     if pinned_chunk_ids:
         overrides["pinned_chunk_ids"] = pinned_chunk_ids

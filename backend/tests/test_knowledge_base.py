@@ -916,6 +916,144 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
         self.kb.vector_store.add_documents.assert_not_called()
 
 
+class WorkspaceScopedKnowledgeBaseTests(_BaseKBMockTest):
+    def test_documents_from_chroma_result_defaults_missing_workspace_id_to_empty(self):
+        result = {
+            "ids": ["legacy-row-id"],
+            "documents": ["legacy content"],
+            "metadatas": [{"source": "legacy.txt", "chunk_index": 0}],
+        }
+
+        docs = IngestionService._documents_from_chroma_result(result)
+
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0].metadata["workspace_id"], "")
+
+    def test_same_source_can_be_ingested_into_multiple_workspaces_without_collision(self):
+        docs = [Document(page_content="workspace specific content " * 100, metadata={"source": "shared.txt"})]
+
+        count_default = self.kb.ingestion._process_documents(docs, workspace_id="")
+        count_workspace = self.kb.ingestion._process_documents(docs, workspace_id="ws-alpha")
+
+        self.assertGreater(count_default, 0)
+        self.assertGreater(count_workspace, 0)
+        self.assertEqual(self.kb.document_count_for_workspace(""), count_default + 1)
+        self.assertEqual(self.kb.document_count_for_workspace("ws-alpha"), count_workspace)
+        self.assertTrue(any(doc.metadata.get("workspace_id") == "ws-alpha" for doc in self.kb.all_docs))
+
+    def test_workspace_specific_source_counts_and_chunk_lookup_do_not_leak(self):
+        default_doc = Document(
+            page_content="default content",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "shared.txt:0:def",
+                "chunk_index": 0,
+                "workspace_id": "",
+            },
+        )
+        ws_doc = Document(
+            page_content="workspace content",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "ws-alpha::shared.txt:0:abc",
+                "chunk_index": 0,
+                "workspace_id": "ws-alpha",
+            },
+        )
+        legacy_doc = Document(
+            page_content="legacy default content",
+            metadata={
+                "source": "legacy.txt",
+                "chunk_id": "legacy.txt:0:ghi",
+                "chunk_index": 0,
+            },
+        )
+        self.kb.all_docs[:] = [default_doc, ws_doc, legacy_doc]
+        self.kb.ingestion._rebuild_all()
+
+        self.assertEqual(self.kb.source_counts(""), [("legacy.txt", 1), ("shared.txt", 1)])
+        self.assertEqual(self.kb.source_counts("ws-alpha"), [("shared.txt", 1)])
+        self.assertIsNotNone(self.kb.get_chunk_by_id("ws-alpha::shared.txt:0:abc", workspace_id="ws-alpha"))
+        self.assertIsNone(self.kb.get_chunk_by_id("ws-alpha::shared.txt:0:abc", workspace_id=""))
+
+    def test_delete_source_only_removes_matching_workspace(self):
+        default_doc = Document(
+            page_content="default content",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "shared.txt:0:def",
+                "chunk_index": 0,
+                "workspace_id": "",
+            },
+        )
+        ws_doc = Document(
+            page_content="workspace content",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "ws-alpha::shared.txt:0:abc",
+                "chunk_index": 0,
+                "workspace_id": "ws-alpha",
+            },
+        )
+        self.kb.all_docs[:] = [default_doc, ws_doc]
+        self.kb.ingestion._rebuild_all()
+        self.kb.vector_store.delete.reset_mock()
+
+        removed = self.kb.delete_source("shared.txt", workspace_id="ws-alpha")
+
+        self.assertEqual(removed, 1)
+        self.assertIn("shared.txt:0:def", self.kb.doc_by_id)
+        self.assertNotIn("ws-alpha::shared.txt:0:abc", self.kb.doc_by_id)
+        self.kb.vector_store.delete.assert_called_once_with(ids=["ws-alpha::shared.txt:0:abc"])
+
+    def test_hybrid_search_filters_results_to_requested_workspace(self):
+        default_doc = Document(
+            page_content="default workspace answer",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "shared.txt:0:def",
+                "chunk_index": 0,
+                "workspace_id": "",
+            },
+        )
+        ws_doc = Document(
+            page_content="workspace scoped answer",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "ws-alpha::shared.txt:0:abc",
+                "chunk_index": 0,
+                "workspace_id": "ws-alpha",
+            },
+        )
+        legacy_doc = Document(
+            page_content="legacy answer",
+            metadata={
+                "source": "legacy.txt",
+                "chunk_id": "legacy.txt:0:ghi",
+                "chunk_index": 0,
+            },
+        )
+        self.kb.all_docs[:] = [default_doc, ws_doc, legacy_doc]
+        self.kb.ingestion._rebuild_all()
+        self.kb.vector_store.similarity_search_with_score.return_value = [
+            (default_doc, 0.9),
+            (ws_doc, 0.8),
+            (legacy_doc, 0.7),
+        ]
+
+        default_results = self.kb.hybrid_search("answer", workspace_id="", score_threshold=None)
+        workspace_results = self.kb.hybrid_search("answer", workspace_id="ws-alpha", score_threshold=None)
+
+        self.assertEqual(
+            {result.chunk_id for result in default_results},
+            {"shared.txt:0:def", "legacy.txt:0:ghi"},
+        )
+        self.assertEqual(
+            {result.chunk_id for result in workspace_results},
+            {"ws-alpha::shared.txt:0:abc"},
+        )
+
+
 class KBEnsureLoadedTests(_BaseKBMockTest):
     """Test _ensure_loaded."""
 

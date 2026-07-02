@@ -14,6 +14,24 @@ from src.api.models import ChatRequest
 
 
 class ChatStreamServiceTests(unittest.TestCase):
+    @patch("src.api.chat_stream_service.run_query")
+    def test_workspace_id_is_forwarded_to_run_query(self, mock_run_query):
+        mock_run_query.return_value = iter([
+            ("updates", {"finalize": {"evidence_level": "none", "outcome_category": "success"}}),
+        ])
+        body = ChatRequest(
+            question="测试",
+            web_search_enabled=False,
+            search_strategy="balanced",
+            workspace_id="ws-alpha",
+        )
+
+        service = ChatStreamService(body, kb=object())
+        list(service.run())
+
+        _, kwargs = mock_run_query.call_args
+        self.assertEqual(kwargs["workspace_id"], "ws-alpha")
+
     @patch("src.api.chat_persistence.replace_pin_state")
     @patch("src.api.chat_stream_service.record_query_metrics")
     @patch("src.api.chat_persistence.add_message", side_effect=[1, 2])

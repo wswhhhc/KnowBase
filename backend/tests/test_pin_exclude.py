@@ -38,10 +38,10 @@ class MockKB:
     def set_neighbors(self, neighbors: dict[str, list[Document]]):
         self._neighbor_map = neighbors
 
-    def hybrid_search(self, query, k, score_threshold=None, filter=None) -> list[RetrievalResult]:
+    def hybrid_search(self, query, k, score_threshold=None, filter=None, workspace_id=None) -> list[RetrievalResult]:
         return self._hybrid_results
 
-    def get_neighbor_chunks(self, chunk_id: str, window: int = 1) -> list[Document]:
+    def get_neighbor_chunks(self, chunk_id: str, window: int = 1, workspace_id=None) -> list[Document]:
         return self._neighbor_map.get(chunk_id, [])
 
 

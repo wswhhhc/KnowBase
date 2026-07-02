@@ -51,6 +51,7 @@ class FakeKnowledgeBase:
                         "source": "test.txt",
                         "chunk_id": "test.txt:0:abc123",
                         "chunk_index": 0,
+                        "workspace_id": "",
                     },
                 ),
                 Document(
@@ -59,18 +60,57 @@ class FakeKnowledgeBase:
                         "source": "test.txt",
                         "chunk_id": "test.txt:1:def456",
                         "chunk_index": 1,
+                        "workspace_id": "",
                     },
                 ),
             ]
             self.doc_by_id = {d.metadata["chunk_id"]: d for d in self.all_docs}
             self._loaded = True
 
-    def source_counts(self):
+    def _workspace_docs(self, workspace_id: str | None = None):
+        self._ensure_loaded()
+        if workspace_id is None:
+            return list(self.all_docs)
+        return [doc for doc in self.all_docs if doc.metadata.get("workspace_id", "") == workspace_id]
+
+    def source_counts(self, workspace_id: str | None = None):
         return [("test.txt", 2)]
 
     @property
     def document_count(self):
         return len(self.all_docs)
+
+    def document_count_for_workspace(self, workspace_id: str = ""):
+        return len(self._workspace_docs(workspace_id))
+
+    def stats(self, workspace_id: str = ""):
+        docs = self._workspace_docs(workspace_id)
+        return {
+            "chunk_count": len(docs),
+            "source_count": 1 if docs else 0,
+            "total_chars": sum(len(doc.page_content) for doc in docs),
+        }
+
+    def list_chunks(self, *, workspace_id: str = "", source: str = "", search: str = "", skip: int = 0, limit: int = 50):
+        docs = self._workspace_docs(workspace_id)
+        if source:
+            docs = [doc for doc in docs if doc.metadata.get("source") == source]
+        if search:
+            docs = [doc for doc in docs if search.lower() in doc.page_content.lower()]
+        total = len(docs)
+        page = docs[skip: skip + limit]
+        return total, [
+            {
+                "source": doc.metadata["source"],
+                "chunk_index": doc.metadata["chunk_index"],
+                "chunk_id": doc.metadata["chunk_id"],
+                "page": doc.metadata.get("page"),
+                "content": doc.page_content,
+                "original_content": doc.metadata.get("original_content"),
+                "section": doc.metadata.get("section"),
+            }
+            for doc in page
+        ]
 
     def load_preset_documents(self):
         return 0
@@ -99,15 +139,14 @@ class FakeKnowledgeBase:
             "fused_results": docs,
         }
 
-    def get_neighbor_chunks(self, chunk_id, window=1):
+    def get_neighbor_chunks(self, chunk_id, window=1, workspace_id=None):
         return []
 
-    def get_hotspots(self, top_n=50):
+    def get_hotspots(self, top_n=50, workspace_id=None):
         return [{"chunk_id": "test.txt:0:abc", "source": "test.txt", "hits": 5, "content_preview": "测试"}]
 
-    def get_chunk_by_id(self, chunk_id):
-        self._ensure_loaded()
-        for doc in self.all_docs:
+    def get_chunk_by_id(self, chunk_id, workspace_id: str | None = None):
+        for doc in self._workspace_docs(workspace_id):
             if doc.metadata["chunk_id"] == chunk_id:
                 return {
                     "source": doc.metadata["source"],
@@ -120,26 +159,29 @@ class FakeKnowledgeBase:
                 }
         return None
 
-    def ingest_file(self, file_path, source_name=None, version_mode="replace", progress_callback=None):
+    def ingest_file(self, file_path, source_name=None, version_mode="replace", progress_callback=None, workspace_id=""):
         if progress_callback:
             progress_callback("loading", 25)
             progress_callback("splitting", 50)
             progress_callback("embedding", 75)
         return 2
 
-    def ingest_url(self, url, version_mode="replace", progress_callback=None):
+    def ingest_url(self, url, version_mode="replace", progress_callback=None, workspace_id=""):
         if progress_callback:
             progress_callback("loading", 25)
             progress_callback("splitting", 50)
             progress_callback("embedding", 75)
         return 1
 
-    def delete_source(self, source_name):
+    def delete_source(self, source_name, workspace_id=None):
         if source_name == "existing.txt":
             return 2
         if source_name == "https://example.com/page":
             return 1
         return 0
+
+    def clear_workspace(self, workspace_id=""):
+        return self.document_count_for_workspace(workspace_id)
 
     def clear(self):
         pass
@@ -323,6 +365,13 @@ class APIEndpointTests(unittest.TestCase):
         for key in ("chunk_count", "source_count", "total_chars"):
             self.assertIn(key, data)
 
+    def test_kb_stats_passes_workspace_id_to_backend(self):
+        with patch.object(self.fake_kb, "stats", return_value={"chunk_count": 1, "source_count": 1, "total_chars": 4}) as mock_stats:
+            resp = self.client.get("/api/knowledge-base/stats?workspace_id=ws-alpha")
+
+        self.assertEqual(resp.status_code, 200)
+        mock_stats.assert_called_once_with(workspace_id="ws-alpha")
+
     def test_kb_config_happy_path(self):
         resp = self.client.get("/api/knowledge-base/config")
         self.assertEqual(resp.status_code, 200)
@@ -340,6 +389,19 @@ class APIEndpointTests(unittest.TestCase):
             item = data["items"][0]
             for key in ("source", "chunk_index", "chunk_id", "content"):
                 self.assertIn(key, item)
+
+    def test_kb_chunks_passes_workspace_id_to_backend(self):
+        with patch.object(self.fake_kb, "list_chunks", return_value=(0, [])) as mock_list_chunks:
+            resp = self.client.get("/api/knowledge-base/chunks?workspace_id=ws-alpha&skip=0&limit=10")
+
+        self.assertEqual(resp.status_code, 200)
+        mock_list_chunks.assert_called_once_with(
+            workspace_id="ws-alpha",
+            source="",
+            search="",
+            skip=0,
+            limit=10,
+        )
 
     def test_kb_chunks_with_source_filter(self):
         resp = self.client.get("/api/knowledge-base/chunks?source=test.txt&skip=0&limit=5")
@@ -475,7 +537,7 @@ class APIEndpointTests(unittest.TestCase):
     def test_ingest_url_stream_passes_version_mode_to_backend(self):
         calls: list[dict] = []
 
-        def _record_ingest(url, version_mode="replace", progress_callback=None):
+        def _record_ingest(url, version_mode="replace", progress_callback=None, workspace_id=""):
             calls.append({"url": url, "version_mode": version_mode})
             if progress_callback:
                 progress_callback("loading", 25)
