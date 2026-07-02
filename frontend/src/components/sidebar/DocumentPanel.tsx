@@ -8,6 +8,7 @@ import type { DocSource } from '@/lib/api'
 interface DocumentPanelProps {
   sources: DocSource[]
   onRefresh: () => Promise<boolean>
+  workspaceId?: string
   onSendQuestion?: (q: string) => void
 }
 
@@ -15,7 +16,7 @@ type VersionPrompt =
   | { kind: 'file'; file: File; sourceName: string }
   | { kind: 'url'; url: string; sourceName: string }
 
-export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: DocumentPanelProps) {
+export default function DocumentPanel({ sources, onRefresh, workspaceId, onSendQuestion }: DocumentPanelProps) {
   const [urlInput, setUrlInput] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadPhase, setUploadPhase] = useState('')
@@ -41,7 +42,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
     setVersionPrompted(null)
     try {
       // Probe first: check if this source already exists (without importing)
-        const probe = await api.checkSource(file.name)
+      const probe = await api.checkSource(file.name, workspaceId)
       if (probe.exists && !versionMode) {
         // Source exists and user hasn't chosen a mode yet — prompt before importing
         setVersionPrompted({ kind: 'file', file, sourceName: file.name })
@@ -75,7 +76,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
           toast.error('上传失败', { description: message })
           resetUploadState()
         },
-      })
+      }, workspaceId)
     } catch (err) {
       toast.error('上传失败', { description: String(err) })
       resetUploadState()
@@ -109,7 +110,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
     setUploadPercent(0)
     setVersionPrompted(null)
     try {
-      const probe = await api.checkSource(url)
+      const probe = await api.checkSource(url, workspaceId)
       if (probe.exists && !versionMode) {
         setVersionPrompted({ kind: 'url', url, sourceName: url })
         resetUploadState()
@@ -145,7 +146,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
         toast.error('导入失败', { description: message })
         resetUploadState()
       },
-    })
+    }, workspaceId)
   }
 
   const handleIngestUrl = async () => {
@@ -273,7 +274,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
         onConfirm={async () => {
           if (!deleteSourceTarget) return
           try {
-            await api.deleteSource(deleteSourceTarget)
+            await api.deleteSource(deleteSourceTarget, workspaceId)
             if (await onRefresh()) toast.success('已删除引用文档')
           } catch (e) {
             toast.error('删除失败', { description: String(e) })
@@ -289,7 +290,7 @@ export default function DocumentPanel({ sources, onRefresh, onSendQuestion }: Do
         description="确定要清空整个知识库中的所有文档和段落吗？此操作不可撤销。"
         onConfirm={async () => {
           try {
-            await api.clearKnowledgeBase()
+            await api.clearKnowledgeBase(workspaceId)
             if (await onRefresh()) toast.success('知识库已清空')
           } catch (e) {
             toast.error('清空失败', { description: String(e) })

@@ -86,8 +86,9 @@ describe('Documents API', () => {
   it('getSources returns list', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([{ source: 'a.txt', count: 1 }]), text: () => Promise.resolve('[]'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
-    const result = await api.getSources()
+    const result = await api.getSources('ws-1')
     expect(result).toHaveLength(1)
+    expect(fn).toHaveBeenCalledWith('/api/documents/sources?workspace_id=ws-1', expect.any(Object))
     vi.unstubAllGlobals()
   })
 
@@ -95,16 +96,16 @@ describe('Documents API', () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ chunk_count: 2 }), text: () => Promise.resolve('{}'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
     const file = new File(['test'], 'test.txt', { type: 'text/plain' })
-    await api.uploadDocument(file)
-    expect(fn).toHaveBeenCalledWith('/api/documents/upload', expect.objectContaining({ method: 'POST' }))
+    await api.uploadDocument(file, 'append', 'ws-1')
+    expect(fn).toHaveBeenCalledWith('/api/documents/upload?version_mode=append&workspace_id=ws-1', expect.objectContaining({ method: 'POST' }))
     vi.unstubAllGlobals()
   })
 
   it('ingestUrl sends POST with URL', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ chunk_count: 1, total_docs: 1, message: 'ok' }), text: () => Promise.resolve('{}'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
-    await api.ingestUrl('https://example.com')
-    expect(fn).toHaveBeenCalledWith('/api/documents/ingest-url', expect.objectContaining({ method: 'POST' }))
+    await api.ingestUrl('https://example.com', undefined, 'ws-1')
+    expect(fn).toHaveBeenCalledWith('/api/documents/ingest-url?workspace_id=ws-1', expect.objectContaining({ method: 'POST' }))
     vi.unstubAllGlobals()
   })
 
@@ -119,9 +120,9 @@ describe('Documents API', () => {
       body: { getReader: () => stream.getReader() },
     })
     vi.stubGlobal('fetch', fn)
-    api.ingestUrlStream('https://example.com', 'append', {})
+    api.ingestUrlStream('https://example.com', 'append', {}, 'ws-1')
     expect(fn).toHaveBeenCalledWith(
-      '/api/documents/ingest-url-stream?version_mode=append',
+      '/api/documents/ingest-url-stream?version_mode=append&workspace_id=ws-1',
       expect.objectContaining({ method: 'POST' }),
     )
     vi.unstubAllGlobals()
@@ -130,16 +131,16 @@ describe('Documents API', () => {
   it('deleteSource encodes URI component', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}), text: () => Promise.resolve(''), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
-    await api.deleteSource('my file.txt')
-    expect(fn).toHaveBeenCalledWith('/api/documents/source/my%20file.txt', expect.any(Object))
+    await api.deleteSource('my file.txt', 'ws-1')
+    expect(fn).toHaveBeenCalledWith('/api/documents/source/my%20file.txt?workspace_id=ws-1', expect.any(Object))
     vi.unstubAllGlobals()
   })
 
   it('clearKnowledgeBase sends POST', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ message: 'cleared' }), text: () => Promise.resolve('{}'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
-    await api.clearKnowledgeBase()
-    expect(fn).toHaveBeenCalledWith('/api/documents/clear', expect.objectContaining({ method: 'POST' }))
+    await api.clearKnowledgeBase('ws-1')
+    expect(fn).toHaveBeenCalledWith('/api/documents/clear?workspace_id=ws-1', expect.objectContaining({ method: 'POST' }))
     vi.unstubAllGlobals()
   })
 })
@@ -148,8 +149,8 @@ describe('Knowledge Base API', () => {
   it('getKBChunks builds query params', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }), text: () => Promise.resolve('{}'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
-    await api.getKBChunks('doc.txt', 'keyword', 10, 20)
-    expect(fn).toHaveBeenCalledWith('/api/knowledge-base/chunks?source=doc.txt&search=keyword&skip=10&limit=20', expect.any(Object))
+    await api.getKBChunks('doc.txt', 'keyword', 10, 20, 'ws-1')
+    expect(fn).toHaveBeenCalledWith('/api/knowledge-base/chunks?source=doc.txt&search=keyword&skip=10&limit=20&workspace_id=ws-1', expect.any(Object))
     vi.unstubAllGlobals()
   })
 
@@ -167,16 +168,17 @@ describe('Knowledge Base API', () => {
   it('getKBChunkById encodes the chunk id in the path', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}), text: () => Promise.resolve('{}'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
-    await api.getKBChunkById('doc.txt:1:hash value')
-    expect(fn).toHaveBeenCalledWith('/api/knowledge-base/chunks/doc.txt%3A1%3Ahash%20value', expect.any(Object))
+    await api.getKBChunkById('doc.txt:1:hash value', 'ws-1')
+    expect(fn).toHaveBeenCalledWith('/api/knowledge-base/chunks/doc.txt%3A1%3Ahash%20value?workspace_id=ws-1', expect.any(Object))
     vi.unstubAllGlobals()
   })
 
   it('getKBSourceNames returns list', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(['a.txt']), text: () => Promise.resolve('[]'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
-    const result = await api.getKBSourceNames()
+    const result = await api.getKBSourceNames('ws-1')
     expect(result).toEqual(['a.txt'])
+    expect(fn).toHaveBeenCalledWith('/api/knowledge-base/sources?workspace_id=ws-1', expect.any(Object))
     vi.unstubAllGlobals()
   })
 
@@ -191,25 +193,27 @@ describe('Knowledge Base API', () => {
   it('getKBHotspots returns list', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([{ chunk_id: 'a', source: 'b', hits: 1, content_preview: 'c' }]), text: () => Promise.resolve('[]'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
-    const result = await api.getKBHotspots()
+    const result = await api.getKBHotspots('ws-1')
     expect(result).toHaveLength(1)
+    expect(fn).toHaveBeenCalledWith('/api/knowledge-base/hotspots?workspace_id=ws-1', expect.any(Object))
     vi.unstubAllGlobals()
   })
 
   it('getKBStats returns stats', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ chunk_count: 10, source_count: 2, total_chars: 1000 }), text: () => Promise.resolve('{}'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
-    const result = await api.getKBStats()
+    const result = await api.getKBStats('ws-1')
     expect(result.chunk_count).toBe(10)
+    expect(fn).toHaveBeenCalledWith('/api/knowledge-base/stats?workspace_id=ws-1', expect.any(Object))
     vi.unstubAllGlobals()
   })
 
   it('debugSearch sends search strategy in body', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]), text: () => Promise.resolve('[]'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
-    await api.debugSearch('test query', 7, 'deep')
+    await api.debugSearch('test query', 7, 'deep', 'ws-1')
     expect(fn).toHaveBeenCalledWith(
-      '/api/knowledge-base/debug-search',
+      '/api/knowledge-base/debug-search?workspace_id=ws-1',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ query: 'test query', k: 7, search_strategy: 'deep' }),

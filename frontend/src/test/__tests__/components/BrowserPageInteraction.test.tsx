@@ -84,13 +84,13 @@ describe('BrowserPage interactions', () => {
   })
 
   it('search input calls getKBChunks with query', async () => {
-    await act(async () => { render(<BrowserPage {...defaultProps} />) })
+    await act(async () => { render(<BrowserPage {...defaultProps} workspaceId="ws-1" />) })
 
     await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
 
     const searchInput = screen.getByPlaceholderText('搜索文档内容…')
     await userEvent.type(searchInput, '年假{Enter}')
-    expect(api.getKBChunks).toHaveBeenCalledWith('', '年假', 0, 50)
+    expect(api.getKBChunks).toHaveBeenCalledWith('', '年假', 0, 50, 'ws-1')
   })
 
   it('source filter buttons render and can be clicked', async () => {
@@ -141,11 +141,11 @@ describe('BrowserPage interactions', () => {
   })
 
   it('only fetches the first chunk page once on initial render', async () => {
-    await act(async () => { render(<BrowserPage {...defaultProps} />) })
+    await act(async () => { render(<BrowserPage {...defaultProps} workspaceId="ws-1" />) })
 
     await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
     expect(api.getKBChunks).toHaveBeenCalledTimes(1)
-    expect(api.getKBChunks).toHaveBeenNthCalledWith(1, '', '', 0, 50)
+    expect(api.getKBChunks).toHaveBeenNthCalledWith(1, '', '', 0, 50, 'ws-1')
   })
 
   it('fetches a highlighted chunk directly by id when it is outside the loaded page', async () => {
@@ -181,7 +181,7 @@ describe('BrowserPage interactions', () => {
       expect(screen.getAllByText('段落 55').length).toBeGreaterThan(0)
     })
     expect(onHighlightConsumed).toHaveBeenCalled()
-    expect(vi.mocked(api.getKBChunkById)).toHaveBeenCalledWith('doc-long.txt:55:hash')
+    expect(vi.mocked(api.getKBChunkById)).toHaveBeenCalledWith('doc-long.txt:55:hash', '')
     expect(vi.mocked(api.getKBChunks)).toHaveBeenCalledTimes(1)
   })
 
@@ -323,7 +323,7 @@ describe('BrowserPage interactions', () => {
       await Promise.resolve()
     })
 
-    expect(api.checkSource).toHaveBeenCalledWith('browser.txt')
+    expect(api.checkSource).toHaveBeenCalledWith('browser.txt', '')
     expect(api.uploadDocumentStream).toHaveBeenCalledWith(
       expect.any(File),
       undefined,
@@ -332,6 +332,7 @@ describe('BrowserPage interactions', () => {
         onDone: expect.any(Function),
         onError: expect.any(Function),
       }),
+      '',
     )
     expect(screen.getByText('文档已导入！现在可以去提问了')).toBeInTheDocument()
 
@@ -404,6 +405,7 @@ describe('BrowserPage interactions', () => {
           onDone: expect.any(Function),
           onError: expect.any(Function),
         }),
+        '',
       )
     })
   })
@@ -425,6 +427,7 @@ describe('BrowserPage interactions', () => {
           onDone: expect.any(Function),
           onError: expect.any(Function),
         }),
+        '',
       )
     })
     expect(screen.getByText('文档已导入！现在可以去提问了')).toBeInTheDocument()
@@ -441,7 +444,7 @@ describe('BrowserPage interactions', () => {
     await userEvent.click(screen.getByRole('button', { name: '检索' }))
 
     await waitFor(() => {
-      expect(api.debugSearch).toHaveBeenCalledWith('策略测试', 5, 'deep')
+      expect(api.debugSearch).toHaveBeenCalledWith('策略测试', 5, 'deep', '')
     })
   })
 })

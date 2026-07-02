@@ -72,7 +72,7 @@ export function useBrowserPage({
   }
 
   const loadChunks = async (src: string, q: string, p: number, ps: number, append = false) => {
-    const res = await api.getKBChunks(src, q, p * ps, ps)
+    const res = await api.getKBChunks(src, q, p * ps, ps, browserWsId)
     setChunksAccumulate(res.items, append)
     setTotal(res.total)
     setHasMore((p + 1) * ps < res.total)
@@ -81,7 +81,7 @@ export function useBrowserPage({
 
   const refreshData = useCallback(async () => {
     try {
-      const [s, srcs, cfg] = await Promise.all([api.getKBStats(), api.getKBSourceNames(), api.getKBConfig()])
+      const [s, srcs, cfg] = await Promise.all([api.getKBStats(browserWsId), api.getKBSourceNames(browserWsId), api.getKBConfig()])
       setStats(s)
       setSources(srcs)
       setKbConfig(cfg)
@@ -92,21 +92,21 @@ export function useBrowserPage({
     } catch (e) {
       toast.error('刷新失败', { description: String(e) })
     }
-  }, [selectedSource, searchQuery])
+  }, [browserWsId, selectedSource, searchQuery])
 
   const handleSearch = useCallback(async () => {
     setLoading(true)
     setPage(0)
     try {
       await loadChunks(selectedSource, searchQuery, 0, PAGE_SIZE)
-      const [srcs, s] = await Promise.all([api.getKBSourceNames(), api.getKBStats()])
+      const [srcs, s] = await Promise.all([api.getKBSourceNames(browserWsId), api.getKBStats(browserWsId)])
       setSources(srcs)
       setStats(s)
     } catch (e) {
       toast.error('搜索失败', { description: String(e) })
     }
     setLoading(false)
-  }, [searchQuery, selectedSource])
+  }, [browserWsId, searchQuery, selectedSource])
 
   const handlePageChange = useCallback(async (newPage: number) => {
     setLoading(true)
@@ -136,7 +136,7 @@ export function useBrowserPage({
     setUploadPercent(0)
     setVersionPrompted(null)
     try {
-      const probe = await api.checkSource(file.name)
+      const probe = await api.checkSource(file.name, browserWsId)
       if (probe.exists && !versionMode) {
         setVersionPrompted({ kind: 'file', file, sourceName: file.name })
         resetProgress()
@@ -178,8 +178,8 @@ export function useBrowserPage({
         resetProgress()
         if (fileInputRef.current) fileInputRef.current.value = ''
       },
-    })
-  }, [refreshData, resetProgress])
+    }, browserWsId)
+  }, [browserWsId, refreshData, resetProgress])
 
   const startUrlIngest = useCallback(async (url: string, versionMode?: 'replace' | 'append') => {
     setIngesting(true)
@@ -187,7 +187,7 @@ export function useBrowserPage({
     setUploadPercent(0)
     setVersionPrompted(null)
     try {
-      const probe = await api.checkSource(url)
+      const probe = await api.checkSource(url, browserWsId)
       if (probe.exists && !versionMode) {
         setVersionPrompted({ kind: 'url', url, sourceName: url })
         resetProgress()
@@ -227,21 +227,21 @@ export function useBrowserPage({
         toast.error('导入失败', { description: msg })
         resetProgress()
       },
-    })
-  }, [refreshData, resetProgress])
+    }, browserWsId)
+  }, [browserWsId, refreshData, resetProgress])
 
   const toggleHotspotMode = useCallback(async () => {
     const next = !hotspotMode
     setHotspotMode(next)
     if (next) {
       try {
-        const data = await api.getKBHotspots()
+        const data = await api.getKBHotspots(browserWsId)
         setHotspots(new Map(data.map((h) => [h.chunk_id, h.hits] as [string, number])))
       } catch (e) {
         toast.error('热点数据加载失败', { description: String(e) })
       }
     }
-  }, [hotspotMode])
+  }, [browserWsId, hotspotMode])
 
   const hotspotCount = useCallback((chunkId: string) => hotspots.get(chunkId) || 0, [hotspots])
 
@@ -270,20 +270,20 @@ export function useBrowserPage({
 
   const runDebugSearch = useCallback(async (query: string, strategy: string): Promise<DebugSearchResponse | null> => {
     try {
-      return await api.debugSearch(query, 5, strategy)
+      return await api.debugSearch(query, 5, strategy, browserWsId)
     } catch (e) {
       toast.error('检索测试失败', { description: String(e) })
       return null
     }
-  }, [])
+  }, [browserWsId])
 
   useEffect(() => {
     setError(null)
     setLoading(true)
     Promise.all([
       loadChunks('', '', 0, PAGE_SIZE),
-      api.getKBStats(),
-      api.getKBSourceNames(),
+      api.getKBStats(browserWsId),
+      api.getKBSourceNames(browserWsId),
       api.getKBConfig(),
     ])
       .then(([, s, srcs, cfg]) => {
@@ -302,7 +302,7 @@ export function useBrowserPage({
         }
         setLoading(false)
       })
-  }, [])
+  }, [browserWsId])
 
   useEffect(() => {
     const handler = () => {
@@ -327,7 +327,7 @@ export function useBrowserPage({
     let cancelled = false
     ;(async () => {
       try {
-        const chunk = await api.getKBChunkById(highlightChunkId)
+        const chunk = await api.getKBChunkById(highlightChunkId, browserWsId)
         if (cancelled) return
         allChunksRef.current = dedupeChunksById([chunk, ...allChunksRef.current])
         setChunks([...allChunksRef.current])
@@ -339,7 +339,7 @@ export function useBrowserPage({
       }
     })()
     return () => { cancelled = true }
-  }, [highlightChunkId, onHighlightConsumed])
+  }, [browserWsId, highlightChunkId, onHighlightConsumed])
 
   useEffect(() => {
     if (!didInitSourceFilter.current) {

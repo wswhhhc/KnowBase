@@ -50,6 +50,19 @@ function authHeaders(): Record<string, string> {
   return key ? { 'Authorization': `Bearer ${key}` } : {}
 }
 
+function withQuery(path: string, params: URLSearchParams): string {
+  const qs = params.toString()
+  return qs ? `${path}?${qs}` : path
+}
+
+function withWorkspaceScope(path: string, workspaceId?: string, params?: URLSearchParams): string {
+  const scopedParams = params ? new URLSearchParams(params) : new URLSearchParams()
+  if (workspaceId !== undefined) {
+    scopedParams.set('workspace_id', workspaceId)
+  }
+  return withQuery(path, scopedParams)
+}
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, {
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...init?.headers },
@@ -73,13 +86,11 @@ export interface Workspace {
 }
 
 export const getConversations = (workspaceId?: string) => {
-  const params = workspaceId !== undefined ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
-  return req<Conversation[]>(`/conversations${params}`)
+  return req<Conversation[]>(withWorkspaceScope('/conversations', workspaceId))
 }
 
 export const createConversation = (title = '新对话', workspaceId?: string) => {
-  const params = workspaceId !== undefined ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
-  return req<Conversation>(`/conversations${params}`, {
+  return req<Conversation>(withWorkspaceScope('/conversations', workspaceId), {
     method: 'POST',
     body: JSON.stringify({ title }),
   })
@@ -202,17 +213,21 @@ export const deleteBookmark = (id: number) =>
 
 // ── Documents ──
 
-export const checkSource = (sourceName: string) =>
-  req<{ exists: boolean }>(`/documents/check-source?source_name=${encodeURIComponent(sourceName)}`)
+export const checkSource = (sourceName: string, workspaceId?: string) => {
+  const params = new URLSearchParams({ source_name: sourceName })
+  return req<{ exists: boolean }>(withWorkspaceScope('/documents/check-source', workspaceId, params))
+}
 
-export const getSources = () => req<DocSource[]>('/documents/sources')
+export const getSources = (workspaceId?: string) =>
+  req<DocSource[]>(withWorkspaceScope('/documents/sources', workspaceId))
 
-export const uploadDocument = async (file: File, versionMode?: string) => {
+export const uploadDocument = async (file: File, versionMode?: string, workspaceId?: string) => {
   const form = new FormData()
   form.append('file', file)
-  const params = versionMode ? `?version_mode=${versionMode}` : ''
+  const params = new URLSearchParams()
+  if (versionMode) params.set('version_mode', versionMode)
   const headers: Record<string, string> = authHeaders()
-  const res = await fetch(`${BASE}/documents/upload${params}`, { method: 'POST', body: form, headers })
+  const res = await fetch(`${BASE}${withWorkspaceScope('/documents/upload', workspaceId, params)}`, { method: 'POST', body: form, headers })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -225,13 +240,15 @@ export function uploadDocumentStream(
     onDone?: (result: any) => void
     onError?: (message: string) => void
   },
+  workspaceId?: string,
 ): AbortController {
   const controller = new AbortController()
   const form = new FormData()
   form.append('file', file)
-  const params = versionMode ? `?version_mode=${versionMode}` : ''
+  const params = new URLSearchParams()
+  if (versionMode) params.set('version_mode', versionMode)
 
-  fetch(`${BASE}/documents/upload-stream${params}`, {
+  fetch(`${BASE}${withWorkspaceScope('/documents/upload-stream', workspaceId, params)}`, {
     method: 'POST',
     body: form,
     headers: authHeaders(),
@@ -271,10 +288,12 @@ export function ingestUrlStream(
     onDone?: (result: any) => void
     onError?: (message: string) => void
   },
+  workspaceId?: string,
 ): AbortController {
   const controller = new AbortController()
-  const params = versionMode ? `?version_mode=${versionMode}` : ''
-  fetch(`${BASE}/documents/ingest-url-stream${params}`, {
+  const params = new URLSearchParams()
+  if (versionMode) params.set('version_mode', versionMode)
+  fetch(`${BASE}${withWorkspaceScope('/documents/ingest-url-stream', workspaceId, params)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ url }),
@@ -331,42 +350,49 @@ function handleSSEEvent(
   } catch { /* ignore parse errors */ }
 }
 
-export const ingestUrl = (url: string, versionMode?: string) =>
-  req<{ chunk_count: number; total_docs: number; message: string }>(`/documents/ingest-url${versionMode ? `?version_mode=${versionMode}` : ''}`, {
+export const ingestUrl = (url: string, versionMode?: string, workspaceId?: string) => {
+  const params = new URLSearchParams()
+  if (versionMode) params.set('version_mode', versionMode)
+  return req<{ chunk_count: number; total_docs: number; message: string }>(withWorkspaceScope('/documents/ingest-url', workspaceId, params), {
     method: 'POST',
     body: JSON.stringify({ url }),
   })
+}
 
-export const deleteSource = (source: string) =>
-  req(`/documents/source/${encodeURIComponent(source)}`, { method: 'DELETE' })
+export const deleteSource = (source: string, workspaceId?: string) =>
+  req(withWorkspaceScope(`/documents/source/${encodeURIComponent(source)}`, workspaceId), { method: 'DELETE' })
 
-export const clearKnowledgeBase = () =>
-  req('/documents/clear', { method: 'POST' })
+export const clearKnowledgeBase = (workspaceId?: string) =>
+  req(withWorkspaceScope('/documents/clear', workspaceId), { method: 'POST' })
 
 // ── KB Browser ──
 
-export const getKBStats = () => req<KBStats>('/knowledge-base/stats')
+export const getKBStats = (workspaceId?: string) =>
+  req<KBStats>(withWorkspaceScope('/knowledge-base/stats', workspaceId))
 
-export const getKBChunks = (source?: string, search?: string, skip = 0, limit = 50) => {
+export const getKBChunks = (source?: string, search?: string, skip = 0, limit = 50, workspaceId?: string) => {
   const params = new URLSearchParams()
   if (source) params.set('source', source)
   if (search) params.set('search', search)
   params.set('skip', String(skip))
   params.set('limit', String(limit))
-  return req<KBChunkResponse>(`/knowledge-base/chunks?${params}`)
+  return req<KBChunkResponse>(withWorkspaceScope('/knowledge-base/chunks', workspaceId, params))
 }
 
-export const getKBChunkById = (chunkId: string) => req<KBChunk>(`/knowledge-base/chunks/${encodeURIComponent(chunkId)}`)
+export const getKBChunkById = (chunkId: string, workspaceId?: string) =>
+  req<KBChunk>(withWorkspaceScope(`/knowledge-base/chunks/${encodeURIComponent(chunkId)}`, workspaceId))
 
-export const getKBSourceNames = () => req<string[]>('/knowledge-base/sources')
+export const getKBSourceNames = (workspaceId?: string) =>
+  req<string[]>(withWorkspaceScope('/knowledge-base/sources', workspaceId))
 
 export const getKBConfig = () => req<KBConfig>('/knowledge-base/config')
 
-export const getKBHotspots = () => req<HotspotEntry[]>('/knowledge-base/hotspots')
+export const getKBHotspots = (workspaceId?: string) =>
+  req<HotspotEntry[]>(withWorkspaceScope('/knowledge-base/hotspots', workspaceId))
 
-export const debugSearch = (query: string, k = 5, searchStrategy = 'balanced') =>
+export const debugSearch = (query: string, k = 5, searchStrategy = 'balanced', workspaceId?: string) =>
   req<DebugSearchResponse>(
-    '/knowledge-base/debug-search',
+    withWorkspaceScope('/knowledge-base/debug-search', workspaceId),
     { method: 'POST', body: JSON.stringify({ query, k, search_strategy: searchStrategy }) },
   )
 

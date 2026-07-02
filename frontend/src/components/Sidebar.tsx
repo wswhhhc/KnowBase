@@ -49,7 +49,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   const theme = useTheme()
   const wss = useWorkspaces()
   const convs = useConversations(wss.activeWorkspaceId || undefined)
-  const srcs = useSources()
+  const srcs = useSources(wss.activeWorkspaceId)
   const [tab, setTab] = useState<'conversations' | 'documents' | 'bookmarks'>('conversations')
   const [createOpen, setCreateOpen] = useState(false)
   const [createName, setCreateName] = useState('')
@@ -241,12 +241,17 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
               clearMessages={chat.clearMessages}
             />
           ) : tab === 'documents' ? (
-            <DocumentPanel sources={srcs.sources} onRefresh={srcs.refresh} onSendQuestion={(q) => { onNavigate('chat'); chat.sendMessage(q, false, 'balanced') }} />
+            <DocumentPanel
+              sources={srcs.sources}
+              onRefresh={srcs.refresh}
+              workspaceId={wss.activeWorkspaceId}
+              onSendQuestion={(q) => { onNavigate('chat'); chat.sendMessage(q, false, 'balanced') }}
+            />
           ) : (
             <BookmarkPanel workspaceId={wss.activeWorkspaceId || undefined} onNavigate={onNavigate} />
           )
         ) : activeView === 'browser' ? (
-          <KBSummary />
+          <KBSummary workspaceId={wss.activeWorkspaceId} />
         ) : activeView === 'dashboard' ? (
           <DashboardSummary />
         ) : (
