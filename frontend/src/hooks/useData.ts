@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as api from '@/lib/api'
 import type { Conversation, DocSource, Workspace } from '@/lib/api'
 
@@ -92,17 +92,34 @@ export function useWorkspaces() {
 export function useSources(workspaceId?: string) {
   const [sources, setSources] = useState<DocSource[]>([])
   const [sourceError, setSourceError] = useState<string | null>(null)
-  const refresh = async (): Promise<boolean> => {
+  const requestTokenRef = useRef(0)
+
+  const runRefresh = async (resetBeforeLoad = false): Promise<boolean> => {
+    const requestToken = requestTokenRef.current + 1
+    requestTokenRef.current = requestToken
+    if (resetBeforeLoad) {
+      setSources([])
+      setSourceError(null)
+    }
     try {
-      setSources(await api.getSources(workspaceId))
+      const nextSources = await api.getSources(workspaceId)
+      if (requestToken !== requestTokenRef.current) return false
+      setSources(nextSources)
       setSourceError(null)
       return true
     } catch (e) {
+      if (requestToken !== requestTokenRef.current) return false
       console.error('加载来源列表失败:', e)
       setSourceError(e instanceof Error ? e.message : '未知错误')
       return false
     }
   }
-  useEffect(() => { refresh() }, [workspaceId])
+
+  const refresh = async (): Promise<boolean> => runRefresh(false)
+
+  useEffect(() => {
+    void runRefresh(true)
+  }, [workspaceId])
+
   return { sources, sourceError, refresh }
 }

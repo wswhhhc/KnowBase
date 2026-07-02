@@ -9,7 +9,16 @@ interface KBSummaryProps {
 export default function KBSummary({ workspaceId }: KBSummaryProps) {
   const [stats, setStats] = useState<{ chunk_count: number; source_count: number } | null>(null)
   useEffect(() => {
-    api.getKBStats(workspaceId).then(setStats).catch((e: unknown) => toast.error('加载工作区统计失败', { description: String(e) }))
+    let cancelled = false
+    setStats(null)
+    api.getKBStats(workspaceId)
+      .then((nextStats) => {
+        if (!cancelled) setStats(nextStats)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) toast.error('加载工作区统计失败', { description: String(e) })
+      })
+    return () => { cancelled = true }
   }, [workspaceId])
   return (
     <div className="px-3 py-4">

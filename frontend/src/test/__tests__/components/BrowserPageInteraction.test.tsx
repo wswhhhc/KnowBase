@@ -93,6 +93,16 @@ describe('BrowserPage interactions', () => {
     expect(api.getKBChunks).toHaveBeenCalledWith('', '年假', 0, 50, 'ws-1')
   })
 
+  it('loads browser data with the active workspace id', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} workspaceId="ws-browser" />) })
+
+    await waitFor(() => {
+      expect(api.getKBChunks).toHaveBeenCalledWith('', '', 0, 50, 'ws-browser')
+      expect(api.getKBStats).toHaveBeenCalledWith('ws-browser')
+      expect(api.getKBSourceNames).toHaveBeenCalledWith('ws-browser')
+    })
+  })
+
   it('source filter buttons render and can be clicked', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
@@ -344,6 +354,34 @@ describe('BrowserPage interactions', () => {
     expect(screen.queryByText('文档已导入！现在可以去提问了')).not.toBeInTheDocument()
   })
 
+  it('uploads documents into the active workspace', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} workspaceId="ws-upload" />) })
+
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
+
+    const file = new File(['browser upload'], 'browser.txt', { type: 'text/plain' })
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } })
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(api.checkSource).toHaveBeenCalledWith('browser.txt', 'ws-upload')
+    expect(api.uploadDocumentStream).toHaveBeenCalledWith(
+      expect.any(File),
+      undefined,
+      expect.objectContaining({
+        onProgress: expect.any(Function),
+        onDone: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+      'ws-upload',
+    )
+  })
+
   it('lets the user dismiss the upload guidance banner immediately', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
@@ -433,6 +471,96 @@ describe('BrowserPage interactions', () => {
     expect(screen.getByText('文档已导入！现在可以去提问了')).toBeInTheDocument()
   })
 
+  it('ingests URLs into the active workspace', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} workspaceId="ws-import" />) })
+
+    await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
+
+    await userEvent.type(screen.getByPlaceholderText('导入公开网页 https://…'), 'https://example.com/ws')
+    await userEvent.click(screen.getByText('Globe'))
+
+    await waitFor(() => {
+      expect(api.checkSource).toHaveBeenCalledWith('https://example.com/ws', 'ws-import')
+      expect(api.ingestUrlStream).toHaveBeenCalledWith(
+        'https://example.com/ws',
+        undefined,
+        expect.objectContaining({
+          onProgress: expect.any(Function),
+          onDone: expect.any(Function),
+          onError: expect.any(Function),
+        }),
+        'ws-import',
+      )
+    })
+  })
+
+  it('clears stale browser state and reloads for the new workspace', async () => {
+    const ws1Chunk = createChunk({
+      source: 'alpha.txt',
+      chunk_id: 'alpha.txt:0:old',
+      content: '旧工作区段落',
+      original_content: '旧工作区段落',
+    })
+    const ws2Chunk = createChunk({
+      source: 'beta.txt',
+      chunk_id: 'beta.txt:0:new',
+      content: '新工作区段落',
+      original_content: '新工作区段落',
+    })
+    const ws1Stats = { chunk_count: 11, source_count: 1, total_chars: 1100 }
+    const ws2Stats = { chunk_count: 22, source_count: 1, total_chars: 2200 }
+
+    let resolveWs2Chunks: ((value: { items: typeof mockKBChunks; total: number } | { items: [typeof ws2Chunk]; total: number }) => void) | undefined
+
+    vi.mocked(api.getKBChunks).mockImplementation(async (_source = '', _search = '', _skip = 0, _limit = 50, workspaceId = '') => {
+      if (workspaceId === 'ws-2') {
+        return new Promise((resolve) => {
+          resolveWs2Chunks = resolve
+        }) as ReturnType<typeof api.getKBChunks>
+      }
+      return { items: [ws1Chunk], total: 1 }
+    })
+    vi.mocked(api.getKBStats).mockImplementation(async (workspaceId = '') => (workspaceId === 'ws-2' ? ws2Stats : ws1Stats))
+    vi.mocked(api.getKBSourceNames).mockImplementation(async (workspaceId = '') => (workspaceId === 'ws-2' ? ['beta.txt'] : ['alpha.txt']))
+
+    const { rerender } = render(<BrowserPage {...defaultProps} workspaceId="ws-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('旧工作区段落')).toBeInTheDocument()
+      expect(screen.getByText('11 段落')).toBeInTheDocument()
+    })
+
+    await userEvent.type(screen.getByPlaceholderText('搜索文档内容…'), 'legacy{Enter}')
+    await waitFor(() => {
+      expect(api.getKBChunks).toHaveBeenCalledWith('', 'legacy', 0, 50, 'ws-1')
+    })
+
+    const ws1SourceButton = screen.getAllByText('alpha.txt')[0]
+    await userEvent.click(ws1SourceButton)
+    await waitFor(() => {
+      expect(api.getKBChunks).toHaveBeenCalledWith('alpha.txt', 'legacy', 0, 50, 'ws-1')
+    })
+
+    rerender(<BrowserPage {...defaultProps} workspaceId="ws-2" />)
+
+    await waitFor(() => {
+      expect(api.getKBChunks).toHaveBeenCalledWith('', '', 0, 50, 'ws-2')
+    })
+    expect(screen.queryByText('旧工作区段落')).not.toBeInTheDocument()
+    expect(screen.queryByText('11 段落')).not.toBeInTheDocument()
+    expect(screen.queryByText('alpha.txt')).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveWs2Chunks?.({ items: [ws2Chunk], total: 1 })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('新工作区段落')).toBeInTheDocument()
+      expect(screen.getByText('22 段落')).toBeInTheDocument()
+      expect(screen.getAllByText('beta.txt').length).toBeGreaterThan(0)
+    })
+  })
+
   it('passes the selected strategy to debug search', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
@@ -445,6 +573,20 @@ describe('BrowserPage interactions', () => {
 
     await waitFor(() => {
       expect(api.debugSearch).toHaveBeenCalledWith('策略测试', 5, 'deep', '')
+    })
+  })
+
+  it('runs debug search inside the active workspace', async () => {
+    await act(async () => { render(<BrowserPage {...defaultProps} workspaceId="ws-debug" />) })
+
+    await waitFor(() => expect(screen.getByText('检索测试沙盒')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByText('检索测试沙盒'))
+    await userEvent.type(screen.getByPlaceholderText('输入测试查询…'), '工作区检索')
+    await userEvent.click(screen.getByRole('button', { name: '检索' }))
+
+    await waitFor(() => {
+      expect(api.debugSearch).toHaveBeenCalledWith('工作区检索', 5, 'balanced', 'ws-debug')
     })
   })
 })

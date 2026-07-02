@@ -121,6 +121,82 @@ describe('useSources', () => {
     expect(result.current.sources).toEqual([])
     expect(api.getSources).toHaveBeenCalledWith('ws-1')
   })
+
+  it('clears stale sources and replaces them when the workspace changes', async () => {
+    const ws2Sources = [{ source: 'beta.txt', count: 2 }]
+    let resolveWs2Sources: ((value: typeof ws2Sources) => void) | undefined
+
+    vi.mocked(api.getSources).mockImplementation((workspaceId?: string) => {
+      if (workspaceId === 'ws-2') {
+        return new Promise((resolve) => {
+          resolveWs2Sources = resolve
+        }) as ReturnType<typeof api.getSources>
+      }
+      return Promise.resolve(mockSources)
+    })
+
+    const { result, rerender } = renderHook(
+      ({ workspaceId }) => useSources(workspaceId),
+      { initialProps: { workspaceId: 'ws-1' as string | undefined } },
+    )
+
+    await waitFor(() => {
+      expect(result.current.sources).toEqual(mockSources)
+    })
+
+    rerender({ workspaceId: 'ws-2' })
+
+    expect(result.current.sources).toEqual([])
+
+    await act(async () => {
+      resolveWs2Sources?.(ws2Sources)
+    })
+
+    await waitFor(() => {
+      expect(result.current.sources).toEqual(ws2Sources)
+    })
+  })
+
+  it('ignores stale source responses from the previous workspace', async () => {
+    const ws1Sources = [{ source: 'alpha.txt', count: 1 }]
+    const ws2Sources = [{ source: 'beta.txt', count: 2 }]
+    let resolveWs1Sources: ((value: typeof ws1Sources) => void) | undefined
+    let resolveWs2Sources: ((value: typeof ws2Sources) => void) | undefined
+
+    vi.mocked(api.getSources).mockImplementation((workspaceId?: string) => {
+      if (workspaceId === 'ws-1') {
+        return new Promise((resolve) => {
+          resolveWs1Sources = resolve
+        }) as ReturnType<typeof api.getSources>
+      }
+      return new Promise((resolve) => {
+        resolveWs2Sources = resolve
+      }) as ReturnType<typeof api.getSources>
+    })
+
+    const { result, rerender } = renderHook(
+      ({ workspaceId }) => useSources(workspaceId),
+      { initialProps: { workspaceId: 'ws-1' as string | undefined } },
+    )
+
+    rerender({ workspaceId: 'ws-2' })
+
+    await act(async () => {
+      resolveWs2Sources?.(ws2Sources)
+    })
+
+    await waitFor(() => {
+      expect(result.current.sources).toEqual(ws2Sources)
+    })
+
+    await act(async () => {
+      resolveWs1Sources?.(ws1Sources)
+    })
+
+    await waitFor(() => {
+      expect(result.current.sources).toEqual(ws2Sources)
+    })
+  })
 })
 
 describe('useConversations error paths', () => {
