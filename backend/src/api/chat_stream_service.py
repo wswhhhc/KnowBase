@@ -74,6 +74,7 @@ class ChatStreamService:
             stream_tokens=True,
             web_search_enabled=self.body.web_search_enabled,
             search_strategy=self.body.search_strategy,
+            workspace_id=self.body.workspace_id,
             pinned_chunk_ids=self.body.pinned_chunk_ids,
             excluded_chunk_ids=self.body.excluded_chunk_ids,
         )

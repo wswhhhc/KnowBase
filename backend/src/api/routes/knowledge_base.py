@@ -65,74 +65,51 @@ router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 @router.get("/stats")
-async def stats(kb: KnowledgeBase = Depends(get_knowledge_base)) -> KBStats:
-    sources = kb.source_counts()
-    return KBStats(
-        chunk_count=sum(c for _, c in sources),
-        source_count=len(sources),
-        total_chars=sum(len(d.page_content) for d in kb.all_docs),
-    )
+async def stats(
+    workspace_id: str = Query(""),
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+) -> KBStats:
+    return KBStats(**kb.stats(workspace_id=workspace_id))
 
 
 @router.get("/chunks")
 async def chunks(
     source: str = Query(""), search: str = Query(""),
     skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
+    workspace_id: str = Query(""),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> dict:
-    # Trigger lazy load from Chroma before accessing all_docs
-    kb.source_counts()
-    docs = kb.all_docs
-    if source:
-        source = normalize_source(source)
-        # Parse optional version suffix: "doc.txt (v2)"
-        import re as _re
-        version_filter = None
-        m = _re.match(r"^(.+?)\s+\(v(\d+)\)$", source)
-        if m:
-            source = m.group(1).strip()
-            version_filter = f"v{m.group(2)}"
-        docs = [
-            d for d in docs
-            if d.metadata.get("source", "") == source
-            and (version_filter is None or d.metadata.get("version") == version_filter)
-        ]
-    if search:
-        keywords = [kw.strip().lower() for kw in search.split() if kw.strip()]
-        docs = [d for d in docs if any(kw in d.page_content.lower() for kw in keywords)]
-    total = len(docs)
-    page = docs[skip : skip + limit]
+    total, items = kb.list_chunks(
+        workspace_id=workspace_id,
+        source=source,
+        search=search,
+        skip=skip,
+        limit=limit,
+    )
     return {
         "total": total,
-        "items": [
-            KBChunk(
-                source=d.metadata.get("source", ""),
-                chunk_index=d.metadata.get("chunk_index", 0),
-                chunk_id=d.metadata.get("chunk_id", ""),
-                page=d.metadata.get("page"),
-                content=d.page_content,
-                original_content=d.metadata.get("original_content"),
-                section=d.metadata.get("section"),
-            )
-            for d in page
-        ],
+        "items": items,
     }
 
 
 @router.get("/chunks/{chunk_id}")
 async def chunk_by_id(
     chunk_id: str,
+    workspace_id: str = Query(""),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> KBChunk:
-    chunk = kb.get_chunk_by_id(chunk_id)
+    chunk = kb.get_chunk_by_id(chunk_id, workspace_id=workspace_id)
     if chunk is None:
         raise HTTPException(404, "Chunk not found")
     return chunk
 
 
 @router.get("/sources")
-async def list_source_names(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[str]:
-    return sorted(s for s, _c in kb.source_counts())
+async def list_source_names(
+    workspace_id: str = Query(""),
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+) -> list[str]:
+    return sorted(s for s, _c in kb.source_counts(workspace_id=workspace_id))
 
 
 @router.get("/config")
@@ -144,12 +121,19 @@ async def kb_config() -> KBConfig:
 
 
 @router.get("/hotspots")
-async def hotspots(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[HotspotEntry]:
-    return kb.get_hotspots()
+async def hotspots(
+    workspace_id: str = Query(""),
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+) -> list[HotspotEntry]:
+    return kb.get_hotspots(workspace_id=workspace_id)
 
 
 @router.post("/debug-search")
-async def debug_search(body: DebugSearchRequest, kb: KnowledgeBase = Depends(get_knowledge_base)) -> DebugSearchResponse:
+async def debug_search(
+    body: DebugSearchRequest,
+    workspace_id: str = Query(""),
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+) -> DebugSearchResponse:
     """Run a debug hybrid search that returns per-document scores (vector, BM25, RRF)."""
     strategy = body.search_strategy or "balanced"
     default_retrieval_k = get_runtime_setting("top_k_retrieval", TOP_K_RETRIEVAL)
@@ -164,6 +148,7 @@ async def debug_search(body: DebugSearchRequest, kb: KnowledgeBase = Depends(get
             body.query,
             k=retrieval_k,
             vector_candidate_k=vector_candidate_k,
+            workspace_id=workspace_id,
         )
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc

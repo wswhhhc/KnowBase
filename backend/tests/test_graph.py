@@ -42,7 +42,7 @@ class EmptyKnowledgeBase:
         return []
 
     @staticmethod
-    def get_neighbor_chunks(chunk_id, window=1):
+    def get_neighbor_chunks(chunk_id, window=1, workspace_id=None):
         return []
 
 
@@ -59,7 +59,7 @@ class OneDocKnowledgeBase:
         return [RetrievalResult(chunk_id="langgraph.txt:0:abc", document=doc, score=0.5)]
 
     @staticmethod
-    def get_neighbor_chunks(chunk_id, window=1):
+    def get_neighbor_chunks(chunk_id, window=1, workspace_id=None):
         return []
 
 

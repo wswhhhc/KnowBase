@@ -37,7 +37,7 @@ class EmptyKB:
         return []
 
     @staticmethod
-    def get_neighbor_chunks(_cid, window=1):
+    def get_neighbor_chunks(_cid, window=1, workspace_id=None):
         return []
 
 

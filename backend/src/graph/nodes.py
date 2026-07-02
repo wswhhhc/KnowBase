@@ -52,9 +52,10 @@ class _GraphKnowledgeBaseLike(Protocol):
         k: int,
         score_threshold: float | None = None,
         filter: object | None = None,
+        workspace_id: str | None = None,
     ) -> list[RetrievalResult]: ...
 
-    def get_neighbor_chunks(self, chunk_id: str, window: int = 1) -> list[Document]: ...
+    def get_neighbor_chunks(self, chunk_id: str, window: int = 1, workspace_id: str | None = None) -> list[Document]: ...
 
 
 # ── Query rewriting ──────────────────────────────────────────────────
@@ -243,6 +244,7 @@ def retrieve_docs(state: GraphState, kb: _GraphKnowledgeBaseLike) -> GraphStateU
         retrieval_k = max(retrieval_k, default_retrieval_k * 3)
     score_threshold = state.get("score_threshold", SCORE_THRESHOLD)
     search_filter = state.get("search_filter") or None
+    workspace_id = state.get("workspace_id", "")
     pinned_ids = state.get("pinned_chunk_ids", []) or []
     excluded_ids = state.get("excluded_chunk_ids", []) or []
     excluded_set = set(excluded_ids)
@@ -255,6 +257,7 @@ def retrieve_docs(state: GraphState, kb: _GraphKnowledgeBaseLike) -> GraphStateU
         k=retrieval_k,
         score_threshold=score_threshold,
         filter=search_filter,
+        workspace_id=workspace_id,
     )
 
     # Apply exclusion filter
@@ -266,7 +269,11 @@ def retrieve_docs(state: GraphState, kb: _GraphKnowledgeBaseLike) -> GraphStateU
     seen_ids: set[str] = set()
     neighbor_window = 2 if short_query else 1
     for result in docs:
-        neighbors = kb.get_neighbor_chunks(result.chunk_id, window=neighbor_window)
+        neighbors = kb.get_neighbor_chunks(
+            result.chunk_id,
+            window=neighbor_window,
+            workspace_id=workspace_id,
+        )
         if not neighbors:
             n = doc_by_id.get(result.chunk_id)
             if n is not None:

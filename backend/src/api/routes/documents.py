@@ -29,9 +29,9 @@ def _source_identity(source_name: str) -> str:
     return normalize_source(source_name)
 
 
-def _source_exists(kb: KnowledgeBase, source_name: str) -> bool:
+def _source_exists(kb: KnowledgeBase, source_name: str, workspace_id: str = "") -> bool:
     target = _source_identity(source_name)
-    for source_label, _count in kb.source_counts():
+    for source_label, _count in kb.source_counts(workspace_id=workspace_id):
         if _source_identity(source_label) == target:
             return True
     return False
@@ -69,31 +69,40 @@ def _threaded_event_source(job) -> EventSourceResponse:
 
 
 @router.get("/sources")
-async def list_sources(kb: KnowledgeBase = Depends(get_knowledge_base)) -> list[SourceOut]:
-    return [SourceOut(source=s, count=c) for s, c in kb.source_counts()]
+async def list_sources(
+    workspace_id: str = Query(""),
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+) -> list[SourceOut]:
+    return [SourceOut(source=s, count=c) for s, c in kb.source_counts(workspace_id=workspace_id)]
 
 
 @router.get("/check-source")
-async def check_source(source_name: str, kb: KnowledgeBase = Depends(get_knowledge_base)) -> dict:
+async def check_source(
+    source_name: str,
+    workspace_id: str = Query(""),
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+) -> dict:
     """Check if a source name already exists, without modifying any data."""
-    return {"exists": _source_exists(kb, source_name)}
+    return {"exists": _source_exists(kb, source_name, workspace_id=workspace_id)}
 
 
 @router.post("/upload-stream")
 async def upload_file_stream(
     file: UploadFile = File(...),
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
+    workspace_id: str = Query(""),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ):
     """SSE streaming upload — sends progress events during ingestion."""
     try:
         file_path, source_name = save_uploaded_file(file)
-        existing = _source_exists(kb, source_name)
+        existing = _source_exists(kb, source_name, workspace_id=workspace_id)
 
         if existing and not version_mode:
             async def _probe_events():
                 yield {"event": "done", "data": json.dumps({
-                    "chunk_count": 0, "total_docs": kb.document_count,
+                    "chunk_count": 0,
+                    "total_docs": kb.document_count_for_workspace(workspace_id),
                     "message": "来源已存在，请指定 version_mode（replace/append/skip）",
                     "existing_version": True,
                 })}
@@ -108,17 +117,16 @@ async def upload_file_stream(
             chunk_count = kb.ingest_file(
                 str(file_path), source_name=source_name,
                 version_mode=actual_mode, progress_callback=_progress,
+                workspace_id=workspace_id,
             )
-            docs_text = " ".join(
-                d.page_content for d in kb.all_docs
-                if d.metadata.get("source", "").startswith(source_name.rsplit(".", 1)[0])
-            )
+            _total, source_chunks = kb.list_chunks(workspace_id=workspace_id, source=source_name, limit=1000)
+            docs_text = " ".join(chunk.content for chunk in source_chunks)
             suggested = generate_suggested_questions(docs_text) if chunk_count > 0 else []
             msg = f"已添加 {chunk_count} 个新段落" if chunk_count else "文件内容无变化，未新增段落"
             emit("progress", {"phase": "done", "percent": 100})
             emit("done", {
                 "chunk_count": chunk_count,
-                "total_docs": kb.document_count,
+                "total_docs": kb.document_count_for_workspace(workspace_id),
                 "message": msg,
                 "suggested_questions": suggested,
                 "existing_version": existing,
@@ -133,17 +141,18 @@ async def upload_file_stream(
 async def ingest_url_stream(
     body: URLIngestRequest,
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
+    workspace_id: str = Query(""),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ):
     """SSE streaming URL ingestion — sends progress events."""
     try:
-        existing = _source_exists(kb, body.url)
+        existing = _source_exists(kb, body.url, workspace_id=workspace_id)
 
         if existing and not version_mode:
             async def _probe_events():
                 yield {"event": "done", "data": json.dumps({
                     "chunk_count": 0,
-                    "total_docs": kb.document_count,
+                    "total_docs": kb.document_count_for_workspace(workspace_id),
                     "message": "来源已存在，请指定 version_mode（replace/append/skip）",
                     "existing_version": True,
                 })}
@@ -155,12 +164,17 @@ async def ingest_url_stream(
             def _progress(phase: str, percent: int):
                 emit("progress", {"phase": phase, "percent": percent})
 
-            chunk_count = kb.ingest_url(body.url, version_mode=actual_mode, progress_callback=_progress)
+            chunk_count = kb.ingest_url(
+                body.url,
+                version_mode=actual_mode,
+                progress_callback=_progress,
+                workspace_id=workspace_id,
+            )
             msg = f"已添加 {chunk_count} 个新段落" if chunk_count else "URL 内容已存在"
             emit("progress", {"phase": "done", "percent": 100})
             emit("done", {
                 "chunk_count": chunk_count,
-                "total_docs": kb.document_count,
+                "total_docs": kb.document_count_for_workspace(workspace_id),
                 "message": msg,
                 "existing_version": existing,
             })
@@ -174,28 +188,35 @@ async def ingest_url_stream(
 async def upload_file(
     file: UploadFile = File(...),
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
+    workspace_id: str = Query(""),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse:
     try:
         file_path, source_name = save_uploaded_file(file)
-        existing = _source_exists(kb, source_name)
+        existing = _source_exists(kb, source_name, workspace_id=workspace_id)
 
         # If no version_mode specified and source exists, return probe info without importing
         if existing and not version_mode:
             return IngestResponse(
-                chunk_count=0, total_docs=kb.document_count,
+                chunk_count=0, total_docs=kb.document_count_for_workspace(workspace_id),
                 message="来源已存在，请指定 version_mode（replace/append/skip）",
                 existing_version=True,
             )
 
         actual_mode = version_mode or "replace"
-        chunk_count = kb.ingest_file(str(file_path), source_name=source_name, version_mode=actual_mode)
-        docs_text = " ".join(d.page_content for d in kb.all_docs if d.metadata.get("source", "").startswith(source_name.rsplit(".", 1)[0]))
+        chunk_count = kb.ingest_file(
+            str(file_path),
+            source_name=source_name,
+            version_mode=actual_mode,
+            workspace_id=workspace_id,
+        )
+        _total, source_chunks = kb.list_chunks(workspace_id=workspace_id, source=source_name, limit=1000)
+        docs_text = " ".join(chunk.content for chunk in source_chunks)
         suggested = generate_suggested_questions(docs_text) if chunk_count > 0 else []
 
         msg = f"已添加 {chunk_count} 个新段落" if chunk_count else "文件内容无变化，未新增段落"
         return IngestResponse(
-            chunk_count=chunk_count, total_docs=kb.document_count,
+            chunk_count=chunk_count, total_docs=kb.document_count_for_workspace(workspace_id),
             message=msg,
             suggested_questions=suggested,
             existing_version=existing,
@@ -208,23 +229,24 @@ async def upload_file(
 async def ingest_url(
     body: URLIngestRequest,
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
+    workspace_id: str = Query(""),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse:
     try:
-        existing = _source_exists(kb, body.url)
+        existing = _source_exists(kb, body.url, workspace_id=workspace_id)
 
         if existing and not version_mode:
             return IngestResponse(
                 chunk_count=0,
-                total_docs=kb.document_count,
+                total_docs=kb.document_count_for_workspace(workspace_id),
                 message="来源已存在，请指定 version_mode（replace/append/skip）",
                 existing_version=True,
             )
 
         actual_mode = version_mode or "replace"
-        chunk_count = kb.ingest_url(body.url, version_mode=actual_mode)
+        chunk_count = kb.ingest_url(body.url, version_mode=actual_mode, workspace_id=workspace_id)
         return IngestResponse(
-            chunk_count=chunk_count, total_docs=kb.document_count,
+            chunk_count=chunk_count, total_docs=kb.document_count_for_workspace(workspace_id),
             message=f"已添加 {chunk_count} 个新段落" if chunk_count else "URL 内容已存在",
             existing_version=existing,
         )
@@ -233,17 +255,24 @@ async def ingest_url(
 
 
 @router.delete("/source/{source_name:path}")
-async def delete_source(source_name: str, kb: KnowledgeBase = Depends(get_knowledge_base)) -> IngestResponse:
-    removed = kb.delete_source(source_name)
+async def delete_source(
+    source_name: str,
+    workspace_id: str = Query(""),
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+) -> IngestResponse:
+    removed = kb.delete_source(source_name, workspace_id=workspace_id)
     if removed == 0:
         raise HTTPException(404, "来源不存在")
     return IngestResponse(
-        chunk_count=removed, total_docs=kb.document_count,
+        chunk_count=removed, total_docs=kb.document_count_for_workspace(workspace_id),
         message=f"已删除 {source_name}（{removed} 个段落）",
     )
 
 
 @router.post("/clear")
-async def clear_kb(kb: KnowledgeBase = Depends(get_knowledge_base)):
-    kb.clear()
-    return {"ok": True, "message": "知识库已清空"}
+async def clear_kb(
+    workspace_id: str = Query(""),
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+):
+    removed = kb.clear_workspace(workspace_id=workspace_id)
+    return {"ok": True, "message": "知识库已清空", "removed": removed}

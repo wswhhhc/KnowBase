@@ -28,17 +28,55 @@ class FakeKnowledgeBase:
         if not self._loaded:
             from langchain_core.documents import Document
             self.all_docs = [
-                Document(page_content="test", metadata={"source": "test.txt", "chunk_id": "test.txt:0:abc", "chunk_index": 0}),
+                Document(page_content="test", metadata={"source": "test.txt", "chunk_id": "test.txt:0:abc", "chunk_index": 0, "workspace_id": ""}),
             ]
             self.doc_by_id = {doc.metadata["chunk_id"]: doc for doc in self.all_docs}
             self._loaded = True
 
-    def source_counts(self):
+    def _workspace_docs(self, workspace_id: str | None = None):
+        self._ensure_loaded()
+        if workspace_id is None:
+            return list(self.all_docs)
+        return [doc for doc in self.all_docs if doc.metadata.get("workspace_id", "") == workspace_id]
+
+    def source_counts(self, workspace_id: str | None = None):
         return [("test.txt", 1)]
 
     @property
     def document_count(self):
         return len(self.all_docs)
+
+    def document_count_for_workspace(self, workspace_id: str = ""):
+        return len(self._workspace_docs(workspace_id))
+
+    def stats(self, workspace_id: str = ""):
+        docs = self._workspace_docs(workspace_id)
+        return {
+            "chunk_count": len(docs),
+            "source_count": 1 if docs else 0,
+            "total_chars": sum(len(doc.page_content) for doc in docs),
+        }
+
+    def list_chunks(self, *, workspace_id: str = "", source: str = "", search: str = "", skip: int = 0, limit: int = 50):
+        docs = self._workspace_docs(workspace_id)
+        if source:
+            docs = [doc for doc in docs if doc.metadata.get("source") == source]
+        if search:
+            docs = [doc for doc in docs if search.lower() in doc.page_content.lower()]
+        total = len(docs)
+        page = docs[skip: skip + limit]
+        return total, [
+            {
+                "source": doc.metadata["source"],
+                "chunk_index": doc.metadata["chunk_index"],
+                "chunk_id": doc.metadata["chunk_id"],
+                "page": doc.metadata.get("page"),
+                "content": doc.page_content,
+                "original_content": doc.metadata.get("original_content"),
+                "section": doc.metadata.get("section"),
+            }
+            for doc in page
+        ]
 
     def load_preset_documents(self):
         return 0
@@ -57,15 +95,15 @@ class FakeKnowledgeBase:
         )
         return {"vector_results": [result], "bm25_results": [result], "fused_results": [result]}
 
-    def get_neighbor_chunks(self, chunk_id, window=1):
+    def get_neighbor_chunks(self, chunk_id, window=1, workspace_id=None):
         return []
 
-    def get_hotspots(self, top_n=50):
+    def get_hotspots(self, top_n=50, workspace_id=None):
         return [{"chunk_id": "test.txt:0:abc", "source": "test.txt", "hits": 5, "content_preview": "test"}]
 
-    def get_chunk_by_id(self, chunk_id):
+    def get_chunk_by_id(self, chunk_id, workspace_id: str | None = None):
         self._ensure_loaded()
-        doc = self.doc_by_id.get(chunk_id)
+        doc = next((doc for doc in self._workspace_docs(workspace_id) if doc.metadata["chunk_id"] == chunk_id), None)
         if doc is None:
             return None
         return {
@@ -78,22 +116,25 @@ class FakeKnowledgeBase:
             "section": doc.metadata.get("section"),
         }
 
-    def ingest_file(self, file_path, source_name=None, version_mode="replace", progress_callback=None):
+    def ingest_file(self, file_path, source_name=None, version_mode="replace", progress_callback=None, workspace_id=""):
         if progress_callback:
             progress_callback("loading", 25)
         return 2
 
-    def ingest_url(self, url, version_mode="replace", progress_callback=None):
+    def ingest_url(self, url, version_mode="replace", progress_callback=None, workspace_id=""):
         if progress_callback:
             progress_callback("loading", 25)
         return 1
 
-    def delete_source(self, source_name):
+    def delete_source(self, source_name, workspace_id=None):
         if source_name == "existing.txt":
             return 2
         if source_name == "https://example.com/page":
             return 1
         return 0
+
+    def clear_workspace(self, workspace_id=""):
+        return self.document_count_for_workspace(workspace_id)
 
     def clear(self):
         self.all_docs = []

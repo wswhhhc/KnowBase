@@ -68,6 +68,7 @@ class GraphState(TypedDict):
     web_search_error: str
     used_web_search: bool
     web_search_enabled: bool
+    workspace_id: str
     search_strategy: SearchStrategy
     search_filter: SearchFilter
     pinned_chunk_ids: list[str]
@@ -104,6 +105,7 @@ class GraphStateUpdate(TypedDict, total=False):
     web_search_error: str
     used_web_search: bool
     web_search_enabled: bool
+    workspace_id: str
     search_strategy: SearchStrategy
     search_filter: SearchFilter
     pinned_chunk_ids: list[str]

@@ -71,7 +71,7 @@ class MultiDocKnowledgeBase:
             RetrievalResult(chunk_id="chroma.txt:0:ghi", document=self.docs[2], score=0.3),
         ]
 
-    def get_neighbor_chunks(self, chunk_id, window=1):
+    def get_neighbor_chunks(self, chunk_id, window=1, workspace_id=None):
         for i, d in enumerate(self.docs):
             if d.metadata["chunk_id"] == chunk_id:
                 neighbors = []
