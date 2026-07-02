@@ -5,7 +5,7 @@
 **目标**: 验证 KnowBase 各模块的纯函数和类方法在隔离环境下的正确性，确保每个最小可测试单元的行为符合预期。
 
 **测试范围**:
-- 后端: graph.py, knowledge_base.py, conversations.py, utils.py, loaders.py, metrics.py, web_search.py, api/models.py, config/settings.py
+- 后端: graph/graph.py, rag/knowledge_base.py, conversations.py, utils.py, loaders.py, metrics.py, rag/web_search.py, api/models.py, config/settings.py
 - 前端: lib/utils.ts, hooks/useTheme.ts, hooks/useChat.ts, hooks/useData.ts, lib/api.ts
 
 **Mock 策略**: 
@@ -17,13 +17,13 @@
 
 **前置条件**:
 - Python 3.10+，安装所有依赖（`cd backend && uv sync`）
-- Node.js 18+，安装依赖（`cd frontend && npm install`）
+- Node.js 20+，安装依赖（`cd frontend && npm install`）
 
 ---
 
 ## 2. 后端单元测试用例
 
-### 2.1 graph.py — LangGraph 工作流
+### 2.1 graph/graph.py — LangGraph 工作流
 
 | 编号 | 测试用例 | 输入 | 预期输出 | 优先级 |
 |------|---------|------|---------|--------|
@@ -50,7 +50,7 @@
 | UT-GRAPH-21 | `run_query` 质量失败重试 | LLM 返回 quality_passed=false | `kb.calls == 2` | P0 |
 | UT-GRAPH-22 | `run_query` 联网搜索启用 | web_search_enabled=True | 结果含 URL 来源 | P0 |
 
-### 2.2 knowledge_base.py — 知识库核心
+### 2.2 rag/knowledge_base.py — 知识库核心
 
 | 编号 | 测试用例 | 输入 | 预期输出 | 优先级 |
 |------|---------|------|---------|--------|
@@ -152,7 +152,7 @@
 | UT-MET-06 | `log_query` 基本记录 | 字段数据 | JSONL 文件含正确内容 | P0 |
 | UT-MET-07 | `log_query` question 截断 | 超 100 字符 question | 只存前 100 字符 | P2 |
 
-### 2.7 web_search.py
+### 2.7 rag/web_search.py
 
 | 编号 | 测试用例 | 输入 | 预期输出 | 优先级 |
 |------|---------|------|---------|--------|

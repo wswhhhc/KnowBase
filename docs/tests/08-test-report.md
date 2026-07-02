@@ -1,7 +1,7 @@
 # 测试报告
 
 > **报告生成时间**: 2026-06-25 22:55
-> **测试环境**: Windows 11 Pro 10.0.26200 / Python 3.13 / Node.js 24.14
+> **测试环境**: Windows 11 Pro 10.0.26200 / Python 3.12 / Node.js 22.14
 > **测试执行人**: Claude Code
 
 ---
@@ -10,12 +10,12 @@
 
 | 维度 | 结果 |
 |------|------|
-| 总测试用例 | **~560**（后端 ~400 + 前端 ~160） |
+| 总测试用例 | **~650**（后端 ~444 + 前端 ~206） |
 | 通过率 | **100%** |
 | 后端源文件覆盖率 | **~90%+** |
 | 前端 hooks 覆盖率 | **96%** |
 | 前端 api.ts 覆盖率 | **~90%** |
-| API 端点覆盖率 | **100%**（21/21） |
+| API 端点覆盖率 | **100%**（27/27） |
 | CI/CD | **已配置**（GitHub Actions） |
 | E2E | **已规划**（Playwright 6 场景） |
 | 测试文档总数 | **12 份** |
@@ -24,7 +24,7 @@
 
 | 类型 | 用例数 | 通过率 |
 |------|-------|--------|
-| 单元测试（后端） | ~200 | 100% |
+| 单元测试（后端） | ~230 | 100% |
 | 集成测试 | 22 | 100% |
 | 接口测试 | 29 | 100% |
 | 冒烟测试 | 10 | 100% |
@@ -37,16 +37,16 @@
 
 ## 2. 后端测试详情
 
-**运行**: `uv run python -m unittest discover -v` — 400 个测试
+**运行**: `uv run python -m unittest discover -v` — 444 个测试
 
 | 文件 | 用例数 | 类型 | 覆盖内容 |
 |------|-------|------|---------|
 | test_knowledge_base.py | 65 | 单元 | chunk_id、RRF 融合、hybrid_search、_process_documents、_prepare_splits、delete_source、clear、neighbor chunks、_tokenize、_infer_source_type、hotspots、BM25 增量、ensure_loaded、ingest_file |
-| test_api_endpoints.py | 29 | 接口 | 21 端点 happy/error path + schema 验证 |
-| test_graph_coverage.py | 28 | 单元 | _should_rerank(5分支)、rewrite_query(缓存/实体扩展)、rerank_docs(fallback)、_rule_check_quality(4分支)、_compute_evidence(状态组合)、check_quality(采样/web_search触发)、generate_answer(deep/历史/联网)、route_question(LLM分支)、_route_search_scope、build_graph/get_graph(缓存)、finalize、parse 决策边缘 |
+| test_api_endpoints.py | 29 | 接口 | 27 端点 happy/error path + schema 验证 |
+| test_graph_coverage.py | 30 | 单元 | _should_rerank(5分支)、rewrite_query(缓存/实体扩展)、rerank_docs(fallback)、_rule_check_quality(4分支)、_compute_evidence(状态组合)、check_quality(采样/web_search触发)、generate_answer(deep/历史/联网)、route_question(LLM分支)、_route_search_scope、build_graph/get_graph(缓存)、finalize、parse 决策边缘 |
 | test_utils.py | 36 | 单元 | 文件名清洗、上传校验、json 提取、错误分类、save_uploaded_file、format_chat_history |
 | test_integration_graph_kb.py | 22 | 集成 | KB 检索、neighbor 扩展、rerank、web_search、finalize 证据等级 |
-| test_edge_cases.py | 18 | 边界 | 空/超长输入、404、分页边界、非法 source |
+| test_edge_cases.py | 20 | 边界 | 空/超长输入、404、分页边界、非法 source |
 | test_conversations.py | 17 | 单元 | CRUD、消息持久化、feedback、export、debug_pairs |
 | test_api_routes_coverage.py | 14 | 接口 | 路由层错误路径（documents/KB/metrics 异常分支）|
 | test_graph.py | 14 | 单元/验收 | 问题路由、质量检查、重排解析、多轮记忆、重试、联网搜索 |
@@ -59,7 +59,7 @@
 | test_routing.py | 6 | 单元 | 澄清路由、should_retry 各分支 |
 | test_debug_models.py | 6 | 单元 | DebugInfo/NodeDebug Pydantic 模型 |
 | test_web_search_coverage.py | 6 | 单元 | web_search(TavilyClient mock: 空Key/标准/字段缺失/异常) |
-| test_web_search.py | 5 | 单元 | format_search_results |
+| test_rag/web_search.py | 5 | 单元 | format_search_results |
 | test_metrics.py | 4 | 单元 | 日志清除、质量失败率计算 |
 | test_settings.py | 3 | 单元 | API key 校验、环境变量类型转换 |
 | test_chat_route.py | 1 | 单元 | metrics debug flag 透传 |
@@ -117,14 +117,14 @@
 
 | 模块 | 覆盖率 | 缺口分析 |
 |------|--------|---------|
-| src/web_search.py | **~90%** (+45%) | TavilyClient mock 全路径覆盖 |
-| src/graph.py | **~92%** (+13%) | _should_rerank/rewrite_query/rerank_docs/_rule_check_quality/_compute_evidence/check_quality/generate_answer/route_question/_route_search_scope/build_graph 分支全覆盖 |
+| src/rag/web_search.py | **~90%** (+45%) | TavilyClient mock 全路径覆盖 |
+| src/graph/graph.py | **~92%** (+13%) | _should_rerank/rewrite_query/rerank_docs/_rule_check_quality/_compute_evidence/check_quality/generate_answer/route_question/_route_search_scope/build_graph 分支全覆盖 |
 | src/metrics.py | 94% | — |
 | src/loaders.py | 93% | — |
 | src/conversations.py | 93% | — |
 | src/utils.py | 89% | — |
 | config/settings.py | 86% | — |
-| src/knowledge_base.py | 85% | — |
+| src/rag/knowledge_base.py | 85% | — |
 | src/api/* | **~80%** (+12%) | 路由层错误路径（非法文件/空日志/404 等） |
 
 ### 前端覆盖
@@ -155,7 +155,7 @@
 
 ### 总体结论
 
-**✅ 可发布。** 测试体系已全面补齐，覆盖核心工作流、API 端点、web_search、前端组件和路由层错误路径。本轮补全使 `graph.py` 覆盖率从 79%→92%+、`web_search.py` 从 45%→90%+、`api.ts` 从 59%→90%+、总后端覆盖率 85%→90%+。
+**✅ 可发布。** 测试体系已全面补齐，覆盖核心工作流、API 端点、web_search、前端组件和路由层错误路径。本轮补全使 `graph/graph.py` 覆盖率从 79%→92%+、`rag/web_search.py` 从 45%→90%+、`api.ts` 从 59%→90%+、总后端覆盖率 85%→90%+。
 
 ### 改进方向
 
@@ -175,7 +175,7 @@
 | 项目 | 值 |
 |------|-----|
 | OS | Windows 11 Pro 10.0.26200 |
-| Python | 3.13 (via uv) |
+| Python | 3.12 (via uv) |
 | Node.js | 24.14 |
 | 浏览器 | Chrome |
 | 数据库 | SQLite（临时文件）|
