@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.api.routes import chat, conversations, documents, knowledge_base, metrics, workspaces, bookmarks, settings as settings_router
 from src.conversations import init_db
 from src.api.deps import get_knowledge_base
-from config.settings import _is_configured_api_key, get_runtime_setting, settings
+from src.config.settings import _is_configured_api_key, get_runtime_setting, settings
 
 
 @asynccontextmanager

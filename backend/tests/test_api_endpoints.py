@@ -13,7 +13,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 from sse_starlette.sse import AppStatus
 from langchain_core.documents import Document
-from src.kb_models import RetrievalResult
+from src.rag.models import RetrievalResult
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
@@ -148,9 +148,9 @@ class FakeKnowledgeBase:
 class APIEndpointTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.patcher_chroma = patch("src.knowledge_base.Chroma")
-        cls.patcher_embeddings = patch("src.knowledge_base.OpenAIEmbeddings")
-        cls.patcher_api_key = patch("src.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
+        cls.patcher_chroma = patch("src.rag.knowledge_base.Chroma")
+        cls.patcher_embeddings = patch("src.rag.knowledge_base.OpenAIEmbeddings")
+        cls.patcher_api_key = patch("src.rag.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
 
         cls.patcher_chroma.start()
         cls.patcher_embeddings.start()

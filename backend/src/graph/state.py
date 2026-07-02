@@ -8,7 +8,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
-from src.kb_models import RetrievalResult
+from src.rag.models import RetrievalResult
 
 
 QuestionType = Literal["knowledge_base", "chat_memory", "conversation_summary", "clarification"]

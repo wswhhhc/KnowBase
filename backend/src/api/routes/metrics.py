@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
-from config.settings import ROOT_DIR
+from src.config.settings import ROOT_DIR
 from src.api.deps import verify_api_key
 from src.api.models import QueryLogEntry, QueryLogsResponse
 from src.conversations import list_assistant_debug_pairs

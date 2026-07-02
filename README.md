@@ -290,8 +290,6 @@ uv run python -m src.evaluate
 ```
 KnowBase/
 ├── backend/                           # FastAPI 后端（31 源文件）
-│   ├── config/settings.py             # pydantic-settings 配置
-│   ├── migrations/                    # Alembic 数据库迁移
 │   ├── src/
 │   │   ├── api/                       # 路由层 + ChatStreamService（调试/持久化独立模块）
 │   │   │   ├── routes/                # 7 个路由文件（平均 <50 行）
@@ -299,18 +297,27 @@ KnowBase/
 │   │   │   ├── chat_debug.py          # DebugState + 节点调试信息累加
 │   │   │   ├── chat_persistence.py    # 对话持久化 + debug payload 序列化
 │   │   │   └── deps.py                # API Key 鉴权
-│   │   ├── graph.py                   # LangGraph 图定义
-│   │   ├── graph_nodes.py             # 工作流节点函数
-│   │   ├── graph_routing.py           # 条件路由逻辑
-│   │   ├── graph_state.py             # GraphState + Pydantic 决策模型
-│   │   ├── knowledge_base.py          # 门面类（Ingestion/Retriever/Hotspots）
-│   │   ├── kb_models.py               # 检索结果数据类
-│   │   ├── conversations.py           # 对话/工作区/书签/pin CRUD
-│   │   ├── loaders.py                 # 多格式加载器（含 SSRF 防护）
-│   │   ├── web_search.py              # Tavily 联网搜索
+│   │   ├── graph/                     # LangGraph 工作流
+│   │   │   ├── graph.py               # 图定义（build/compile/cache）
+│   │   │   ├── nodes.py               # 工作流节点函数
+│   │   │   ├── routing.py             # 条件路由逻辑
+│   │   │   ├── state.py               # GraphState + Pydantic 决策模型
+│   │   │   └── utils.py               # 图工具（LLM/上下文格式化/解析）
+│   │   ├── rag/                       # 检索增强生成
+│   │   │   ├── knowledge_base.py      # 门面类（Ingestion/Retriever/Hotspots）
+│   │   │   ├── models.py              # 检索结果数据类
+│   │   │   ├── loaders.py             # 多格式加载器（含 SSRF 防护）
+│   │   │   └── web_search.py          # Tavily 联网搜索
+│   │   ├── config/                    # 配置
+│   │   │   └── settings.py           # pydantic-settings 配置
 │   │   ├── evaluate.py                # 离线 RAG 质量评估
-│   │   └── metrics.py                 # 查询 JSONL 日志
+│   │   ├── metrics.py                 # 查询 JSONL 日志
+│   │   ├── conversations.py           # 对话/工作区/书签/pin CRUD
+│   │   ├── chat_utils.py              # LLM 标题生成/建议问题
+│   │   └── utils.py                   # 通用工具（文件上传/分词/JSON 提取）
 │   ├── tests/                         # 28 个文件 · 444 用例
+│   ├── data/                          # chroma_db / checkpoints / conversations
+│   ├── migrations/                    # Alembic 数据库迁移
 │   └── scripts/quickstart.py          # 5 分钟 demo 体验脚本
 ├── frontend/                          # React 19 + Vite + Tailwind
 │   └── src/
@@ -329,11 +336,10 @@ KnowBase/
 │       │   ├── useChat.ts             # SSE 流式聊天 hook（委托至 chat/ 子模块）
 │       │   ├── chat/                  # 类型定义 + useChatMessages + usePinnedSourcesState
 │       │   ├── useData.ts / useTheme.ts / useBrowserPage.ts
-│       └── lib/                       # api.ts / api-types.ts / api-types.openapi.ts
-│   └── data/                          # chroma_db / checkpoints / conversations
+│       │   └── lib/                   # api.ts / api-types.ts / api-types.openapi.ts
 ├── docs/tests/                        # 12 份测试文档
-├── data/samples/demo/                 # quickstart 示例文档
-└── scripts/                           # 一键启动脚本
+├── scripts/                           # 一键启动脚本
+└── data/samples/demo/                 # quickstart 示例文档
 ```
 
 ### API 端点一览

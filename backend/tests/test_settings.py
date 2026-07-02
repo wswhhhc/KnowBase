@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from config import settings as settings_module
-from config.settings import Settings, _is_configured_api_key
+import src.config.settings as settings_module
+from src.config.settings import Settings, _is_configured_api_key
 from src.api import main as api_main
 
 

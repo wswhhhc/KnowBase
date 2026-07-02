@@ -1,7 +1,7 @@
 """Tests for src.web_search — format_search_results."""
 import unittest
 
-from src.web_search import format_search_results
+from src.rag.web_search import format_search_results
 
 
 class FormatSearchResultsTests(unittest.TestCase):

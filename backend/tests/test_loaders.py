@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 from unittest.mock import Mock, patch
 
-from src.loaders import (
+from src.rag.loaders import (
     load_document, load_url, _is_private_url, _is_safe_ip,
 )
 
@@ -243,7 +243,7 @@ class LoaderTests(unittest.TestCase):
     @patch("urllib3.util.connection.create_connection")
     def test_pinned_connection_new_conn_uses_keyword_args(self, mock_create):
         """_new_conn() 用关键字参数调用 create_connection"""
-        from src.loaders import _make_pinned_connection_cls
+        from src.rag.loaders import _make_pinned_connection_cls
         from urllib3.connection import HTTPConnection
 
         Cls = _make_pinned_connection_cls(HTTPConnection, "203.0.113.10")

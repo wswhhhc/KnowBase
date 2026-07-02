@@ -112,8 +112,8 @@ KnowBase 是一个本地优先的知识库问答助手，采用 React 前端和 
 
 - `backend/data/chroma_db/`
 - `backend/data/checkpoints.db`
-- `data/conversations.db`
-- `data/rag_logs/`
+- `backend/data/conversations.db`
+- `backend/data/rag_logs/`
 
 ## 8. 配置要求
 

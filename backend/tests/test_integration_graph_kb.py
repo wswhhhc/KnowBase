@@ -13,20 +13,20 @@ from langchain_core.documents import Document
 from src.graph import (
     run_query,
 )
-from src.graph_routing import (
+from src.graph.routing import (
     detect_question_type,
     route_after_classifier,
 )
-from src.graph_nodes import (
+from src.graph.nodes import (
     finalize,
     route_after_retrieval,
     should_retry,
 )
-from src.graph_utils import (
+from src.graph.utils import (
     parse_quality_decision,
     parse_rerank_decision,
 )
-from src.knowledge_base import RetrievalResult
+from src.rag.knowledge_base import RetrievalResult
 
 
 class FakeResponse:
@@ -88,11 +88,11 @@ class GraphKBIntegrationTests(unittest.TestCase):
     def test_retrieve_docs_returns_retrieval_results_from_kb(self):
         """Verify the retrieve_docs node returns results when KB has documents."""
         kb = MultiDocKnowledgeBase()
-        with patch("src.graph_utils._get_llm") as mock_llm_factory:
+        with patch("src.graph.utils._get_llm") as mock_llm_factory:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = FakeResponse("mock answer")
             mock_llm_factory.return_value = mock_llm
-            with patch("src.graph_routing.route_question", return_value={"question_type": "knowledge_base", "search_filter": {}}):
+            with patch("src.graph.routing.route_question", return_value={"question_type": "knowledge_base", "search_filter": {}}):
                 result = run_query(
                     question="LangGraph 持久化",
                     thread_id=str(uuid4()),
@@ -105,11 +105,11 @@ class GraphKBIntegrationTests(unittest.TestCase):
         """When get_neighbor_chunks returns neighbors, final source count should
         be at least as many as the raw results."""
         kb = MultiDocKnowledgeBase()
-        with patch("src.graph_utils._get_llm") as mock_llm_factory:
+        with patch("src.graph.utils._get_llm") as mock_llm_factory:
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = FakeResponse("mock answer")
             mock_llm_factory.return_value = mock_llm
-            with patch("src.graph_routing.route_question", return_value={"question_type": "knowledge_base", "search_filter": {}}):
+            with patch("src.graph.routing.route_question", return_value={"question_type": "knowledge_base", "search_filter": {}}):
                 result = run_query(
                     question="LangGraph 持久化",
                     thread_id=str(uuid4()),
@@ -127,10 +127,10 @@ class GraphKBIntegrationTests(unittest.TestCase):
             '{"quality_passed":true,"quality_reason":"PASS","retry_strategy":"none"}',
         ])
 
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
-            with patch("src.graph_routing.route_question", return_value={"question_type": "knowledge_base", "search_filter": {}}):
-                with patch("src.graph_nodes.ENABLE_QUALITY_CHECK", True):
-                    with patch("src.graph_nodes.MAX_RETRIES", 3):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            with patch("src.graph.routing.route_question", return_value={"question_type": "knowledge_base", "search_filter": {}}):
+                with patch("src.graph.nodes.ENABLE_QUALITY_CHECK", True):
+                    with patch("src.graph.nodes.MAX_RETRIES", 3):
                         initial_calls = kb.calls
                         result = run_query(
                             question="LangGraph",
@@ -161,10 +161,10 @@ class GraphKBIntegrationTests(unittest.TestCase):
             }
         ]
 
-        with patch("src.graph_utils._get_llm", return_value=fake_llm):
-            with patch("src.graph_routing.route_question", return_value={"question_type": "knowledge_base"}):
-                with patch("src.graph_nodes._tavily_configured", return_value=True):
-                    with patch("src.web_search.web_search", return_value=(web_results, "")):
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            with patch("src.graph.routing.route_question", return_value={"question_type": "knowledge_base"}):
+                with patch("src.graph.nodes._tavily_configured", return_value=True):
+                    with patch("src.rag.web_search.web_search", return_value=(web_results, "")):
                         result = run_query(
                             question="LangGraph",
                             thread_id=str(uuid4()),
@@ -194,7 +194,7 @@ class GraphKBIntegrationTests(unittest.TestCase):
             "retry_strategy": "expand_retrieval",
             "retry_count": 1,
         }
-        with patch("src.graph_nodes.MAX_RETRIES", 3):
+        with patch("src.graph.nodes.MAX_RETRIES", 3):
             self.assertEqual(should_retry(state), "retrieve_docs")
 
     def test_should_retry_rewrite_strategy(self):
@@ -203,7 +203,7 @@ class GraphKBIntegrationTests(unittest.TestCase):
             "retry_strategy": "rewrite_query",
             "retry_count": 1,
         }
-        with patch("src.graph_nodes.MAX_RETRIES", 3):
+        with patch("src.graph.nodes.MAX_RETRIES", 3):
             self.assertEqual(should_retry(state), "rewrite_query")
 
     def test_should_retry_exceeds_max_returns_finalize(self):
@@ -212,7 +212,7 @@ class GraphKBIntegrationTests(unittest.TestCase):
             "retry_strategy": "expand_retrieval",
             "retry_count": 5,
         }
-        with patch("src.graph_nodes.MAX_RETRIES", 3):
+        with patch("src.graph.nodes.MAX_RETRIES", 3):
             self.assertEqual(should_retry(state), "finalize")
 
     def test_route_after_classifier_knowledge_base(self):

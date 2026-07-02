@@ -14,7 +14,7 @@ from src.api.models import ChatRequest, ChatSource, DebugInfo, NodeDebug
 from src.api.chat_persistence import build_debug_payload, persist_conversation_turn
 from src.chat_utils import NODE_LABELS, record_query_metrics
 from src.graph import run_query
-from src.knowledge_base import KnowledgeBase
+from src.rag.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 

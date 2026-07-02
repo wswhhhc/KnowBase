@@ -19,7 +19,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from rank_bm25 import BM25Okapi
 
-from config.settings import (
+from src.config.settings import (
     CHROMA_PERSIST_DIR,
     CHUNK_OVERLAP,
     CHUNK_SIZE,
@@ -34,7 +34,7 @@ from config.settings import (
     require_siliconflow_api_key,
     get_runtime_setting,
 )
-from src.kb_models import (
+from src.rag.models import (
     RetrievalResult,
     FusionScore,
     canonical_source_from_metadata,
@@ -44,7 +44,7 @@ from src.kb_models import (
     normalize_source,
     document_chunk_id as _document_chunk_id,
 )
-from src.loaders import load_document
+from src.rag.loaders import load_document
 from src.api.models import HotspotEntry, KBChunk
 
 
@@ -402,7 +402,7 @@ class IngestionService:
 
     def ingest_url(self, url: str, version_mode: str = "replace", progress_callback: Callable[[str, int], None] | None = None) -> int:
         """Fetch a public URL and ingest its content."""
-        from src.loaders import load_url
+        from src.rag.loaders import load_url
 
         if progress_callback:
             progress_callback("loading", 25)

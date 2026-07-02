@@ -48,7 +48,7 @@ class FakeKnowledgeBase:
     def source_counts(self):
         self.ensure_all_docs_populated()
         from collections import Counter
-        from src.kb_models import normalize_source
+        from src.rag.models import normalize_source
         counts = Counter(
             normalize_source(d.metadata.get("source", "未知来源"))
             for d in self.all_docs
@@ -104,9 +104,9 @@ def setup_test_env():
         # ... run tests ...
         teardown_test_env(tmp_dir)
     """
-    patcher_chroma = patch("src.knowledge_base.Chroma")
-    patcher_emb = patch("src.knowledge_base.OpenAIEmbeddings")
-    patcher_api = patch("src.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
+    patcher_chroma = patch("src.rag.knowledge_base.Chroma")
+    patcher_emb = patch("src.rag.knowledge_base.OpenAIEmbeddings")
+    patcher_api = patch("src.rag.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
 
     patcher_chroma.start()
     patcher_emb.start()

@@ -2,7 +2,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: docker/Dockerfile.backend
     working_dir: /app/backend
     env_file:
       - ./backend/.env
@@ -16,7 +16,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: Dockerfile.frontend
+      dockerfile: docker/Dockerfile.frontend
     working_dir: /app/frontend
     environment:
       VITE_API_BASE_URL: http://localhost:8000

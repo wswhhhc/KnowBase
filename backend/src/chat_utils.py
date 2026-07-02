@@ -6,7 +6,7 @@ import logging
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from config.settings import LLM_MODEL, get_runtime_setting
+from src.config.settings import LLM_MODEL, get_runtime_setting
 from src.api.models import DebugInfo
 from src.metrics import log_query
 
@@ -73,7 +73,7 @@ def generate_title(question: str) -> str:
     """Use LLM to generate a short conversation title from the first question."""
     try:
         from langchain_openai import ChatOpenAI
-        from config.settings import (
+        from src.config.settings import (
             _is_configured_api_key,
             require_siliconflow_api_key,
             SILICONFLOW_BASE_URL,
@@ -108,7 +108,7 @@ def generate_suggested_questions(docs_text: str, max_questions: int = 5) -> list
         return []
     try:
         from langchain_openai import ChatOpenAI
-        from config.settings import (
+        from src.config.settings import (
             _is_configured_api_key,
             require_siliconflow_api_key,
             SILICONFLOW_BASE_URL,
