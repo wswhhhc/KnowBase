@@ -97,7 +97,7 @@ describe('useSources', () => {
   it('loads sources after refresh', async () => {
     vi.mocked(api.getSources).mockResolvedValue(mockSources)
 
-    const { result } = renderHook(() => useSources())
+    const { result } = renderHook(() => useSources('ws-1'))
 
     // useSources does not auto-load on mount; need to call refresh
     await act(async () => {
@@ -105,12 +105,13 @@ describe('useSources', () => {
     })
 
     expect(result.current.sources).toEqual(mockSources)
+    expect(api.getSources).toHaveBeenCalledWith('ws-1')
   })
 
   it('refresh catches error and does not throw', async () => {
     vi.mocked(api.getSources).mockRejectedValue(new Error('network error'))
 
-    const { result } = renderHook(() => useSources())
+    const { result } = renderHook(() => useSources('ws-1'))
 
     await act(async () => {
       // Should not throw
@@ -118,6 +119,7 @@ describe('useSources', () => {
     })
 
     expect(result.current.sources).toEqual([])
+    expect(api.getSources).toHaveBeenCalledWith('ws-1')
   })
 })
 

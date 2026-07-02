@@ -400,6 +400,7 @@ describe('Sidebar interactions', () => {
           onDone: expect.any(Function),
           onError: expect.any(Function),
         }),
+        '',
       )
     })
   })

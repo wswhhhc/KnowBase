@@ -89,12 +89,12 @@ export function useWorkspaces() {
   return { workspaces, activeWorkspaceId, setActiveWorkspaceId, create, remove, rename, refresh, loading }
 }
 
-export function useSources() {
+export function useSources(workspaceId?: string) {
   const [sources, setSources] = useState<DocSource[]>([])
   const [sourceError, setSourceError] = useState<string | null>(null)
   const refresh = async (): Promise<boolean> => {
     try {
-      setSources(await api.getSources())
+      setSources(await api.getSources(workspaceId))
       setSourceError(null)
       return true
     } catch (e) {
@@ -103,6 +103,6 @@ export function useSources() {
       return false
     }
   }
-  useEffect(() => { refresh() }, [])
+  useEffect(() => { refresh() }, [workspaceId])
   return { sources, sourceError, refresh }
 }

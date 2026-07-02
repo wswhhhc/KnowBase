@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
 
-export default function KBSummary() {
+interface KBSummaryProps {
+  workspaceId?: string
+}
+
+export default function KBSummary({ workspaceId }: KBSummaryProps) {
   const [stats, setStats] = useState<{ chunk_count: number; source_count: number } | null>(null)
   useEffect(() => {
-    api.getKBStats().then(setStats).catch((e: unknown) => toast.error('加载工作区统计失败', { description: String(e) }))
-  }, [])
+    api.getKBStats(workspaceId).then(setStats).catch((e: unknown) => toast.error('加载工作区统计失败', { description: String(e) }))
+  }, [workspaceId])
   return (
     <div className="px-3 py-4">
       <p className="text-xs text-muted-foreground/50 tracking-wide uppercase px-1 mb-2">工作区</p>

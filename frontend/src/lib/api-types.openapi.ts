@@ -1532,7 +1532,9 @@ export interface operations {
     };
     list_sources_api_documents_sources_get: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1548,12 +1550,22 @@ export interface operations {
                     "application/json": components["schemas"]["SourceOut"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     check_source_api_documents_check_source_get: {
         parameters: {
             query: {
                 source_name: string;
+                workspace_id?: string;
             };
             header?: never;
             path?: never;
@@ -1587,6 +1599,7 @@ export interface operations {
         parameters: {
             query?: {
                 version_mode?: string | null;
+                workspace_id?: string;
             };
             header?: never;
             path?: never;
@@ -1622,6 +1635,7 @@ export interface operations {
         parameters: {
             query?: {
                 version_mode?: string | null;
+                workspace_id?: string;
             };
             header?: never;
             path?: never;
@@ -1657,6 +1671,7 @@ export interface operations {
         parameters: {
             query?: {
                 version_mode?: string | null;
+                workspace_id?: string;
             };
             header?: never;
             path?: never;
@@ -1692,6 +1707,7 @@ export interface operations {
         parameters: {
             query?: {
                 version_mode?: string | null;
+                workspace_id?: string;
             };
             header?: never;
             path?: never;
@@ -1725,7 +1741,9 @@ export interface operations {
     };
     delete_source_api_documents_source__source_name__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string;
+            };
             header?: never;
             path: {
                 source_name: string;
@@ -1756,7 +1774,9 @@ export interface operations {
     };
     clear_kb_api_documents_clear_post: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1772,11 +1792,22 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     stats_api_knowledge_base_stats_get: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1792,6 +1823,15 @@ export interface operations {
                     "application/json": components["schemas"]["KBStats"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     chunks_api_knowledge_base_chunks_get: {
@@ -1801,6 +1841,7 @@ export interface operations {
                 search?: string;
                 skip?: number;
                 limit?: number;
+                workspace_id?: string;
             };
             header?: never;
             path?: never;
@@ -1832,7 +1873,9 @@ export interface operations {
     };
     chunk_by_id_api_knowledge_base_chunks__chunk_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string;
+            };
             header?: never;
             path: {
                 chunk_id: string;
@@ -1878,7 +1921,9 @@ export interface operations {
     };
     list_source_names_api_knowledge_base_sources_get: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1892,6 +1937,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1918,7 +1972,9 @@ export interface operations {
     };
     hotspots_api_knowledge_base_hotspots_get: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1934,11 +1990,22 @@ export interface operations {
                     "application/json": components["schemas"]["HotspotEntry"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     debug_search_api_knowledge_base_debug_search_post: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
