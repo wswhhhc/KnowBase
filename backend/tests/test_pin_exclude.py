@@ -9,9 +9,16 @@ from src.rag.models import RetrievalResult
 
 
 def _make_doc(chunk_id: str, content: str = "doc content") -> Document:
+    workspace_id = ""
+    if "::" in chunk_id:
+        workspace_id = chunk_id.split("::", 1)[0]
     return Document(
         page_content=content,
-        metadata={"source": chunk_id.split(":")[0], "chunk_id": chunk_id},
+        metadata={
+            "source": chunk_id.split("::", 1)[-1].split(":")[0],
+            "chunk_id": chunk_id,
+            "workspace_id": workspace_id,
+        },
     )
 
 
@@ -69,6 +76,7 @@ class RetrieveDocsPinExcludeTests(unittest.TestCase):
             "web_search_error": "",
             "used_web_search": False,
             "web_search_enabled": False,
+            "workspace_id": "",
             "search_strategy": "balanced",
             "search_filter": {},
             "pinned_chunk_ids": pinned or [],
@@ -144,6 +152,58 @@ class RetrieveDocsPinExcludeTests(unittest.TestCase):
         kb.vector_store.get.assert_called_once()
         call_kwargs = kb.vector_store.get.call_args[1]
         self.assertIn("remote.txt:0:r", call_kwargs.get("ids", []))
+
+    def test_pinned_chunks_from_other_workspace_are_ignored(self):
+        """Pinned chunks must not pierce the active workspace boundary."""
+        kb = MockKB()
+        kb.set_hybrid_results([_make_result("ws-alpha::doc.txt:0:a")])
+        kb.set_neighbors({})
+        kb.vector_store.get.return_value = {
+            "ids": ["ws-beta::secret.txt:0:x"],
+            "documents": ["beta secret"],
+            "metadatas": [{
+                "source": "secret.txt",
+                "chunk_id": "ws-beta::secret.txt:0:x",
+                "workspace_id": "ws-beta",
+            }],
+        }
+
+        result = retrieve_docs({
+            **{
+                "question": "test",
+                "messages": [],
+                "question_type": "knowledge_base",
+                "rewritten_question": "",
+                "documents": [],
+                "context": "",
+                "answer": "",
+                "sources": [],
+                "retry_count": 0,
+                "retrieval_k": 5,
+                "score_threshold": None,
+                "quality_ok": True,
+                "quality_reason": "",
+                "retry_strategy": "none",
+                "web_search_results": [],
+                "web_context": "",
+                "web_search_error": "",
+                "used_web_search": False,
+                "web_search_enabled": False,
+                "workspace_id": "ws-alpha",
+                "search_strategy": "balanced",
+                "search_filter": {},
+                "pinned_chunk_ids": ["ws-beta::secret.txt:0:x"],
+                "excluded_chunk_ids": [],
+                "evidence_level": "none",
+                "evidence_summary": "",
+                "outcome_category": "success",
+                "used_rerank": False,
+                "used_rewrite": False,
+            }
+        }, kb)
+
+        source_ids = [s["chunk_id"] for s in result["sources"]]
+        self.assertEqual(source_ids, ["ws-alpha::doc.txt:0:a"])
 
     def test_empty_pinned_excluded_no_effect(self):
         """Empty pin/exclude lists don't modify normal retrieval."""

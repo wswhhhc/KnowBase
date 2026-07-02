@@ -32,7 +32,7 @@ from src.config.settings import (
 )
 from src.graph import utils as gu
 from src.graph.state import GraphSource, GraphState, GraphStateUpdate, QualityDecision, RerankDecision
-from src.rag.models import RetrievalResult, normalize_source
+from src.rag.models import RetrievalResult, metadata_workspace_id, normalize_source, normalize_workspace_id
 from src.utils import extract_context_terms, json_from_text
 
 
@@ -301,10 +301,14 @@ def retrieve_docs(state: GraphState, kb: _GraphKnowledgeBaseLike) -> GraphStateU
                 pinned_raw.get("documents", []) or [],
                 pinned_raw.get("metadatas", []) or [],
             ):
-                if doc_content:
-                    doc = Document(page_content=doc_content, metadata=dict(doc_meta))
-                    enriched_docs.append(doc)
-                    seen_ids.add(cid_str)
+                if not doc_content:
+                    continue
+                metadata = dict(doc_meta or {})
+                if metadata_workspace_id(metadata) != normalize_workspace_id(workspace_id):
+                    continue
+                doc = Document(page_content=doc_content, metadata=metadata)
+                enriched_docs.append(doc)
+                seen_ids.add(cid_str)
 
     enriched_results = []
     for d in enriched_docs:

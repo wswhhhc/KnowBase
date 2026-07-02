@@ -190,6 +190,26 @@ describe('Sidebar interactions', () => {
     expect(onNavigate).toHaveBeenCalledWith('browser')
   })
 
+  it('syncs the active workspace to the parent on mount', async () => {
+    const onWorkspaceChange = vi.fn()
+    vi.mocked(useWorkspaces).mockReturnValue({
+      workspaces: [{ id: 'ws-alpha', name: 'Alpha', description: '', created_at: '', updated_at: '' }],
+      activeWorkspaceId: 'ws-alpha',
+      setActiveWorkspaceId: vi.fn(),
+      create: vi.fn(),
+      remove: vi.fn(),
+      rename: vi.fn(),
+      refresh: vi.fn(),
+      loading: false,
+    })
+
+    render(<Sidebar {...defaultProps} onWorkspaceChange={onWorkspaceChange} />)
+
+    await waitFor(() => {
+      expect(onWorkspaceChange).toHaveBeenCalledWith('ws-alpha')
+    })
+  })
+
   it('shows KB stats in browser view', async () => {
     await act(async () => {
       render(<Sidebar {...defaultProps} activeView="browser" />)

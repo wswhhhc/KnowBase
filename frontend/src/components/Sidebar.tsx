@@ -85,6 +85,10 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     wss.workspaces,
   ])
 
+  useEffect(() => {
+    onWorkspaceChange?.(wss.activeWorkspaceId)
+  }, [onWorkspaceChange, wss.activeWorkspaceId])
+
   const switchConversation = async (conversation: Conversation) => {
     onNavigate('chat')
     onLoadingMessages?.(true)
