@@ -103,7 +103,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
         chunkView={chunkView} setChunkView={setChunkView} hotspotMode={hotspotMode} toggleHotspotMode={toggleHotspotMode}
         kbConfig={kbConfig} showViewControls={!!selectedSource} />
 
-      <DebugSandbox onRunSearch={runDebugSearch} />
+      <DebugSandbox key={workspaceId || ''} onRunSearch={runDebugSearch} />
 
       <ScrollArea ref={scrollRef} className="flex-1">
         <div className="mx-auto max-w-5xl px-5 py-6">

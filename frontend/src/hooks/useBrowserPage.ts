@@ -35,6 +35,7 @@ export function useBrowserPage({
   const allChunksRef = useRef<KBChunk[]>([])
   const didInitSourceFilter = useRef(false)
   const skipNextSourceSearch = useRef(false)
+  const scopeTokenRef = useRef(0)
 
   const [stats, setStats] = useState<KBStats | null>(null)
   const [chunks, setChunks] = useState<KBChunk[]>([])
@@ -65,14 +66,20 @@ export function useBrowserPage({
   const [hasMore, setHasMore] = useState(true)
 
   const browserWsId = workspaceId || ''
+  const nextScopeToken = () => {
+    scopeTokenRef.current += 1
+    return scopeTokenRef.current
+  }
+  const isScopeCurrent = (token: number) => scopeTokenRef.current === token
 
   const setChunksAccumulate = (items: KBChunk[], append: boolean) => {
     allChunksRef.current = dedupeChunksById(append ? [...allChunksRef.current, ...items] : items)
     setChunks([...allChunksRef.current])
   }
 
-  const loadChunks = async (src: string, q: string, p: number, ps: number, append = false) => {
+  const loadChunks = async (src: string, q: string, p: number, ps: number, append = false, scopeToken = scopeTokenRef.current) => {
     const res = await api.getKBChunks(src, q, p * ps, ps, browserWsId)
+    if (!isScopeCurrent(scopeToken)) return null
     setChunksAccumulate(res.items, append)
     setTotal(res.total)
     setHasMore((p + 1) * ps < res.total)
@@ -80,43 +87,63 @@ export function useBrowserPage({
   }
 
   const refreshData = useCallback(async () => {
+    const scopeToken = scopeTokenRef.current
     try {
-      const [s, srcs, cfg] = await Promise.all([api.getKBStats(browserWsId), api.getKBSourceNames(browserWsId), api.getKBConfig()])
+      const [s, srcs, cfg, chunkResult] = await Promise.all([
+        api.getKBStats(browserWsId),
+        api.getKBSourceNames(browserWsId),
+        api.getKBConfig(),
+        loadChunks(selectedSource, searchQuery, 0, PAGE_SIZE, false, scopeToken),
+      ])
+      if (!isScopeCurrent(scopeToken) || !chunkResult) return
       setStats(s)
       setSources(srcs)
       setKbConfig(cfg)
       setPage(0)
-      allChunksRef.current = []
-      setChunks([])
-      await loadChunks(selectedSource, searchQuery, 0, PAGE_SIZE, false)
     } catch (e) {
-      toast.error('刷新失败', { description: String(e) })
+      if (isScopeCurrent(scopeToken)) {
+        toast.error('刷新失败', { description: String(e) })
+      }
     }
   }, [browserWsId, selectedSource, searchQuery])
 
   const handleSearch = useCallback(async () => {
+    const scopeToken = scopeTokenRef.current
     setLoading(true)
     setPage(0)
     try {
-      await loadChunks(selectedSource, searchQuery, 0, PAGE_SIZE)
+      const chunkResult = await loadChunks(selectedSource, searchQuery, 0, PAGE_SIZE, false, scopeToken)
+      if (!isScopeCurrent(scopeToken) || !chunkResult) return
       const [srcs, s] = await Promise.all([api.getKBSourceNames(browserWsId), api.getKBStats(browserWsId)])
+      if (!isScopeCurrent(scopeToken)) return
       setSources(srcs)
       setStats(s)
     } catch (e) {
-      toast.error('搜索失败', { description: String(e) })
+      if (isScopeCurrent(scopeToken)) {
+        toast.error('搜索失败', { description: String(e) })
+      }
+    } finally {
+      if (isScopeCurrent(scopeToken)) {
+        setLoading(false)
+      }
     }
-    setLoading(false)
   }, [browserWsId, searchQuery, selectedSource])
 
   const handlePageChange = useCallback(async (newPage: number) => {
+    const scopeToken = scopeTokenRef.current
     setLoading(true)
     setPage(newPage)
     try {
-      await loadChunks(selectedSource, searchQuery, newPage, PAGE_SIZE, true)
+      await loadChunks(selectedSource, searchQuery, newPage, PAGE_SIZE, true, scopeToken)
     } catch (e) {
-      toast.error('翻页失败', { description: String(e) })
+      if (isScopeCurrent(scopeToken)) {
+        toast.error('翻页失败', { description: String(e) })
+      }
+    } finally {
+      if (isScopeCurrent(scopeToken)) {
+        setLoading(false)
+      }
     }
-    setLoading(false)
   }, [searchQuery, selectedSource])
 
   const handleSourceClick = useCallback((src: string) => {
@@ -131,34 +158,41 @@ export function useBrowserPage({
   }, [])
 
   const startUpload = useCallback(async (file: File, versionMode?: 'replace' | 'append') => {
+    const scopeToken = scopeTokenRef.current
     setUploading(true)
     setUploadPhase('loading')
     setUploadPercent(0)
     setVersionPrompted(null)
     try {
       const probe = await api.checkSource(file.name, browserWsId)
+      if (!isScopeCurrent(scopeToken)) return
       if (probe.exists && !versionMode) {
         setVersionPrompted({ kind: 'file', file, sourceName: file.name })
         resetProgress()
         return
       }
     } catch {
-      toast.error('上传前检查失败')
-      resetProgress()
+      if (isScopeCurrent(scopeToken)) {
+        toast.error('上传前检查失败')
+        resetProgress()
+      }
       return
     }
     api.uploadDocumentStream(file, versionMode, {
       onProgress: (phase, pct) => {
+        if (!isScopeCurrent(scopeToken)) return
         setUploadPhase(phase)
         setUploadPercent(pct)
       },
       onDone: async (result) => {
+        if (!isScopeCurrent(scopeToken)) return
         if (result.existing_version && !versionMode) {
           setVersionPrompted({ kind: 'file', file, sourceName: file.name })
           resetProgress()
           return
         }
         await refreshData()
+        if (!isScopeCurrent(scopeToken)) return
         setShowPostUploadGuide(true)
         if (guideTimerRef.current) clearTimeout(guideTimerRef.current)
         guideTimerRef.current = setTimeout(() => setShowPostUploadGuide(false), 8000)
@@ -174,6 +208,7 @@ export function useBrowserPage({
         if (fileInputRef.current) fileInputRef.current.value = ''
       },
       onError: (msg) => {
+        if (!isScopeCurrent(scopeToken)) return
         toast.error('上传失败', { description: msg })
         resetProgress()
         if (fileInputRef.current) fileInputRef.current.value = ''
@@ -182,28 +217,34 @@ export function useBrowserPage({
   }, [browserWsId, refreshData, resetProgress])
 
   const startUrlIngest = useCallback(async (url: string, versionMode?: 'replace' | 'append') => {
+    const scopeToken = scopeTokenRef.current
     setIngesting(true)
     setUploadPhase('loading')
     setUploadPercent(0)
     setVersionPrompted(null)
     try {
       const probe = await api.checkSource(url, browserWsId)
+      if (!isScopeCurrent(scopeToken)) return
       if (probe.exists && !versionMode) {
         setVersionPrompted({ kind: 'url', url, sourceName: url })
         resetProgress()
         return
       }
     } catch {
-      toast.error('导入前检查失败')
-      resetProgress()
+      if (isScopeCurrent(scopeToken)) {
+        toast.error('导入前检查失败')
+        resetProgress()
+      }
       return
     }
     api.ingestUrlStream(url, versionMode, {
       onProgress: (phase, pct) => {
+        if (!isScopeCurrent(scopeToken)) return
         setUploadPhase(phase)
         setUploadPercent(pct)
       },
       onDone: async (result) => {
+        if (!isScopeCurrent(scopeToken)) return
         if (result.existing_version && !versionMode) {
           setVersionPrompted({ kind: 'url', url, sourceName: url })
           resetProgress()
@@ -211,6 +252,7 @@ export function useBrowserPage({
         }
         setUrlInput('')
         await refreshData()
+        if (!isScopeCurrent(scopeToken)) return
         setShowPostUploadGuide(true)
         if (guideTimerRef.current) clearTimeout(guideTimerRef.current)
         guideTimerRef.current = setTimeout(() => setShowPostUploadGuide(false), 8000)
@@ -224,6 +266,7 @@ export function useBrowserPage({
         resetProgress()
       },
       onError: (msg) => {
+        if (!isScopeCurrent(scopeToken)) return
         toast.error('导入失败', { description: msg })
         resetProgress()
       },
@@ -231,14 +274,22 @@ export function useBrowserPage({
   }, [browserWsId, refreshData, resetProgress])
 
   const toggleHotspotMode = useCallback(async () => {
+    const scopeToken = scopeTokenRef.current
     const next = !hotspotMode
     setHotspotMode(next)
+    if (!next) {
+      setHotspots(new Map())
+      return
+    }
     if (next) {
       try {
         const data = await api.getKBHotspots(browserWsId)
+        if (!isScopeCurrent(scopeToken)) return
         setHotspots(new Map(data.map((h) => [h.chunk_id, h.hits] as [string, number])))
       } catch (e) {
-        toast.error('热点数据加载失败', { description: String(e) })
+        if (isScopeCurrent(scopeToken)) {
+          toast.error('热点数据加载失败', { description: String(e) })
+        }
       }
     }
   }, [browserWsId, hotspotMode])
@@ -269,40 +320,69 @@ export function useBrowserPage({
   }, [bookmarkedChunks, browserWsId])
 
   const runDebugSearch = useCallback(async (query: string, strategy: string): Promise<DebugSearchResponse | null> => {
+    const scopeToken = scopeTokenRef.current
     try {
       return await api.debugSearch(query, 5, strategy, browserWsId)
     } catch (e) {
-      toast.error('检索测试失败', { description: String(e) })
+      if (isScopeCurrent(scopeToken)) {
+        toast.error('检索测试失败', { description: String(e) })
+      }
       return null
     }
   }, [browserWsId])
 
   useEffect(() => {
+    const scopeToken = nextScopeToken()
+    skipNextSourceSearch.current = true
+    allChunksRef.current = []
+    setChunks([])
+    setStats(null)
+    setSources([])
+    setError(null)
+    setSelectedSource('')
+    setSearchQuery('')
+    setSelectedChunk(null)
+    setChunkView('grid')
+    setHotspotMode(false)
+    setHotspots(new Map())
+    setKbConfig(null)
+    setUrlInput('')
+    setVersionPrompted(null)
+    setShowPostUploadGuide(false)
+    setPage(0)
+    setTotal(0)
+    setHasMore(true)
+    setBookmarkedChunks(new Set())
+    resetProgress()
+    if (fileInputRef.current) fileInputRef.current.value = ''
     setError(null)
     setLoading(true)
     Promise.all([
-      loadChunks('', '', 0, PAGE_SIZE),
+      loadChunks('', '', 0, PAGE_SIZE, false, scopeToken),
       api.getKBStats(browserWsId),
       api.getKBSourceNames(browserWsId),
       api.getKBConfig(),
     ])
       .then(([, s, srcs, cfg]) => {
+        if (!isScopeCurrent(scopeToken)) return
         setStats(s)
         setSources(srcs)
         setKbConfig(cfg)
       })
       .catch((e) => {
+        if (!isScopeCurrent(scopeToken)) return
         setError(String(e))
         toast.error('加载失败', { description: String(e) })
       })
       .finally(() => {
+        if (!isScopeCurrent(scopeToken)) return
         if (sessionStorage.getItem('kb_trigger_upload') === 'true') {
           sessionStorage.removeItem('kb_trigger_upload')
           requestAnimationFrame(() => fileInputRef.current?.click())
         }
         setLoading(false)
       })
-  }, [browserWsId])
+  }, [browserWsId, resetProgress])
 
   useEffect(() => {
     const handler = () => {
