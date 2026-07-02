@@ -585,7 +585,7 @@ class Retriever:
         else:
             candidate_k = vector_candidate_k
         vector_filter = dict(filter or {})
-        if normalized_workspace_id:
+        if workspace_id is not None:
             vector_filter["workspace_id"] = normalized_workspace_id
         vector_results = self.vector_store.similarity_search_with_score(
             query,
@@ -662,7 +662,7 @@ class Retriever:
 
         normalized_workspace_id = normalize_workspace_id(workspace_id)
         vector_filter = dict(filter or {})
-        if normalized_workspace_id:
+        if workspace_id is not None:
             vector_filter["workspace_id"] = normalized_workspace_id
         vector_results = self.vector_store.similarity_search_with_score(
             query,

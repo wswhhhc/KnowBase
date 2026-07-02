@@ -13,6 +13,7 @@ from src.api.chat_debug import DebugState, accumulate_node_debug
 from src.api.models import ChatRequest, ChatSource, DebugInfo, NodeDebug
 from src.api.chat_persistence import build_debug_payload, persist_conversation_turn
 from src.chat_utils import NODE_LABELS, record_query_metrics
+from src.conversations import get_conversation_by_thread
 from src.graph import run_query
 from src.rag.knowledge_base import KnowledgeBase
 
@@ -30,6 +31,7 @@ class ChatStreamService:
         self.body = body
         self.kb = kb
         self.thread_id = body.thread_id or str(uuid4())
+        self.workspace_id = self._resolve_workspace_id()
         self.t0 = time.monotonic()
 
         # Accumulators filled during streaming
@@ -51,6 +53,25 @@ class ChatStreamService:
         self.ttfb = 0
         self.first_token = 0
         self._ttfb_set = False
+
+    def _resolve_workspace_id(self) -> str:
+        """Use the persisted conversation workspace when a thread already exists."""
+        if not self.body.thread_id:
+            return self.body.workspace_id
+
+        conversation = get_conversation_by_thread(self.thread_id)
+        if not conversation:
+            return self.body.workspace_id
+
+        workspace_id = str(conversation.get("workspace_id", ""))
+        if workspace_id != self.body.workspace_id:
+            logger.info(
+                "Chat thread workspace mismatch resolved to persisted scope: thread_id=%s requested=%s persisted=%s",
+                self.thread_id,
+                self.body.workspace_id,
+                workspace_id,
+            )
+        return workspace_id
 
     # ── Public entry point ──────────────────────────────────────────────
 
@@ -74,7 +95,7 @@ class ChatStreamService:
             stream_tokens=True,
             web_search_enabled=self.body.web_search_enabled,
             search_strategy=self.body.search_strategy,
-            workspace_id=self.body.workspace_id,
+            workspace_id=self.workspace_id,
             pinned_chunk_ids=self.body.pinned_chunk_ids,
             excluded_chunk_ids=self.body.excluded_chunk_ids,
         )
@@ -202,7 +223,7 @@ class ChatStreamService:
             conversation_id, assistant_message_id = persist_conversation_turn(
                 question=self.body.question,
                 thread_id=self.thread_id,
-                workspace_id=self.body.workspace_id,
+                workspace_id=self.workspace_id,
                 answer=self.answer,
                 final_sources=self.final_sources,
                 final_quality=self.final_quality,

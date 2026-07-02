@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from langchain_core.documents import Document
+from langchain_core.messages import AIMessage
 
 from src.graph import (
     run_query,
@@ -84,7 +85,124 @@ class MultiDocKnowledgeBase:
         return []
 
 
+class WorkspaceAwareKnowledgeBase:
+    def __init__(self):
+        self.vector_store = MagicMock()
+        self.docs = {
+            "ws-alpha": Document(
+                page_content="alpha workspace answer",
+                metadata={
+                    "source": "alpha.txt",
+                    "chunk_id": "ws-alpha::alpha.txt:0:aaa",
+                    "chunk_index": 0,
+                    "workspace_id": "ws-alpha",
+                },
+            ),
+            "ws-beta": Document(
+                page_content="beta workspace answer",
+                metadata={
+                    "source": "beta.txt",
+                    "chunk_id": "ws-beta::beta.txt:0:bbb",
+                    "chunk_index": 0,
+                    "workspace_id": "ws-beta",
+                },
+            ),
+        }
+
+    def hybrid_search(self, _query, k, score_threshold=None, filter=None, workspace_id=None):
+        doc = self.docs.get(workspace_id or "")
+        if doc is None:
+            return []
+        return [
+            RetrievalResult(
+                chunk_id=doc.metadata["chunk_id"],
+                document=doc,
+                score=0.9,
+            )
+        ][:k]
+
+    def get_neighbor_chunks(self, chunk_id, window=1, workspace_id=None):
+        doc = next((item for item in self.docs.values() if item.metadata["chunk_id"] == chunk_id), None)
+        if doc is None:
+            return []
+        if doc.metadata.get("workspace_id", "") != (workspace_id or ""):
+            return []
+        return [doc]
+
+
+def _route_to_kb(_state):
+    return {"question_type": "knowledge_base", "search_filter": {}}
+
+
+def _answer_from_sources(state):
+    sources = state.get("sources", [])
+    answer = sources[0]["content"] if sources else "no answer"
+    return {"answer": answer, "sources": sources}
+
+
+def _accept_answer(state):
+    answer = state.get("answer", "")
+    return {
+        "quality_ok": True,
+        "quality_reason": "skip",
+        "retry_strategy": "none",
+        "messages": [AIMessage(content=answer)] if answer else [],
+    }
+
+
 class GraphKBIntegrationTests(unittest.TestCase):
+    @patch("src.graph.nodes.check_quality", side_effect=_accept_answer)
+    @patch("src.graph.nodes.generate_answer", side_effect=_answer_from_sources)
+    @patch("src.graph.graph.route_question", side_effect=_route_to_kb)
+    def test_same_question_hits_different_sources_in_different_workspaces(
+        self,
+        _mock_route_question,
+        _mock_generate_answer,
+        _mock_check_quality,
+    ):
+        kb = WorkspaceAwareKnowledgeBase()
+
+        alpha_result = run_query(
+            question="workspace answer",
+            thread_id=str(uuid4()),
+            knowledge_base=kb,
+            workspace_id="ws-alpha",
+        )
+        beta_result = run_query(
+            question="workspace answer",
+            thread_id=str(uuid4()),
+            knowledge_base=kb,
+            workspace_id="ws-beta",
+        )
+
+        self.assertEqual(
+            [source["chunk_id"] for source in alpha_result["sources"]],
+            ["ws-alpha::alpha.txt:0:aaa"],
+        )
+        self.assertEqual(
+            [source["chunk_id"] for source in beta_result["sources"]],
+            ["ws-beta::beta.txt:0:bbb"],
+        )
+
+    @patch("src.graph.graph.route_question", side_effect=_route_to_kb)
+    def test_empty_workspace_returns_no_docs_semantics(
+        self,
+        _mock_route_question,
+    ):
+        kb = WorkspaceAwareKnowledgeBase()
+
+        result = run_query(
+            question="workspace answer",
+            thread_id=str(uuid4()),
+            knowledge_base=kb,
+            workspace_id="ws-empty",
+        )
+
+        self.assertEqual(result["evidence_level"], "none")
+        self.assertEqual(result["outcome_category"], "no_docs")
+        self.assertEqual(result["quality_reason"], "没有检索到相关文档。")
+        self.assertIn("工作区里没有找到足够相关的内容", result["answer"])
+
     def test_retrieve_docs_returns_retrieval_results_from_kb(self):
         """Verify the retrieve_docs node returns results when KB has documents."""
         kb = MultiDocKnowledgeBase()

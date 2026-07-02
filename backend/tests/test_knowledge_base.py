@@ -1053,6 +1053,39 @@ class WorkspaceScopedKnowledgeBaseTests(_BaseKBMockTest):
             {"ws-alpha::shared.txt:0:abc"},
         )
 
+    def test_hybrid_search_scopes_default_workspace_at_vector_query_time(self):
+        default_doc = Document(
+            page_content="default workspace answer",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "shared.txt:0:def",
+                "chunk_index": 0,
+                "workspace_id": "",
+            },
+        )
+        ws_doc = Document(
+            page_content="workspace scoped answer",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "ws-alpha::shared.txt:0:abc",
+                "chunk_index": 0,
+                "workspace_id": "ws-alpha",
+            },
+        )
+        self.kb.all_docs[:] = [default_doc, ws_doc]
+        self.kb.ingestion._rebuild_all()
+
+        def _search(_query, k, filter=None):
+            if filter == {"workspace_id": ""}:
+                return [(default_doc, 0.9)]
+            return [(ws_doc, 0.95)]
+
+        self.kb.vector_store.similarity_search_with_score.side_effect = _search
+
+        default_results = self.kb.hybrid_search("answer", workspace_id="", score_threshold=None)
+
+        self.assertEqual([result.chunk_id for result in default_results], ["shared.txt:0:def"])
+
 
 class KBEnsureLoadedTests(_BaseKBMockTest):
     """Test _ensure_loaded."""
