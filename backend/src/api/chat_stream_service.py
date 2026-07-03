@@ -219,6 +219,7 @@ class ChatStreamService:
                 evidence_level=self.final_evidence_level,
                 evidence_summary=self.final_evidence_summary,
                 outcome_category=self.final_outcome_category,
+                search_strategy=self.body.search_strategy,
             )
             conversation_id, assistant_message_id = persist_conversation_turn(
                 question=self.body.question,
