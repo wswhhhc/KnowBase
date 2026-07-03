@@ -13,6 +13,7 @@ from src.rag.models import RetrievalResult
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
+from src.api.rate_limit import enforce_document_import_rate_limit
 from src import conversations
 
 
@@ -149,6 +150,9 @@ class APIRoutesCoverageTests(unittest.TestCase):
     def setUpClass(cls):
         cls.fake_kb = FakeKnowledgeBase()
         app.dependency_overrides[get_knowledge_base] = lambda: cls.fake_kb
+
+        # Disable rate limiting for these error-path coverage tests
+        app.dependency_overrides[enforce_document_import_rate_limit] = lambda: None
 
         # Use a temp database for all test data
         cls._temp_dir = tempfile.TemporaryDirectory()
