@@ -1,8 +1,8 @@
 """Test that SSE hand-maintained types in api-types.ts stay in sync with Pydantic models.
 
 Reads the TS interfaces from frontend/src/lib/api-types.ts, extracts
-the field names of KBChunk, DebugNodeInfo, and DebugInfo, and compares them
-against the Pydantic model fields from backend/src/api/models.py.
+the field names of DebugNodeInfo and DebugInfo, and compares them against
+the Pydantic model fields from backend/src/api/models.py.
 
 This is a build-time consistency check — if a developer adds/removes/renames a field
 in one place but forgets the other, this test fails.
@@ -16,14 +16,13 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from src.api.models import KBChunk, NodeDebug, DebugInfo
+from src.api.models import NodeDebug, DebugInfo
 
 # Path to the TS file relative to backend/tests/
 _TS_FILE = Path(__file__).resolve().parent.parent.parent / "frontend" / "src" / "lib" / "api-types.ts"
 
 # TS interface name → Pydantic model class
 _INTERFACE_MAP: dict[str, type[BaseModel]] = {
-    "KBChunk": KBChunk,
     "DebugNodeInfo": NodeDebug,
     "DebugInfo": DebugInfo,
 }
@@ -87,9 +86,6 @@ class TestSSETypeSync(unittest.TestCase):
                 + "\n请同步更新 frontend/src/lib/api-types.ts 中的 SSE 类型，"
                   "使其与 backend/src/api/models.py 中的 Pydantic 模型保持一致。"
             )
-
-    def test_kb_chunk_in_sync(self):
-        self._assert_fields_match("KBChunk", KBChunk)
 
     def test_debug_node_info_in_sync(self):
         self._assert_fields_match("DebugNodeInfo", NodeDebug)

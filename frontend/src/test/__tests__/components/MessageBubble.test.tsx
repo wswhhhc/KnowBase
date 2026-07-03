@@ -89,6 +89,15 @@ describe('MessageBubble', () => {
     )
   }
 
+  it('maps citation markers back to the matching source when clicked', async () => {
+    const onCitationClick = vi.fn()
+    renderBubble({ onCitationClick })
+
+    await userEvent.click(screen.getByText('1'))
+
+    expect(onCitationClick).toHaveBeenCalledWith(baseMessage.sources[0])
+  })
+
   it('keeps only the primary actions visible by default', () => {
     renderBubble()
 

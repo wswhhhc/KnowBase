@@ -1,40 +1,10 @@
-// Frontend-facing API type layer.
-// Depends on the generated OpenAPI types in api-types.openapi.ts and adds:
-// - short aliases for commonly used response schemas
-// - hand-maintained SSE-only payload types that OpenAPI cannot infer
 import type { components } from './api-types.openapi'
 
-type Schemas = components['schemas']
+type ChatSource = components['schemas']['ChatSource']
 
-export type Source = Schemas['ChatSource']
-export type Conversation = Schemas['ConversationOut']
-export type ApiMessage = Schemas['MessageOut']
-export type KBStats = Schemas['KBStats']
-export type QueryLogEntry = Schemas['QueryLogEntry']
-export type DocSource = Schemas['SourceOut']
-export type HotspotEntry = Schemas['HotspotEntry']
-export type KBConfig = Schemas['KBConfig']
-export type IngestResponse = Schemas['IngestResponse']
-export type RuntimeSettings = Schemas['RuntimeSettingsOut']
-export type RuntimeSettingsUpdate = Schemas['RuntimeSettingsUpdate']
-export type SettingsUpdateResult = Schemas['SettingsUpdateResult']
-
-// Manually maintained — these Pydantic models are used inside SSE events
-// (not FastAPI JSON responses), so openapi-typescript cannot infer them.
-// Keep in sync with backend/src/api/models.py.
-//
-// When you add/change fields in the Pydantic model, update these interfaces
-// to match. They are checked by backend/tests/test_sse_type_sync.py.
-
-export interface KBChunk {
-  source: string
-  chunk_index: number
-  chunk_id: string
-  page: number | null
-  content: string
-  original_content: string | null
-  section: string | null
-}
+// Manually maintained SSE-only payload types. These models are streamed over
+// chat events and are not described by the FastAPI OpenAPI responses.
+// Keep them aligned with backend/src/api/models.py.
 
 export interface DebugNodeInfo {
   name: string
@@ -57,8 +27,24 @@ export interface DebugInfo {
   retry_count: number
   used_web_search: boolean
   web_results_count: number
-  context_sources: Source[]
+  context_sources: ChatSource[]
   token_count: number | null
   prompt_tokens: number | null
   completion_tokens: number | null
+}
+
+export interface ChatStreamSourcesPayload {
+  sources: ChatSource[]
+  quality_reason: string
+  evidence_level: string
+  evidence_summary: string
+  outcome_category: string
+}
+
+export interface ChatStreamDonePayload extends ChatStreamSourcesPayload {
+  thread_id: string
+  conv_id: string
+  assistant_msg_id: number
+  answer: string
+  elapsed_ms: number
 }

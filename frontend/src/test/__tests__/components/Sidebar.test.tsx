@@ -34,8 +34,8 @@ vi.mock('lucide-react', () => {
 })
 
 const mockConversations = [
-  { id: 'conv-1', thread_id: 'thread-1', title: '测试对话 1', created_at: '2024-01-01T00:00:00', updated_at: '2024-01-01T00:00:00' },
-  { id: 'conv-2', thread_id: 'thread-2', title: '测试对话 2', created_at: '2024-01-02T00:00:00', updated_at: '2024-01-02T00:00:00' },
+  { id: 'conv-1', thread_id: 'thread-1', title: '测试对话 1', created_at: '2024-01-01T00:00:00', updated_at: '2024-01-01T00:00:00', last_message_preview: '第一条摘要' },
+  { id: 'conv-2', thread_id: 'thread-2', title: '测试对话 2', created_at: '2024-01-02T00:00:00', updated_at: '2024-01-02T00:00:00', last_message_preview: '第二条摘要' },
 ]
 
 // Mock hooks

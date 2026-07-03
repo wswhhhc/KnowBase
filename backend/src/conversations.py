@@ -13,6 +13,24 @@ _DB_PATH = ROOT_DIR / "data" / "conversations.db"
 logger = logging.getLogger(__name__)
 
 
+def _normalize_preview_text(content: str | None) -> str:
+    """Return a single-line preview suitable for sidebar summaries."""
+    if not content:
+        return ""
+    return " ".join(content.split())
+
+
+def _conversation_select_sql(where_clause: str = "") -> str:
+    return (
+        "SELECT c.id, c.thread_id, c.title, c.workspace_id, c.created_at, c.updated_at, "
+        "COALESCE(("
+        "SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1"
+        "), '') AS last_message_preview "
+        "FROM conversations c "
+        f"{where_clause}"
+    )
+
+
 def _get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -141,11 +159,15 @@ def get_conversation_by_thread(thread_id: str) -> dict | None:
     """Return the conversation that owns this thread_id, or None."""
     conn = _get_conn()
     row = conn.execute(
-        "SELECT id, thread_id, title, workspace_id, created_at, updated_at FROM conversations WHERE thread_id = ?",
+        _conversation_select_sql("WHERE c.thread_id = ?"),
         (thread_id,),
     ).fetchone()
     conn.close()
-    return dict(row) if row else None
+    if not row:
+        return None
+    conversation = dict(row)
+    conversation["last_message_preview"] = _normalize_preview_text(conversation.get("last_message_preview"))
+    return conversation
 
 
 def list_conversations(workspace_id: str | None = None) -> list[dict]:
@@ -157,25 +179,32 @@ def list_conversations(workspace_id: str | None = None) -> list[dict]:
     conn = _get_conn()
     if workspace_id is not None:
         rows = conn.execute(
-            "SELECT id, thread_id, title, workspace_id, created_at, updated_at FROM conversations WHERE workspace_id = ? ORDER BY updated_at DESC",
+            _conversation_select_sql("WHERE c.workspace_id = ? ORDER BY c.updated_at DESC"),
             (workspace_id,),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, thread_id, title, workspace_id, created_at, updated_at FROM conversations ORDER BY updated_at DESC"
+            _conversation_select_sql("ORDER BY c.updated_at DESC")
         ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    conversations = [dict(r) for r in rows]
+    for conversation in conversations:
+        conversation["last_message_preview"] = _normalize_preview_text(conversation.get("last_message_preview"))
+    return conversations
 
 
 def get_conversation(conv_id: str) -> dict | None:
     """Get a single conversation by id."""
     conn = _get_conn()
     row = conn.execute(
-        "SELECT id, thread_id, title, workspace_id, created_at, updated_at FROM conversations WHERE id = ?", (conv_id,)
+        _conversation_select_sql("WHERE c.id = ?"), (conv_id,)
     ).fetchone()
     conn.close()
-    return dict(row) if row else None
+    if not row:
+        return None
+    conversation = dict(row)
+    conversation["last_message_preview"] = _normalize_preview_text(conversation.get("last_message_preview"))
+    return conversation
 
 
 def update_title(conv_id: str, title: str) -> bool:

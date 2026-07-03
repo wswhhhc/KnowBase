@@ -12,7 +12,7 @@ export default function DashboardSummary() {
     api.queryLogs(7, 100)
       .then((result) => {
         if (cancelled) return
-        const logs = result.logs
+        const logs = result.logs ?? []
         setTotal(logs.length)
         if (logs.length > 0) {
           const recent = logs.reduce((a, b) =>

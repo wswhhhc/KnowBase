@@ -43,6 +43,7 @@ class ConversationOut(BaseModel):
     title: str
     created_at: str
     updated_at: str
+    last_message_preview: str = ""
 
 
 class MessageOut(BaseModel):
