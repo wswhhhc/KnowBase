@@ -86,6 +86,8 @@ function renderChatArea(chatOverrides?: any, propsOverrides?: any) {
 }
 
 describe('ChatArea interactions', () => {
+  const onboardingPlaceholder = '先导入资料，或直接输入你想验证的问题…'
+
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
@@ -93,7 +95,7 @@ describe('ChatArea interactions', () => {
 
   it('renders input area with placeholder', () => {
     renderChatArea()
-    expect(screen.getByPlaceholderText('输入你的问题…')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(onboardingPlaceholder)).toBeInTheDocument()
   })
 
   it('shows search strategy buttons by default', async () => {
@@ -109,7 +111,7 @@ describe('ChatArea interactions', () => {
     localStorage.setItem('kb_search_strategy', 'deep')
 
     renderChatArea()
-    const input = screen.getByPlaceholderText('输入你的问题…')
+    const input = screen.getByPlaceholderText(onboardingPlaceholder)
 
     await userEvent.type(input, '读取偏好')
     await userEvent.click(screen.getByText('发送'))
@@ -159,7 +161,7 @@ describe('ChatArea interactions', () => {
 
   it('sends message when clicking send button', async () => {
     renderChatArea()
-    const input = screen.getByPlaceholderText('输入你的问题…')
+    const input = screen.getByPlaceholderText(onboardingPlaceholder)
     await userEvent.type(input, '你好')
     await userEvent.click(screen.getByText('发送'))
     expect(mockSendMessage).toHaveBeenCalledWith('你好', false, 'balanced')
@@ -167,7 +169,7 @@ describe('ChatArea interactions', () => {
 
   it('sends message on Enter key', async () => {
     renderChatArea()
-    const input = screen.getByPlaceholderText('输入你的问题…')
+    const input = screen.getByPlaceholderText(onboardingPlaceholder)
     await userEvent.type(input, '年假多少天')
     await userEvent.keyboard('{Enter}')
     expect(mockSendMessage).toHaveBeenCalled()
@@ -186,7 +188,7 @@ describe('ChatArea interactions', () => {
 
   it('disables input when streaming', () => {
     renderChatArea({ isStreaming: true })
-    const input = screen.getByPlaceholderText('输入你的问题…')
+    const input = screen.getByPlaceholderText(onboardingPlaceholder)
     expect(input).toBeDisabled()
   })
 

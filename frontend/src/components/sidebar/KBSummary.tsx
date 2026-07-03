@@ -4,9 +4,10 @@ import * as api from '@/lib/api'
 
 interface KBSummaryProps {
   workspaceId?: string
+  workspaceName?: string
 }
 
-export default function KBSummary({ workspaceId }: KBSummaryProps) {
+export default function KBSummary({ workspaceId, workspaceName = '默认工作区' }: KBSummaryProps) {
   const [stats, setStats] = useState<{ chunk_count: number; source_count: number } | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -24,6 +25,7 @@ export default function KBSummary({ workspaceId }: KBSummaryProps) {
     <div className="px-3 py-4">
       <p className="text-xs text-muted-foreground/50 tracking-wide uppercase px-1 mb-2">工作区</p>
       <div className="rounded-lg border border-border bg-surface/30 p-3 space-y-1.5">
+        <p className="text-2xs text-muted-foreground/60">当前工作区：{workspaceName}</p>
         {stats ? (
           <>
             <div className="flex items-center justify-between text-xs">

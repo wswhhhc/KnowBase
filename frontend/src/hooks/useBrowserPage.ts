@@ -60,6 +60,7 @@ export function useBrowserPage({
     null
   >(null)
   const [showPostUploadGuide, setShowPostUploadGuide] = useState(false)
+  const [lastImportedSource, setLastImportedSource] = useState<string | null>(null)
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [bookmarkedChunks, setBookmarkedChunks] = useState<Set<string>>(new Set())
@@ -106,6 +107,59 @@ export function useBrowserPage({
       }
     }
   }, [browserWsId, selectedSource, searchQuery])
+
+  const focusSource = useCallback(async (sourceName: string) => {
+    const scopeToken = scopeTokenRef.current
+    setLoading(true)
+    setSearchQuery('')
+    setSelectedSource(sourceName)
+    setSelectedChunk(null)
+    setChunkView('slice')
+    try {
+      const chunkResult = await loadChunks(sourceName, '', 0, PAGE_SIZE, false, scopeToken)
+      if (!isScopeCurrent(scopeToken) || !chunkResult) return
+      const [srcs, s] = await Promise.all([api.getKBSourceNames(browserWsId), api.getKBStats(browserWsId)])
+      if (!isScopeCurrent(scopeToken)) return
+      setSources(srcs)
+      setStats(s)
+      setPage(0)
+    } catch (e) {
+      if (isScopeCurrent(scopeToken)) {
+        toast.error('加载来源失败', { description: String(e) })
+      }
+    } finally {
+      if (isScopeCurrent(scopeToken)) {
+        setLoading(false)
+      }
+    }
+  }, [browserWsId])
+
+  const resetBrowseFilters = useCallback(async () => {
+    const scopeToken = scopeTokenRef.current
+    skipNextSourceSearch.current = true
+    setLoading(true)
+    setSearchQuery('')
+    setSelectedSource('')
+    setSelectedChunk(null)
+    setChunkView('grid')
+    try {
+      const chunkResult = await loadChunks('', '', 0, PAGE_SIZE, false, scopeToken)
+      if (!isScopeCurrent(scopeToken) || !chunkResult) return
+      const [srcs, s] = await Promise.all([api.getKBSourceNames(browserWsId), api.getKBStats(browserWsId)])
+      if (!isScopeCurrent(scopeToken)) return
+      setSources(srcs)
+      setStats(s)
+      setPage(0)
+    } catch (e) {
+      if (isScopeCurrent(scopeToken)) {
+        toast.error('重置筛选失败', { description: String(e) })
+      }
+    } finally {
+      if (isScopeCurrent(scopeToken)) {
+        setLoading(false)
+      }
+    }
+  }, [browserWsId])
 
   const handleSearch = useCallback(async () => {
     const scopeToken = scopeTokenRef.current
@@ -193,6 +247,9 @@ export function useBrowserPage({
         }
         await refreshData()
         if (!isScopeCurrent(scopeToken)) return
+        setLastImportedSource(file.name)
+        await focusSource(file.name)
+        if (!isScopeCurrent(scopeToken)) return
         setShowPostUploadGuide(true)
         if (guideTimerRef.current) clearTimeout(guideTimerRef.current)
         guideTimerRef.current = setTimeout(() => setShowPostUploadGuide(false), 8000)
@@ -214,7 +271,7 @@ export function useBrowserPage({
         if (fileInputRef.current) fileInputRef.current.value = ''
       },
     }, browserWsId)
-  }, [browserWsId, refreshData, resetProgress])
+  }, [browserWsId, focusSource, refreshData, resetProgress])
 
   const startUrlIngest = useCallback(async (url: string, versionMode?: 'replace' | 'append') => {
     const scopeToken = scopeTokenRef.current
@@ -253,6 +310,9 @@ export function useBrowserPage({
         setUrlInput('')
         await refreshData()
         if (!isScopeCurrent(scopeToken)) return
+        setLastImportedSource(url)
+        await focusSource(url)
+        if (!isScopeCurrent(scopeToken)) return
         setShowPostUploadGuide(true)
         if (guideTimerRef.current) clearTimeout(guideTimerRef.current)
         guideTimerRef.current = setTimeout(() => setShowPostUploadGuide(false), 8000)
@@ -271,7 +331,7 @@ export function useBrowserPage({
         resetProgress()
       },
     }, browserWsId)
-  }, [browserWsId, refreshData, resetProgress])
+  }, [browserWsId, focusSource, refreshData, resetProgress])
 
   const toggleHotspotMode = useCallback(async () => {
     const scopeToken = scopeTokenRef.current
@@ -349,6 +409,7 @@ export function useBrowserPage({
     setUrlInput('')
     setVersionPrompted(null)
     setShowPostUploadGuide(false)
+    setLastImportedSource(null)
     setPage(0)
     setTotal(0)
     setHasMore(true)
@@ -414,7 +475,7 @@ export function useBrowserPage({
         setSelectedChunk(chunk)
         onHighlightConsumed?.()
       } catch (e) {
-        toast.error('定位引用失败', { description: String(e) })
+        toast.error('无法在当前工作区定位该引用', { description: String(e) })
         onHighlightConsumed?.()
       }
     })()
@@ -464,6 +525,7 @@ export function useBrowserPage({
     searchQuery,
     setSearchQuery,
     selectedSource,
+    setSelectedSource,
     sources,
     selectedChunk,
     setSelectedChunk,
@@ -481,6 +543,7 @@ export function useBrowserPage({
     setVersionPrompted,
     showPostUploadGuide,
     setShowPostUploadGuide,
+    lastImportedSource,
     total,
     hasMore,
     bookmarkedChunks,
@@ -490,6 +553,8 @@ export function useBrowserPage({
     refreshData,
     handleSearch,
     handleSourceClick,
+    focusSource,
+    resetBrowseFilters,
     startUpload,
     startUrlIngest,
     toggleHotspotMode,

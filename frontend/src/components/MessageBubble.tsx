@@ -7,6 +7,7 @@ import type { Source } from '@/lib/api'
 import type { ChatMessage, PinnedSource } from '@/hooks/useChat'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle, MessageSquare, ExternalLink, Upload, Bookmark, BookmarkCheck, RefreshCw, AlignLeft, Paperclip, Pin, X, MoreHorizontal } from 'lucide-react'
+import type { WorkspaceSummary } from '@/types/workspace-summary'
 
 interface CitationTextProps {
   text: string
@@ -67,6 +68,82 @@ function CopyButton({ content }: { content: string }) {
   )
 }
 
+interface OutcomeGuidance {
+  badge: string
+  badgeClass: string
+  title: string
+  description: string
+  primaryLabel?: string
+  secondaryLabel?: string
+  followUpPrompt?: string
+}
+
+function getOutcomeGuidance(
+  message: ChatMessage,
+  workspaceSummary: WorkspaceSummary | undefined,
+  questionContext: string,
+): OutcomeGuidance | null {
+  const documentCount = workspaceSummary?.documentCount ?? 0
+  const workspaceName = workspaceSummary?.workspaceName || '当前工作区'
+
+  switch (message.outcome_category) {
+    case 'no_docs':
+      if (documentCount <= 0) {
+        return {
+          badge: '当前工作区暂无资料',
+          badgeClass: 'bg-red-500/10 text-red-400',
+          title: `${workspaceName} 里还没有可用资料`,
+          description: '先导入一份文档或网页，再回到聊天页提问；导入后也可以先去知识库核对原文。',
+          primaryLabel: '去导入资料',
+          secondaryLabel: questionContext ? '帮我改写问题' : undefined,
+          followUpPrompt: questionContext ? `请帮我把这个问题改写成更具体、便于检索的版本：${questionContext}` : undefined,
+        }
+      }
+      return {
+        badge: '当前工作区未命中',
+        badgeClass: 'bg-red-500/10 text-red-400',
+        title: `${workspaceName} 里没有找到直接相关的内容`,
+        description: '先去知识库核对当前来源范围，再决定是补充资料，还是换一种更具体的问法。',
+        primaryLabel: '去验证来源',
+        secondaryLabel: questionContext ? '换个问法' : undefined,
+        followUpPrompt: questionContext ? `请基于当前工作区，帮我把这个问题改写得更具体：${questionContext}` : undefined,
+      }
+    case 'web_empty':
+      return {
+        badge: '当前无结果',
+        badgeClass: 'bg-red-500/10 text-red-400',
+        title: '当前工作区和联网结果都不足以回答',
+        description: '建议先核对当前工作区里的来源范围，再补充资料或换一个更明确的问题。',
+        primaryLabel: '去验证来源',
+        secondaryLabel: questionContext ? '换个问法' : undefined,
+        followUpPrompt: questionContext ? `请帮我把这个问题改写得更明确，并指出缺少哪些关键信息：${questionContext}` : undefined,
+      }
+    case 'weak_evidence':
+      return {
+        badge: '证据偏弱',
+        badgeClass: 'bg-orange-500/10 text-orange-400',
+        title: '当前证据不足以支撑可靠回答',
+        description: message.evidence_summary
+          ? `${message.evidence_summary}。先去核对来源，再决定是否补充资料。`
+          : '先去核对当前工作区里的来源片段，再决定是否补充更相关的资料。',
+        primaryLabel: '去验证来源',
+        secondaryLabel: questionContext ? '帮我缩小问题范围' : undefined,
+        followUpPrompt: questionContext ? `请帮我把这个问题缩小范围，并改写成更容易命中文档的问题：${questionContext}` : undefined,
+      }
+    case 'vague_question':
+      return {
+        badge: '问题不够具体',
+        badgeClass: 'bg-orange-500/10 text-orange-400',
+        title: '问题还不够具体',
+        description: '补充对象、时间、范围或你想验证的结论后，当前工作区更容易给出可核对的回答。',
+        secondaryLabel: questionContext ? '帮我改写问题' : undefined,
+        followUpPrompt: questionContext ? `请把这个问题改写得更具体，并保留原意：${questionContext}` : undefined,
+      }
+    default:
+      return null
+  }
+}
+
 interface MessageBubbleProps {
   message: ChatMessage
   prevMessage?: ChatMessage
@@ -77,9 +154,10 @@ interface MessageBubbleProps {
   pinnedSources?: PinnedSource[]
   onPinToggle?: (chunkId: string, action: 'pin' | 'unpin' | 'exclude' | 'unexclude') => void
   workspaceId?: string
+  workspaceSummary?: WorkspaceSummary
 }
 
-export default function MessageBubble({ message, prevMessage, threadId, onCitationClick, onSendQuestion, onNavigateBrowser, pinnedSources, onPinToggle, workspaceId }: MessageBubbleProps) {
+export default function MessageBubble({ message, prevMessage, threadId, onCitationClick, onSendQuestion, onNavigateBrowser, pinnedSources, onPinToggle, workspaceId, workspaceSummary }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const [sourceOpen, setSourceOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
@@ -95,6 +173,8 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
   const [bookmarked, setBookmarked] = useState(false)
   const [bookmarkNote, setBookmarkNote] = useState('')
   const [bookmarkOpen, setBookmarkOpen] = useState(false)
+  const questionContext = message.originalQuestion || (prevMessage?.role === 'user' ? prevMessage.content : '')
+  const guidance = !isUser ? getOutcomeGuidance(message, workspaceSummary, questionContext) : null
 
   const handleBookmarkToggle = () => {
     if (bookmarked) return
@@ -196,17 +276,11 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                   )}
                   {message.sources && message.sources.length > 0 && (
                     <span className="text-2xs text-muted-foreground/70">
-                      {message.sources.length} 个来源 · 可点击验证
+                      {message.sources.length} 个来源 · 可在当前工作区验证
                     </span>
                   )}
-                  {message.outcome_category === 'no_docs' && (
-                    <span className="inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 工作区中未找到</span>
-                  )}
-                  {message.outcome_category === 'web_empty' && (
-                    <span className="inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">● 无法回答</span>
-                  )}
-                  {message.outcome_category === 'weak_evidence' && (
-                    <span className="inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400">● 证据不足</span>
+                  {guidance?.badge && (
+                    <span className={`inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full ${guidance.badgeClass}`}>● {guidance.badge}</span>
                   )}
 
                   <CopyButton content={message.content} />
@@ -295,20 +369,26 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                 </div>
 
                 {/* No-answer guidance panel */}
-                {(message.outcome_category === 'no_docs' || message.outcome_category === 'web_empty' || message.outcome_category === 'weak_evidence' || message.outcome_category === 'vague_question') && (
+                {guidance && (
                   <div className="mt-3 rounded-lg border border-border/60 bg-surface/30 px-3.5 py-3">
-                    <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                      {message.outcome_category === 'no_docs' && '工作区中没有找到相关内容。你可以上传相关文档后再问一次。'}
-                      {message.outcome_category === 'web_empty' && '联网搜索也没有找到相关信息。建议换一种问法或上传相关资料。'}
-                      {message.outcome_category === 'weak_evidence' && `检索到的信息不足以支撑可靠回答。尝试更具体的问题或上传更详细的资料。${message.evidence_summary ? `（${message.evidence_summary}）` : ''}`}
-                      {message.outcome_category === 'vague_question' && '问题比较模糊，建议补充更多细节。'}
-                    </p>
-                    {onNavigateBrowser && (message.outcome_category === 'no_docs' || message.outcome_category === 'weak_evidence') && (
-                      <button onClick={onNavigateBrowser}
-                        className="mt-2 inline-flex items-center gap-1 text-2xs font-medium text-primary/70 hover:text-primary transition-colors">
-                        <Upload className="h-3 w-3" />上传文档
-                      </button>
-                    )}
+                    <p className="text-xs font-medium text-foreground/85">{guidance.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground/80 leading-relaxed">{guidance.description}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {guidance.primaryLabel && onNavigateBrowser && (
+                        <button onClick={onNavigateBrowser}
+                          className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-2xs font-medium text-primary/80 transition-colors hover:bg-primary/10 hover:text-primary">
+                          <Upload className="h-3 w-3" />{guidance.primaryLabel}
+                        </button>
+                      )}
+                      {guidance.followUpPrompt && onSendQuestion && (
+                        <button
+                          onClick={() => onSendQuestion(guidance.followUpPrompt || '')}
+                          className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
+                        >
+                          <MessageSquare className="h-3 w-3" />{guidance.secondaryLabel}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -440,7 +520,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                                 onClick={() => onCitationClick?.(s)}
                                 className="inline-flex items-center gap-1 text-2xs text-primary/50 hover:text-primary transition-colors"
                               >
-                                <ExternalLink className="h-2.5 w-2.5" />查看原文
+                                <ExternalLink className="h-2.5 w-2.5" />在当前工作区查看原文
                               </button>
                             )}
                             {onSendQuestion && !isExcluded && (

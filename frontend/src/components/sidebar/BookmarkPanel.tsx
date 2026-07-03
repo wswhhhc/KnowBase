@@ -20,17 +20,33 @@ export default function BookmarkPanel({ workspaceId, onNavigate, onRefresh }: Bo
   const [editTags, setEditTags] = useState('')
   const [editNote, setEditNote] = useState('')
   const longPressTimerRef = useRef<number | null>(null)
+  const requestTokenRef = useRef(0)
 
   const load = useCallback(async () => {
+    const requestToken = requestTokenRef.current + 1
+    requestTokenRef.current = requestToken
     setLoading(true)
     try {
       const data = await api.getBookmarks(workspaceId, searchQuery || undefined)
+      if (requestToken !== requestTokenRef.current) return
       setBookmarks(data)
-    } catch { /* ignore */ }
-    setLoading(false)
+    } catch {
+      if (requestToken !== requestTokenRef.current) return
+    }
+    if (requestToken === requestTokenRef.current) {
+      setLoading(false)
+    }
   }, [workspaceId, searchQuery])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    setBookmarks([])
+    setSelectedTag(null)
+    setEditingId(null)
+    setEditTags('')
+    setEditNote('')
+  }, [workspaceId])
 
   const handleUpdateBookmark = async (id: number) => {
     await api.updateBookmark(id, { tags: editTags, note: editNote })
@@ -111,7 +127,9 @@ export default function BookmarkPanel({ workspaceId, onNavigate, onRefresh }: Bo
           <p className="text-xs text-muted-foreground/60 text-center py-6 italic">加载中…</p>
         ) : displayedBookmarks.length === 0 ? (
           <p className="text-xs text-muted-foreground/60 text-center py-6 italic">
-            {searchQuery || selectedTag ? '未找到匹配的书签' : '暂无书签，在知识浏览页面或消息气泡中可以收藏'}
+            {searchQuery || selectedTag
+              ? '当前工作区没有匹配的书签，清空筛选后再看一次。'
+              : '当前工作区还没有书签，可在回答来源或知识库片段里收藏。'}
           </p>
         ) : (
           <div className="space-y-1">

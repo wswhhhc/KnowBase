@@ -27,7 +27,7 @@ const STATE_COPY: Record<EmptyStateMode, StateCopy> = {
   onboarding: {
     eyebrow: '从资料开始',
     title: '工作区问答助手',
-    description: '上传文档或导入网页，让 AI 基于你的工作区回答问题',
+    description: '先把资料放进当前工作区，再回来提问或验证来源。',
     primaryLabel: '开始导入资料',
     primaryIcon: Upload,
     suggestions: [
@@ -39,7 +39,7 @@ const STATE_COPY: Record<EmptyStateMode, StateCopy> = {
   'first-question': {
     eyebrow: '资料已就绪',
     title: '基于当前工作区开始提问',
-    description: '文档已经准备好，直接提问会比再次导入更高效。',
+    description: '资料已经准备好。先问一个结论性问题，必要时再去知识库核对原文。',
     primaryLabel: '基于当前工作区提问',
     secondaryLabel: '查看知识库',
     primaryIcon: ArrowRight,
@@ -52,7 +52,7 @@ const STATE_COPY: Record<EmptyStateMode, StateCopy> = {
   returning: {
     eyebrow: '继续推进',
     title: '继续当前工作区',
-    description: '你已经有资料和历史对话，可以直接追问、复盘或验证引用。',
+    description: '你已经有资料和历史对话，可以继续追问、复盘，或回到知识库验证引用。',
     primaryLabel: '继续提问',
     secondaryLabel: '查看知识库',
     primaryIcon: ArrowRight,

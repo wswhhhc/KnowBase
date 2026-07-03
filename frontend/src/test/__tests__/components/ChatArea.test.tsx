@@ -100,7 +100,7 @@ describe('ChatArea', () => {
   it('renders the input area with placeholder', () => {
     render(<ChatArea {...defaultProps} />)
 
-    const input = screen.getByPlaceholderText('输入你的问题…')
+    const input = screen.getByPlaceholderText('先导入资料，或直接输入你想验证的问题…')
     expect(input).toBeInTheDocument()
   })
 
@@ -115,7 +115,7 @@ describe('ChatArea', () => {
     render(<ChatArea {...defaultProps} />)
 
     expect(screen.getByText('工作区问答助手')).toBeInTheDocument()
-    expect(screen.getByText(/上传文档或导入网页/)).toBeInTheDocument()
+    expect(screen.getByText(/先把资料放进当前工作区/)).toBeInTheDocument()
   })
 
   it('shows a return-user prompt when the workspace already has documents and conversations', () => {
@@ -138,5 +138,11 @@ describe('ChatArea', () => {
     render(<ChatArea {...defaultProps} />)
 
     expect(screen.getByText('知识库')).toBeInTheDocument()
+  })
+
+  it('shows the current workspace summary in the header', () => {
+    render(<ChatArea {...defaultProps} />)
+
+    expect(screen.getByText('当前工作区：默认工作区 · 0 份资料')).toBeInTheDocument()
   })
 })
