@@ -344,14 +344,17 @@ describe('BrowserPage interactions', () => {
       }),
       '',
     )
-    expect(screen.getByText('文档已导入！现在可以去提问了')).toBeInTheDocument()
+    expect(screen.getByText(/资料已进入/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /去当前工作区提问/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /查看当前来源/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /继续导入/i })).toBeInTheDocument()
 
     await act(async () => {
       vi.advanceTimersByTime(8000)
       await Promise.resolve()
     })
 
-    expect(screen.queryByText('文档已导入！现在可以去提问了')).not.toBeInTheDocument()
+    expect(screen.queryByText(/资料已进入/)).not.toBeInTheDocument()
   })
 
   it('uploads documents into the active workspace', async () => {
@@ -397,11 +400,11 @@ describe('BrowserPage interactions', () => {
       await Promise.resolve()
     })
 
-    expect(screen.getByText('文档已导入！现在可以去提问了')).toBeInTheDocument()
+    expect(screen.getByText(/资料已进入/)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '关闭提示' }))
 
-    expect(screen.queryByText('文档已导入！现在可以去提问了')).not.toBeInTheDocument()
+    expect(screen.queryByText(/资料已进入/)).not.toBeInTheDocument()
   })
 
   it('opens the file picker automatically when kb_trigger_upload is present on load', async () => {
@@ -468,7 +471,7 @@ describe('BrowserPage interactions', () => {
         '',
       )
     })
-    expect(screen.getByText('文档已导入！现在可以去提问了')).toBeInTheDocument()
+    expect(screen.getByText(/资料已进入/)).toBeInTheDocument()
   })
 
   it('ingests URLs into the active workspace', async () => {

@@ -56,6 +56,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   const [deleteWsOpen, setDeleteWsOpen] = useState(false)
   const prevKey = useRef(convRefreshKey)
   const workspaceSelectValue = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
+  const workspaceScopeKey = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
 
   // Refresh conversation list when workspace changes or new conv created
   useEffect(() => {
@@ -173,7 +174,13 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
             value={workspaceSelectValue}
             onValueChange={(value) => {
               const workspaceId = value === DEFAULT_WORKSPACE_SELECT_VALUE ? '' : value
+              const nextWorkspace = wss.workspaces.find((ws) => ws.id === workspaceId)
               wss.setActiveWorkspaceId(workspaceId)
+              onWorkspaceSummaryChange?.({
+                workspaceName: nextWorkspace?.name || '默认工作区',
+                documentCount: 0,
+                conversationCount: 0,
+              })
               onWorkspaceChange?.(workspaceId)
             }}
           >
@@ -233,6 +240,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         {activeView === 'chat' ? (
           tab === 'conversations' ? (
             <ConversationList
+              key={`conversations-${workspaceScopeKey}`}
               conversations={convs.conversations}
               activeId={convs.activeId}
               loading={convs.loading}
@@ -246,18 +254,27 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
             />
           ) : tab === 'documents' ? (
             <DocumentPanel
+              key={`documents-${workspaceScopeKey}`}
               sources={srcs.sources}
               onRefresh={srcs.refresh}
               workspaceId={wss.activeWorkspaceId}
               onSendQuestion={(q) => { onNavigate('chat'); chat.sendMessage(q, false, 'balanced') }}
             />
           ) : (
-            <BookmarkPanel workspaceId={wss.activeWorkspaceId || undefined} onNavigate={onNavigate} />
+            <BookmarkPanel
+              key={`bookmarks-${workspaceScopeKey}`}
+              workspaceId={wss.activeWorkspaceId || undefined}
+              onNavigate={onNavigate}
+            />
           )
         ) : activeView === 'browser' ? (
-          <KBSummary workspaceId={wss.activeWorkspaceId} />
+          <KBSummary
+            key={`kb-summary-${workspaceScopeKey}`}
+            workspaceId={wss.activeWorkspaceId}
+            workspaceName={wss.workspaces.find((ws) => ws.id === wss.activeWorkspaceId)?.name || '默认工作区'}
+          />
         ) : activeView === 'dashboard' ? (
-          <DashboardSummary />
+          <DashboardSummary key={`dashboard-summary-${workspaceScopeKey}`} />
         ) : (
           <div className="rounded-lg border border-dashed border-border/60 bg-surface/20 p-4 text-xs text-muted-foreground/70">
             <p className="font-medium text-foreground/80">设置项将在主面板中编辑</p>

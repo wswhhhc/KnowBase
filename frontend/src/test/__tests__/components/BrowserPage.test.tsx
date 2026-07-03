@@ -125,7 +125,7 @@ describe('BrowserPage', () => {
     })
   })
 
-  it('shows "知识库为空" empty state when no chunks', async () => {
+  it('shows a workspace-aware empty state when no chunks match the current view', async () => {
     vi.mocked(api.getKBChunks).mockResolvedValue({ items: [], total: 0 })
 
     await act(async () => {
@@ -133,7 +133,8 @@ describe('BrowserPage', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('知识库为空')).toBeInTheDocument()
+      expect(screen.getByText('当前工作区没有匹配结果')).toBeInTheDocument()
+      expect(screen.getByText('去聊天页提问')).toBeInTheDocument()
     })
   })
 
@@ -158,7 +159,7 @@ describe('BrowserPage', () => {
       await Promise.resolve()
     })
 
-    expect(screen.queryByText('知识库为空')).not.toBeInTheDocument()
+    expect(screen.queryByText('当前工作区没有匹配结果')).not.toBeInTheDocument()
     expect(screen.queryByText('这是第一段内容')).not.toBeInTheDocument()
 
     await act(async () => {
@@ -166,7 +167,7 @@ describe('BrowserPage', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('知识库为空')).toBeInTheDocument()
+      expect(screen.getByText('当前工作区没有匹配结果')).toBeInTheDocument()
     })
   })
 

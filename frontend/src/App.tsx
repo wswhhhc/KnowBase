@@ -69,9 +69,18 @@ function App() {
   }, [chat])
 
   const syncWsId = useCallback((wsId: string) => {
+    if (wsId === activeWsId) {
+      chat.setWorkspaceId(wsId)
+      return
+    }
+    sessionStorage.removeItem('highlightChunkId')
+    setHighlightChunkId(null)
+    setActiveThreadId(null)
+    setIsLoadingMessages(false)
+    chat.clearMessages()
     setActiveWsId(wsId)
     chat.setWorkspaceId(wsId)
-  }, [chat])
+  }, [activeWsId, chat])
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background noise-overlay">
@@ -113,6 +122,7 @@ function App() {
         {activeView === 'chat' && (
           <ErrorBoundary fallback={<div className="flex items-center justify-center flex-1 p-8 text-center text-muted-foreground text-sm">聊天组件异常，请刷新页面</div>}>
           <ChatArea
+            key={`chat-${activeWsId || 'default'}`}
             chat={chat}
             onOpenSidebar={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
@@ -128,12 +138,14 @@ function App() {
         {activeView === 'browser' && (
           <ErrorBoundary fallback={<div className="flex items-center justify-center flex-1 p-8 text-center text-muted-foreground text-sm">知识库组件异常，请刷新页面</div>}>
           <BrowserPage
+            key={`browser-${activeWsId || 'default'}`}
             onOpenSidebar={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
             onNavigate={setActiveView}
             highlightChunkId={highlightChunkId}
             onHighlightConsumed={() => setHighlightChunkId(null)}
             workspaceId={activeWsId}
+            workspaceName={workspaceSummary.workspaceName}
           />
           </ErrorBoundary>
         )}

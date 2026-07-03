@@ -6,21 +6,35 @@ export function useConversations(workspaceId?: string) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const requestTokenRef = useRef(0)
 
-  const refresh = async () => {
+  const refresh = async (resetBeforeLoad = false) => {
+    const requestToken = requestTokenRef.current + 1
+    requestTokenRef.current = requestToken
+    if (resetBeforeLoad) {
+      setConversations([])
+      setActiveId(null)
+      setLoading(true)
+    }
     try {
       const list = await api.getConversations(workspaceId)
+      if (requestToken !== requestTokenRef.current) return []
       setConversations(list)
       return list
     } catch (e) {
+      if (requestToken !== requestTokenRef.current) return []
       console.error('加载对话列表失败:', e)
       return []
     } finally {
-      setLoading(false)
+      if (requestToken === requestTokenRef.current) {
+        setLoading(false)
+      }
     }
   }
 
-  useEffect(() => { refresh() }, [workspaceId])
+  useEffect(() => {
+    void refresh(true)
+  }, [workspaceId])
 
   const create = async () => {
     const conv = await api.createConversation('新对话', workspaceId)

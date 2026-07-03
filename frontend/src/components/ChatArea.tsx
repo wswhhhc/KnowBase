@@ -129,6 +129,9 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
   }, [input])
 
   const isEmpty = chat.messages.length === 0
+  const composerPlaceholder = workspaceSummary.documentCount <= 0
+    ? '先导入资料，或直接输入你想验证的问题…'
+    : `基于“${workspaceSummary.workspaceName}”提问，例如：这份资料的重点是什么？`
   const emptyStateMode = useMemo(() => {
     if (workspaceSummary.documentCount <= 0) return 'onboarding' as const
     if (workspaceSummary.conversationCount > 0) return 'returning' as const
@@ -148,7 +151,12 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
               <PanelRightOpen className="h-4 w-4" />
             </Button>
           )}
-          <h1 className={`font-heading text-lg text-foreground tracking-tight ${isMobile ? 'max-w-[11rem] truncate' : ''}`}>{activeTitle}</h1>
+          <div>
+            <h1 className={`font-heading text-lg text-foreground tracking-tight ${isMobile ? 'max-w-[11rem] truncate' : ''}`}>{activeTitle}</h1>
+            <p className="text-2xs text-muted-foreground/60">
+              当前工作区：{workspaceSummary.workspaceName} · {workspaceSummary.documentCount} 份资料
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -306,6 +314,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                       )
                     }}
                     workspaceId={chat.workspaceId}
+                    workspaceSummary={workspaceSummary}
                   />
                 </motion.div>
               ))}
@@ -348,7 +357,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="输入你的问题…"
+              placeholder={composerPlaceholder}
               rows={1}
               className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none py-1.5 font-body leading-relaxed"
               disabled={chat.isStreaming}

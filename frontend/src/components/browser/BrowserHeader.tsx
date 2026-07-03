@@ -6,9 +6,10 @@ interface BrowserHeaderProps {
   onOpenSidebar: () => void
   sidebarOpen: boolean
   onNavigate: (v: 'chat' | 'browser' | 'dashboard' | 'settings') => void
+  workspaceName?: string
 }
 
-export default function BrowserHeader({ stats, onOpenSidebar, sidebarOpen, onNavigate }: BrowserHeaderProps) {
+export default function BrowserHeader({ stats, onOpenSidebar, sidebarOpen, onNavigate, workspaceName = '默认工作区' }: BrowserHeaderProps) {
   return (
     <header className="flex items-center justify-between border-b border-border px-5 py-3 bg-background/80 backdrop-blur-sm">
       <div className="flex items-center gap-3">
@@ -23,7 +24,10 @@ export default function BrowserHeader({ stats, onOpenSidebar, sidebarOpen, onNav
         </button>
         <div className="h-4 w-px bg-border" />
         <BookOpen className="h-4 w-4 text-primary" />
-        <h1 className="font-heading text-lg text-foreground tracking-tight">知识库</h1>
+        <div>
+          <h1 className="font-heading text-lg text-foreground tracking-tight">知识库</h1>
+          <p className="text-2xs text-muted-foreground/60">当前工作区：{workspaceName}</p>
+        </div>
       </div>
 
       {stats && (

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -140,5 +140,44 @@ describe('BookmarkPanel', () => {
     fireEvent.contextMenu(screen.getByText('第一条书签'))
 
     expect(screen.getByRole('button', { name: '删除书签' })).toBeInTheDocument()
+  })
+
+  it('clears stale bookmarks when the workspace changes', async () => {
+    const ws2Bookmarks = [
+      {
+        ...mockBookmarks[0],
+        id: 9,
+        workspace_id: 'ws-2',
+        content: '第二工作区书签',
+      },
+    ]
+    let resolveWs2Bookmarks: ((value: typeof ws2Bookmarks) => void) | undefined
+
+    vi.mocked(api.getBookmarks).mockImplementation((workspaceId?: string) => {
+      if (workspaceId === 'ws-2') {
+        return new Promise((resolve) => {
+          resolveWs2Bookmarks = resolve
+        }) as ReturnType<typeof api.getBookmarks>
+      }
+      return Promise.resolve(mockBookmarks as any)
+    })
+
+    const { rerender } = render(<BookmarkPanel workspaceId="ws-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('第一条书签')).toBeInTheDocument()
+    })
+
+    rerender(<BookmarkPanel workspaceId="ws-2" />)
+
+    expect(screen.queryByText('第一条书签')).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveWs2Bookmarks?.(ws2Bookmarks as any)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('第二工作区书签')).toBeInTheDocument()
+    })
   })
 })

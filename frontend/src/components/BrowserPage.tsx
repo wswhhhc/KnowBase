@@ -1,5 +1,5 @@
 import { Button, ScrollArea, SkeletonGrid } from '@/components/ui'
-import { BookOpen, AlertTriangle, Sparkles, X } from 'lucide-react'
+import { BookOpen, AlertTriangle, Sparkles, X, Upload } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { ViewType } from '@/App'
 import { useBrowserPage } from '@/hooks/useBrowserPage'
@@ -18,9 +18,10 @@ interface BrowserPageProps {
   highlightChunkId?: string | null
   onHighlightConsumed?: () => void
   workspaceId?: string
+  workspaceName?: string
 }
 
-export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, highlightChunkId, onHighlightConsumed, workspaceId }: BrowserPageProps) {
+export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, highlightChunkId, onHighlightConsumed, workspaceId, workspaceName = '默认工作区' }: BrowserPageProps) {
   const {
     fileInputRef,
     scrollRef,
@@ -48,6 +49,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     setVersionPrompted,
     showPostUploadGuide,
     setShowPostUploadGuide,
+    lastImportedSource,
     total,
     hasMore,
     bookmarkedChunks,
@@ -57,6 +59,8 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
     refreshData,
     handleSearch,
     handleSourceClick,
+    focusSource,
+    resetBrowseFilters,
     startUpload,
     startUrlIngest,
     toggleHotspotMode,
@@ -76,12 +80,21 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
         ? 'slice'
         : 'grid'
 
+  const hasDocuments = (stats?.source_count ?? 0) > 0 || sources.length > 0
+  const hasActiveFilters = Boolean(searchQuery || selectedSource)
+
   return (
     <div className="flex flex-col h-full">
       <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.md,.pdf,.docx,.html"
         onChange={async (e) => { const f = e.target.files?.[0]; if (f) await startUpload(f) }} />
 
-      <BrowserHeader stats={stats} onOpenSidebar={onOpenSidebar} sidebarOpen={sidebarOpen} onNavigate={onNavigate} />
+      <BrowserHeader
+        stats={stats}
+        onOpenSidebar={onOpenSidebar}
+        sidebarOpen={sidebarOpen}
+        onNavigate={onNavigate}
+        workspaceName={workspaceName}
+      />
 
       <DocumentActions uploading={uploading} ingesting={ingesting} uploadPhase={uploadPhase} uploadPercent={uploadPercent}
         urlInput={urlInput} setUrlInput={setUrlInput} handleIngestUrl={() => { const u = urlInput.trim(); if (u) startUrlIngest(u) }}
@@ -119,9 +132,32 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
               {showPostUploadGuide && (
                 <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                   className="mb-4 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-                  <p className="text-xs text-foreground/80">文档已导入！现在可以去提问了</p>
+                  <div>
+                    <p className="text-xs font-medium text-foreground/85">资料已进入“{workspaceName}”</p>
+                    <p className="mt-1 text-2xs text-muted-foreground">
+                      {lastImportedSource
+                        ? `已切到刚导入的来源“${lastImportedSource}”，你可以先核对原文、去提问，或继续导入更多资料。`
+                        : '现在可以去提问、继续核对原文，或继续导入更多资料。'}
+                    </p>
+                  </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={() => onNavigate('chat')} className="gap-1"><Sparkles className="h-3 w-3" />现在去提问</Button>
+                    <Button size="sm" onClick={() => onNavigate('chat')} className="gap-1"><Sparkles className="h-3 w-3" />去当前工作区提问</Button>
+                    {lastImportedSource && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          void focusSource(lastImportedSource)
+                          setShowPostUploadGuide(false)
+                        }}
+                        className="gap-1"
+                      >
+                        <BookOpen className="h-3 w-3" />查看当前来源
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-1">
+                      <Upload className="h-3 w-3" />继续导入
+                    </Button>
                     <button onClick={() => setShowPostUploadGuide(false)}
                       className="rounded-md p-1 text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-foreground"
                       aria-label="关闭提示">
@@ -140,11 +176,19 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                 transition={{ duration: 0.25 }}
               >
                 {loading ? <SkeletonGrid count={6} /> : displayChunks.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <BookOpen className="mb-4 h-12 w-12 text-muted-foreground/20" />
-                    <p className="text-sm text-muted-foreground">知识库为空</p>
-                    <p className="mt-1 text-xs text-muted-foreground/50">上传文档或导入网页后即可浏览</p>
-                  </div>
+                  <BrowserEmptyState
+                    workspaceName={workspaceName}
+                    hasDocuments={hasDocuments}
+                    hasActiveFilters={hasActiveFilters}
+                    onPrimaryAction={
+                      hasDocuments
+                        ? () => { void resetBrowseFilters() }
+                        : () => fileInputRef.current?.click()
+                    }
+                    onSecondaryAction={hasDocuments ? () => onNavigate('chat') : undefined}
+                    primaryLabel={hasDocuments ? '清空筛选' : '上传文档'}
+                    secondaryLabel={hasDocuments ? '去聊天页提问' : undefined}
+                  />
                 ) : chunkView === 'slice' && selectedSource ? (
                   <SliceView chunks={displayChunks} kbConfig={kbConfig} hotspotMode={hotspotMode} hotspotCount={hotspotCount}
                     findOverlap={findOverlap} onChunkClick={setSelectedChunk} bookmarkedChunks={bookmarkedChunks} onBookmark={handleChunkBookmark} />
@@ -167,6 +211,48 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
       </ScrollArea>
 
       <ChunkDetailDialog chunk={selectedChunk} onClose={() => setSelectedChunk(null)} />
+    </div>
+  )
+}
+
+interface BrowserEmptyStateProps {
+  workspaceName: string
+  hasDocuments: boolean
+  hasActiveFilters: boolean
+  onPrimaryAction: () => void
+  onSecondaryAction?: () => void
+  primaryLabel: string
+  secondaryLabel?: string
+}
+
+function BrowserEmptyState({
+  workspaceName,
+  hasDocuments,
+  hasActiveFilters,
+  onPrimaryAction,
+  onSecondaryAction,
+  primaryLabel,
+  secondaryLabel,
+}: BrowserEmptyStateProps) {
+  const title = hasDocuments ? '当前工作区没有匹配结果' : '当前工作区还没有资料'
+  const description = hasDocuments
+    ? hasActiveFilters
+      ? '先清空筛选或切回全部来源，再决定是去提问还是继续补充资料。'
+      : '当前工作区暂无可浏览的段落，可以继续导入更相关的资料。'
+    : '先导入文档或网页内容，再回来提问和验证来源。'
+
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <BookOpen className="mb-4 h-12 w-12 text-muted-foreground/20" />
+      <p className="text-sm font-medium text-foreground/85">{title}</p>
+      <p className="mt-1 text-xs text-muted-foreground/70">{workspaceName}</p>
+      <p className="mt-2 max-w-md text-xs text-muted-foreground/60">{description}</p>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        <Button size="sm" onClick={onPrimaryAction}>{primaryLabel}</Button>
+        {secondaryLabel && onSecondaryAction && (
+          <Button size="sm" variant="outline" onClick={onSecondaryAction}>{secondaryLabel}</Button>
+        )}
+      </div>
     </div>
   )
 }
