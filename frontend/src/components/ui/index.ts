@@ -7,6 +7,18 @@ export { Separator } from './separator'
 export { Select, SelectGroup, SelectValue, SelectTrigger, SelectContent, SelectItem } from './select'
 export { Dialog, DialogTrigger, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './dialog'
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './tooltip'
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuItemButton,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuSeparator,
+  DropdownMenuSeparatorLine,
+} from './dropdown-menu'
 export { Progress } from './progress'
 export { Skeleton, SkeletonCard, SkeletonGrid } from './skeleton'
 export { ConfirmDialog } from './confirm-dialog'

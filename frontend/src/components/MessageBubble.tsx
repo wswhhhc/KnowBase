@@ -1,5 +1,22 @@
 import { useState } from 'react'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItemButton,
+  DropdownMenuSeparatorLine,
+  DropdownMenuTrigger,
+  Input,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui'
 import { evidenceLabel } from '@/lib/utils'
 import DebugPanel from './DebugPanel'
 import * as api from '@/lib/api'
@@ -8,6 +25,14 @@ import type { ChatMessage, PinnedSource } from '@/hooks/useChat'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ThumbsUp, ThumbsDown, FileDown, Copy, CheckCircle, MessageSquare, ExternalLink, Upload, Bookmark, BookmarkCheck, RefreshCw, AlignLeft, Paperclip, Pin, X, MoreHorizontal } from 'lucide-react'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
+
+const FEEDBACK_OPTIONS = [
+  { key: 'off_topic', label: '答非所问' },
+  { key: 'insufficient_evidence', label: '证据不足' },
+  { key: 'too_long', label: '回答太长' },
+  { key: 'factual_error', label: '事实错误' },
+  { key: 'other', label: '其他' },
+] as const
 
 interface CitationTextProps {
   text: string
@@ -162,23 +187,26 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
   const [sourceOpen, setSourceOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
-  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [activeDialog, setActiveDialog] = useState<'bookmark' | 'feedback' | 'export' | null>(null)
   const [feedbackCategory, setFeedbackCategory] = useState<string | null>(null)
   const [feedbackDetail, setFeedbackDetail] = useState('')
   const [exporting, setExporting] = useState(false)
-  const [exportOpen, setExportOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState<'markdown' | 'json'>('markdown')
   const [exportSources, setExportSources] = useState(true)
   const [exportDebug, setExportDebug] = useState(false)
   const [bookmarked, setBookmarked] = useState(false)
   const [bookmarkNote, setBookmarkNote] = useState('')
-  const [bookmarkOpen, setBookmarkOpen] = useState(false)
   const questionContext = message.originalQuestion || (prevMessage?.role === 'user' ? prevMessage.content : '')
   const guidance = !isUser ? getOutcomeGuidance(message, workspaceSummary, questionContext) : null
+  const bookmarkDialogOpen = activeDialog === 'bookmark'
+  const feedbackDialogOpen = activeDialog === 'feedback'
+  const exportDialogOpen = activeDialog === 'export'
+  const feedbackReasonName = `feedback-reason-${message.id}`
 
   const handleBookmarkToggle = () => {
     if (bookmarked) return
-    setBookmarkOpen(true)
+    setActionsOpen(false)
+    setActiveDialog('bookmark')
   }
 
   const handleBookmarkConfirm = async () => {
@@ -193,7 +221,8 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
         note: bookmarkNote || undefined,
       })
       setBookmarked(true)
-      setBookmarkOpen(false)
+      setBookmarkNote('')
+      setActiveDialog(null)
     } catch (e) { console.error('收藏失败', e) }
   }
 
@@ -201,7 +230,7 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
     const convId = message.convId || threadId
     if (!convId) return
     setExporting(true)
-    setExportOpen(false)
+    setActiveDialog(null)
     try {
       const result = await api.exportConversation(convId, exportFormat, exportSources, exportDebug)
       if (exportFormat === 'json') {
@@ -219,6 +248,39 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
       }
     } catch (e) { console.error('导出失败', e) }
     setExporting(false)
+  }
+
+  const handleHelpfulFeedback = async () => {
+    setActiveDialog(null)
+    setFeedback('helpful')
+    setFeedbackCategory(null)
+    setFeedbackDetail('')
+    if (message.convId && message.assistantMsgId) {
+      try {
+        await api.updateFeedback(message.convId, message.assistantMsgId, 'helpful')
+      } catch (e) {
+        console.error('反馈提交失败', e)
+      }
+    }
+  }
+
+  const handleUnhelpfulFeedback = async () => {
+    if (!feedbackCategory) return
+    setFeedback('unhelpful')
+    if (message.convId && message.assistantMsgId) {
+      try {
+        await api.updateFeedback(
+          message.convId,
+          message.assistantMsgId,
+          'unhelpful',
+          feedbackCategory,
+          feedbackDetail.trim() || undefined,
+        )
+      } catch (e) {
+        console.error('反馈提交失败', e)
+      }
+    }
+    setActiveDialog(null)
   }
 
   return (
@@ -288,82 +350,29 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                   {(message.sources && message.sources.length > 0) && (
                     <div className="flex items-center gap-0.5 ml-auto">
                       <button onClick={handleBookmarkToggle}
+                        aria-label={bookmarked ? '已收藏' : '收藏回答'}
+                        aria-pressed={bookmarked}
                         className={`p-1 rounded transition-colors ${bookmarked ? 'text-amber-400' : 'text-muted-foreground/40 hover:text-amber-400'}`}
                         title={bookmarked ? '已收藏' : '收藏'}>
                         {bookmarked ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
                       </button>
-                      {bookmarkOpen && (
-                        <div className="absolute top-full right-0 mt-1 w-56 rounded-lg border border-border bg-surface shadow-xl p-2.5 z-50 max-sm:right-auto max-sm:left-0">
-                          <p className="text-2xs font-medium text-muted-foreground mb-2">添加备注（可选）</p>
-                          <input
-                            value={bookmarkNote}
-                            onChange={(e) => setBookmarkNote(e.target.value)}
-                            placeholder="为什么收藏这条回答？"
-                            className="w-full text-2xs px-2 py-1 rounded border border-border bg-background outline-none placeholder:text-muted-foreground/30 mb-2"
-                            autoFocus
-                          />
-                          <div className="flex gap-2">
-                            <button onClick={() => setBookmarkOpen(false)}
-                              className="flex-1 text-2xs py-1 rounded text-muted-foreground hover:text-foreground bg-muted/50 transition-colors">取消</button>
-                            <button onClick={handleBookmarkConfirm}
-                              className="flex-1 text-2xs py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors">保存</button>
-                          </div>
-                        </div>
-                      )}
-                      <button onClick={async () => {
-                        setFeedback('helpful')
-                        if (message.convId && message.assistantMsgId) {
-                          try { await api.updateFeedback(message.convId, message.assistantMsgId, 'helpful') } catch (e) { console.error('反馈提交失败', e) }
-                        }
-                      }}
+                      <button onClick={handleHelpfulFeedback}
+                        aria-label="有帮助"
+                        aria-pressed={feedback === 'helpful'}
                         className={`p-1 rounded transition-colors ${feedback === 'helpful' ? 'text-emerald-400' : 'text-muted-foreground/40 hover:text-emerald-400'}`}>
                         <ThumbsUp className="h-3 w-3" />
                       </button>
-                      <div className="relative">
-                        <button onClick={() => setFeedbackOpen(!feedbackOpen)}
-                          className={`p-1 rounded transition-colors ${feedback === 'unhelpful' ? 'text-red-400' : 'text-muted-foreground/40 hover:text-red-400'}`}>
-                          <ThumbsDown className="h-3 w-3" />
-                        </button>
-                        {feedbackOpen && (
-                          <div className="absolute bottom-full right-0 mb-2 w-56 rounded-lg border border-border bg-surface shadow-xl p-2.5 z-50">
-                            <p className="text-2xs font-medium text-muted-foreground mb-2">请选择原因</p>
-                            <div className="space-y-1">
-                              {[
-                                { key: 'off_topic', label: '答非所问' },
-                                { key: 'insufficient_evidence', label: '证据不足' },
-                                { key: 'too_long', label: '回答太长' },
-                                { key: 'factual_error', label: '事实错误' },
-                                { key: 'other', label: '其他' },
-                              ].map((opt) => (
-                                <button
-                                  key={opt.key}
-                                  onClick={async () => {
-                                    setFeedbackCategory(opt.key)
-                                    setFeedback('unhelpful')
-                                    if (message.convId && message.assistantMsgId) {
-                                      try {
-                                        await api.updateFeedback(message.convId, message.assistantMsgId, 'unhelpful', opt.key, feedbackDetail || undefined)
-                                      } catch (e) { console.error('反馈提交失败', e) }
-                                    }
-                                    setFeedbackOpen(false)
-                                  }}
-                                  className={`block w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
-                                    feedbackCategory === opt.key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                                  }`}
-                                >
-                                  {opt.label}
-                                </button>
-                              ))}
-                            </div>
-                            <input
-                              value={feedbackDetail}
-                              onChange={(e) => setFeedbackDetail(e.target.value)}
-                              placeholder="补充说明（可选）"
-                              className="mt-2 w-full text-2xs px-2 py-1 rounded border border-border bg-background outline-none placeholder:text-muted-foreground/30"
-                            />
-                          </div>
-                        )}
-                      </div>
+                      <button
+                        onClick={() => {
+                          setActionsOpen(false)
+                          setActiveDialog('feedback')
+                        }}
+                        aria-label="无帮助"
+                        aria-pressed={feedback === 'unhelpful'}
+                        className={`p-1 rounded transition-colors ${feedback === 'unhelpful' ? 'text-red-400' : 'text-muted-foreground/40 hover:text-red-400'}`}
+                      >
+                        <ThumbsDown className="h-3 w-3" />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -408,80 +417,191 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
                     >
                       <MessageSquare className="h-3 w-3" />继续追问
                     </button>
-                    <div className="relative">
-                      <button
-                        onClick={() => {
-                          setActionsOpen((open) => !open)
-                          setExportOpen(false)
-                        }}
-                        aria-label="更多操作"
-                        className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
-                      >
-                        <MoreHorizontal className="h-3 w-3" />更多
-                      </button>
-                      {actionsOpen && (
-                        <div className="absolute left-0 top-full z-50 mt-2 w-56 rounded-xl border border-border bg-surface p-2 shadow-xl">
-                          <div className="space-y-1">
-                            <button
-                              onClick={() => {
-                                setActionsOpen(false)
-                                onSendQuestion?.(message.originalQuestion || message.content.slice(0, 60))
-                              }}
-                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted/50"
-                            >
-                              <RefreshCw className="h-3.5 w-3.5" />重新回答
-                            </button>
-                            <button
-                              onClick={() => {
-                                setActionsOpen(false)
-                                onSendQuestion?.(`用一句话简洁回答：${message.originalQuestion || message.content.slice(0, 60)}`)
-                              }}
-                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted/50"
-                            >
-                              <AlignLeft className="h-3.5 w-3.5" />更简洁
-                            </button>
-                            <button
-                              onClick={() => setExportOpen((open) => !open)}
-                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted/50"
-                            >
-                              <FileDown className="h-3.5 w-3.5" />导出对话
-                            </button>
-                            {exportOpen && (
-                              <div className="rounded-lg border border-border/70 bg-background/70 p-2.5">
-                                <div className="space-y-1.5">
-                                  <label className="flex items-center gap-2 text-2xs">
-                                    <input type="radio" name={`export-fmt-${message.id}`} checked={exportFormat === 'markdown'} onChange={() => setExportFormat('markdown')} className="accent-primary" />
-                                    Markdown
-                                  </label>
-                                  <label className="flex items-center gap-2 text-2xs">
-                                    <input type="radio" name={`export-fmt-${message.id}`} checked={exportFormat === 'json'} onChange={() => setExportFormat('json')} className="accent-primary" />
-                                    JSON
-                                  </label>
-                                  <label className="flex items-center gap-2 text-2xs">
-                                    <input type="checkbox" checked={exportSources} onChange={(e) => setExportSources(e.target.checked)} className="accent-primary" />
-                                    包含来源
-                                  </label>
-                                  <label className="flex items-center gap-2 text-2xs">
-                                    <input type="checkbox" checked={exportDebug} onChange={(e) => setExportDebug(e.target.checked)} className="accent-primary" />
-                                    包含调试信息
-                                  </label>
-                                  <button
-                                    onClick={handleExport}
-                                    disabled={exporting || !(message.convId || threadId)}
-                                    className="mt-1 flex w-full items-center justify-center gap-1 rounded-md bg-primary/10 px-3 py-1.5 text-2xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    <FileDown className="h-3 w-3" />
-                                    {exporting ? '导出中…' : '确认导出'}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <DropdownMenu open={actionsOpen} onOpenChange={setActionsOpen}>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          aria-label="更多操作"
+                          aria-haspopup="menu"
+                          className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:border-primary/20 hover:text-foreground"
+                        >
+                          <MoreHorizontal className="h-3 w-3" />更多
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItemButton
+                          onSelect={() => {
+                            onSendQuestion?.(message.originalQuestion || message.content.slice(0, 60))
+                          }}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />重新回答
+                        </DropdownMenuItemButton>
+                        <DropdownMenuItemButton
+                          onSelect={() => {
+                            onSendQuestion?.(`用一句话简洁回答：${message.originalQuestion || message.content.slice(0, 60)}`)
+                          }}
+                        >
+                          <AlignLeft className="h-3.5 w-3.5" />更简洁
+                        </DropdownMenuItemButton>
+                        <DropdownMenuSeparatorLine />
+                        <DropdownMenuItemButton
+                          onSelect={(event) => {
+                            event.preventDefault()
+                            setActionsOpen(false)
+                            window.setTimeout(() => setActiveDialog('export'), 0)
+                          }}
+                        >
+                          <FileDown className="h-3.5 w-3.5" />导出对话
+                        </DropdownMenuItemButton>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 )}
+
+                <Dialog open={bookmarkDialogOpen} onOpenChange={(open) => setActiveDialog(open ? 'bookmark' : null)}>
+                  <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle>收藏回答</DialogTitle>
+                      <DialogDescription>可以补一条备注，方便之后回看为什么保留这条回答。</DialogDescription>
+                    </DialogHeader>
+                    <form
+                      className="space-y-4 pt-2"
+                      onSubmit={async (event) => {
+                        event.preventDefault()
+                        await handleBookmarkConfirm()
+                      }}
+                    >
+                      <div className="space-y-2">
+                        <label htmlFor={`bookmark-note-${message.id}`} className="text-xs font-medium text-foreground/85">
+                          备注
+                        </label>
+                        <Input
+                          id={`bookmark-note-${message.id}`}
+                          value={bookmarkNote}
+                          onChange={(e) => setBookmarkNote(e.target.value)}
+                          placeholder="为什么收藏这条回答？"
+                          className="text-xs"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={() => setActiveDialog(null)}>
+                          取消
+                        </Button>
+                        <Button type="submit">
+                          保存
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={feedbackDialogOpen} onOpenChange={(open) => setActiveDialog(open ? 'feedback' : null)}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>这条回答哪里不理想？</DialogTitle>
+                      <DialogDescription>选择一个主要原因，可以补充说明，便于后续改进回答质量。</DialogDescription>
+                    </DialogHeader>
+                    <form
+                      className="space-y-4 pt-2"
+                      onSubmit={async (event) => {
+                        event.preventDefault()
+                        await handleUnhelpfulFeedback()
+                      }}
+                    >
+                      <fieldset className="space-y-2">
+                        <legend className="text-xs font-medium text-foreground/85">反馈原因</legend>
+                        {FEEDBACK_OPTIONS.map((opt) => (
+                          <label
+                            key={opt.key}
+                            className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                              feedbackCategory === opt.key
+                                ? 'border-primary/30 bg-primary/10 text-primary'
+                                : 'border-border text-foreground hover:bg-muted/40'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={feedbackReasonName}
+                              value={opt.key}
+                              checked={feedbackCategory === opt.key}
+                              onChange={() => setFeedbackCategory(opt.key)}
+                              className="accent-primary"
+                            />
+                            <span>{opt.label}</span>
+                          </label>
+                        ))}
+                      </fieldset>
+                      <div className="space-y-2">
+                        <label htmlFor={`feedback-detail-${message.id}`} className="text-xs font-medium text-foreground/85">
+                          补充说明
+                        </label>
+                        <textarea
+                          id={`feedback-detail-${message.id}`}
+                          value={feedbackDetail}
+                          onChange={(e) => setFeedbackDetail(e.target.value)}
+                          placeholder="可选，补充一下哪里不准确或不够有用"
+                          className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={() => setActiveDialog(null)}>
+                          取消
+                        </Button>
+                        <Button type="submit" disabled={!feedbackCategory}>
+                          提交反馈
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={exportDialogOpen} onOpenChange={(open) => setActiveDialog(open ? 'export' : null)}>
+                  <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle>导出对话</DialogTitle>
+                      <DialogDescription>选择导出格式和附带内容，导出后会直接下载到本地。</DialogDescription>
+                    </DialogHeader>
+                    <form
+                      className="space-y-4 pt-2"
+                      onSubmit={async (event) => {
+                        event.preventDefault()
+                        await handleExport()
+                      }}
+                    >
+                      <fieldset className="space-y-2">
+                        <legend className="text-xs font-medium text-foreground/85">导出格式</legend>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input type="radio" name={`export-fmt-${message.id}`} checked={exportFormat === 'markdown'} onChange={() => setExportFormat('markdown')} className="accent-primary" />
+                          Markdown
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input type="radio" name={`export-fmt-${message.id}`} checked={exportFormat === 'json'} onChange={() => setExportFormat('json')} className="accent-primary" />
+                          JSON
+                        </label>
+                      </fieldset>
+                      <fieldset className="space-y-2">
+                        <legend className="text-xs font-medium text-foreground/85">附带内容</legend>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" checked={exportSources} onChange={(e) => setExportSources(e.target.checked)} className="accent-primary" />
+                          包含来源
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" checked={exportDebug} onChange={(e) => setExportDebug(e.target.checked)} className="accent-primary" />
+                          包含调试信息
+                        </label>
+                      </fieldset>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={() => setActiveDialog(null)}>
+                          取消
+                        </Button>
+                        <Button type="submit" disabled={exporting || !(message.convId || threadId)}>
+                          <FileDown className="mr-1 h-3.5 w-3.5" />
+                          {exporting ? '导出中…' : '确认导出'}
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
 
                 <AnimatePresence>
                   {sourceOpen && message.sources && (
