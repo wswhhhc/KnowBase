@@ -1006,6 +1006,77 @@ class WorkspaceScopedKnowledgeBaseTests(_BaseKBMockTest):
         self.assertNotIn("ws-alpha::shared.txt:0:abc", self.kb.doc_by_id)
         self.kb.vector_store.delete.assert_called_once_with(ids=["ws-alpha::shared.txt:0:abc"])
 
+    def test_list_chunks_filters_specific_version_label_without_crossing_workspace(self):
+        default_v1 = Document(
+            page_content="default v1",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "shared.txt:0:v1",
+                "chunk_index": 0,
+                "workspace_id": "",
+                "version": "v1",
+            },
+        )
+        default_v2 = Document(
+            page_content="default v2",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "shared.txt:1:v2",
+                "chunk_index": 1,
+                "workspace_id": "",
+                "version": "v2",
+            },
+        )
+        workspace_v2 = Document(
+            page_content="workspace v2",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "ws-alpha::shared.txt:0:abc",
+                "chunk_index": 0,
+                "workspace_id": "ws-alpha",
+                "version": "v2",
+            },
+        )
+        self.kb.all_docs[:] = [default_v1, default_v2, workspace_v2]
+        self.kb.ingestion._rebuild_all()
+
+        total, chunks = self.kb.list_chunks(workspace_id="", source="shared.txt (v2)")
+
+        self.assertEqual(total, 1)
+        self.assertEqual([chunk.chunk_id for chunk in chunks], ["shared.txt:1:v2"])
+
+    def test_delete_source_can_target_single_version_only(self):
+        v1_doc = Document(
+            page_content="version one",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "shared.txt:0:v1",
+                "chunk_index": 0,
+                "workspace_id": "",
+                "version": "v1",
+            },
+        )
+        v2_doc = Document(
+            page_content="version two",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "shared.txt:1:v2",
+                "chunk_index": 1,
+                "workspace_id": "",
+                "version": "v2",
+            },
+        )
+        self.kb.all_docs[:] = [v1_doc, v2_doc]
+        self.kb.ingestion._rebuild_all()
+        self.kb.vector_store.delete.reset_mock()
+
+        removed = self.kb.delete_source("shared.txt (v2)", workspace_id="")
+
+        self.assertEqual(removed, 1)
+        self.assertIn("shared.txt:0:v1", self.kb.doc_by_id)
+        self.assertNotIn("shared.txt:1:v2", self.kb.doc_by_id)
+        self.kb.vector_store.delete.assert_called_once_with(ids=["shared.txt:1:v2"])
+
     def test_hybrid_search_filters_results_to_requested_workspace(self):
         default_doc = Document(
             page_content="default workspace answer",
@@ -1085,6 +1156,31 @@ class WorkspaceScopedKnowledgeBaseTests(_BaseKBMockTest):
         default_results = self.kb.hybrid_search("answer", workspace_id="", score_threshold=None)
 
         self.assertEqual([result.chunk_id for result in default_results], ["shared.txt:0:def"])
+
+    def test_debug_search_breakdown_scales_default_candidate_depth_with_requested_k(self):
+        doc = Document(
+            page_content="debug workspace answer",
+            metadata={
+                "source": "shared.txt",
+                "chunk_id": "shared.txt:0:def",
+                "chunk_index": 0,
+                "workspace_id": "",
+            },
+        )
+        self.kb.all_docs[:] = [doc]
+        self.kb.ingestion._rebuild_all()
+
+        calls: list[int] = []
+
+        def _search(_query, k, filter=None):
+            calls.append(k)
+            return [(doc, 0.9)]
+
+        self.kb.vector_store.similarity_search_with_score.side_effect = _search
+
+        self.kb.debug_search_breakdown("answer", k=12, workspace_id="")
+
+        self.assertEqual(calls, [36])
 
 
 class KBEnsureLoadedTests(_BaseKBMockTest):
