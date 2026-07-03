@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sse_starlette.sse import EventSourceResponse
 
 from src.api.deps import get_knowledge_base, verify_api_key
-from src.api.models import IngestResponse, URLIngestRequest, SourceOut
+from src.api.models import DemoImportResponse, IngestResponse, URLIngestRequest, SourceOut
 from src.chat_utils import generate_suggested_questions
 from src.rag.models import normalize_source
 from src.rag.knowledge_base import KnowledgeBase
@@ -35,6 +35,30 @@ def _source_exists(kb: KnowledgeBase, source_name: str, workspace_id: str = "") 
         if _source_identity(source_label) == target:
             return True
     return False
+
+
+def _collect_suggested_questions(
+    kb: KnowledgeBase,
+    source_names: list[str],
+    *,
+    workspace_id: str = "",
+) -> list[str]:
+    texts: list[str] = []
+    seen_sources: set[str] = set()
+    for source_name in source_names:
+        normalized = normalize_source(source_name)
+        if normalized in seen_sources:
+            continue
+        seen_sources.add(normalized)
+        _total, source_chunks = kb.list_chunks(
+            workspace_id=workspace_id,
+            source=source_name,
+            limit=1000,
+        )
+        if source_chunks:
+            texts.append(" ".join(chunk.content for chunk in source_chunks))
+    docs_text = " ".join(texts).strip()
+    return generate_suggested_questions(docs_text) if docs_text else []
 
 
 def _threaded_event_source(job) -> EventSourceResponse:
@@ -119,9 +143,7 @@ async def upload_file_stream(
                 version_mode=actual_mode, progress_callback=_progress,
                 workspace_id=workspace_id,
             )
-            _total, source_chunks = kb.list_chunks(workspace_id=workspace_id, source=source_name, limit=1000)
-            docs_text = " ".join(chunk.content for chunk in source_chunks)
-            suggested = generate_suggested_questions(docs_text) if chunk_count > 0 else []
+            suggested = _collect_suggested_questions(kb, [source_name], workspace_id=workspace_id)
             msg = f"已添加 {chunk_count} 个新段落" if chunk_count else "文件内容无变化，未新增段落"
             emit("progress", {"phase": "done", "percent": 100})
             emit("done", {
@@ -170,12 +192,14 @@ async def ingest_url_stream(
                 progress_callback=_progress,
                 workspace_id=workspace_id,
             )
+            suggested = _collect_suggested_questions(kb, [body.url], workspace_id=workspace_id)
             msg = f"已添加 {chunk_count} 个新段落" if chunk_count else "URL 内容已存在"
             emit("progress", {"phase": "done", "percent": 100})
             emit("done", {
                 "chunk_count": chunk_count,
                 "total_docs": kb.document_count_for_workspace(workspace_id),
                 "message": msg,
+                "suggested_questions": suggested,
                 "existing_version": existing,
             })
 
@@ -210,9 +234,7 @@ async def upload_file(
             version_mode=actual_mode,
             workspace_id=workspace_id,
         )
-        _total, source_chunks = kb.list_chunks(workspace_id=workspace_id, source=source_name, limit=1000)
-        docs_text = " ".join(chunk.content for chunk in source_chunks)
-        suggested = generate_suggested_questions(docs_text) if chunk_count > 0 else []
+        suggested = _collect_suggested_questions(kb, [source_name], workspace_id=workspace_id)
 
         msg = f"已添加 {chunk_count} 个新段落" if chunk_count else "文件内容无变化，未新增段落"
         return IngestResponse(
@@ -245,10 +267,36 @@ async def ingest_url(
 
         actual_mode = version_mode or "replace"
         chunk_count = kb.ingest_url(body.url, version_mode=actual_mode, workspace_id=workspace_id)
+        suggested = _collect_suggested_questions(kb, [body.url], workspace_id=workspace_id)
         return IngestResponse(
             chunk_count=chunk_count, total_docs=kb.document_count_for_workspace(workspace_id),
             message=f"已添加 {chunk_count} 个新段落" if chunk_count else "URL 内容已存在",
+            suggested_questions=suggested,
             existing_version=existing,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/import-demo")
+async def import_demo_documents(
+    workspace_id: str = Query(""),
+    kb: KnowledgeBase = Depends(get_knowledge_base),
+) -> DemoImportResponse:
+    try:
+        chunk_count, imported_sources = kb.import_demo_documents(workspace_id=workspace_id)
+        suggested = _collect_suggested_questions(kb, imported_sources, workspace_id=workspace_id)
+        message = (
+            f"已导入 {len(imported_sources)} 份示例资料"
+            if chunk_count > 0
+            else "示例资料已在当前工作区就绪"
+        )
+        return DemoImportResponse(
+            chunk_count=chunk_count,
+            total_docs=kb.document_count_for_workspace(workspace_id),
+            message=message,
+            imported_sources=imported_sources,
+            suggested_questions=suggested,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))

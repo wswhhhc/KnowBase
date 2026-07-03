@@ -201,6 +201,11 @@ class KnowledgeBase:
             self._ensure_embedding_compatible()
             return self.ingestion.load_preset_documents(workspace_id=workspace_id)
 
+    def import_demo_documents(self, workspace_id: str = "") -> tuple[int, list[str]]:
+        with self._write_lock:
+            self._ensure_embedding_compatible()
+            return self.ingestion.import_demo_documents(workspace_id=workspace_id)
+
     def ingest_file(
         self,
         file_path: str,

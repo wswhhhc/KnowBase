@@ -143,6 +143,19 @@ describe('Documents API', () => {
     expect(fn).toHaveBeenCalledWith('/api/documents/clear?workspace_id=ws-1', expect.objectContaining({ method: 'POST' }))
     vi.unstubAllGlobals()
   })
+
+  it('importDemoDocuments sends POST with workspace scope', async () => {
+    const fn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ chunk_count: 3, total_docs: 12, message: 'ok', imported_sources: ['contract_notice.md'], suggested_questions: [] }),
+      text: () => Promise.resolve('{}'),
+      headers: new Headers(),
+    })
+    vi.stubGlobal('fetch', fn)
+    await api.importDemoDocuments('ws-1')
+    expect(fn).toHaveBeenCalledWith('/api/documents/import-demo?workspace_id=ws-1', expect.objectContaining({ method: 'POST' }))
+    vi.unstubAllGlobals()
+  })
 })
 
 describe('Knowledge Base API', () => {

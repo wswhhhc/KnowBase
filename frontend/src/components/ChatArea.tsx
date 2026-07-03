@@ -8,6 +8,7 @@ import MessageBubble from './MessageBubble'
 import type { ViewType } from '@/App'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3, Globe, SlidersHorizontal, Zap, Scale, FileSearch, Search } from 'lucide-react'
+import { OPEN_DOCUMENTS_PANEL_EVENT } from '@/lib/ui-events'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
 
 interface ChatAreaProps {
@@ -119,6 +120,11 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
 
   const focusComposer = () => {
     requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const openDocumentPanel = () => {
+    onOpenSidebar()
+    window.dispatchEvent(new Event(OPEN_DOCUMENTS_PANEL_EVENT))
   }
 
   useEffect(() => {
@@ -284,7 +290,7 @@ export default function ChatArea({ chat, onOpenSidebar, sidebarOpen, onNavigate,
               workspaceName={workspaceSummary.workspaceName}
               documentCount={workspaceSummary.documentCount}
               conversationCount={workspaceSummary.conversationCount}
-              onPrimaryAction={emptyStateMode === 'onboarding' ? () => onNavigate('browser') : focusComposer}
+              onPrimaryAction={emptyStateMode === 'onboarding' ? openDocumentPanel : focusComposer}
               onSecondaryAction={emptyStateMode === 'onboarding' ? undefined : () => onNavigate('browser')}
             />
           ) : (

@@ -358,6 +358,27 @@ class IngestionService:
             )
         return total
 
+    def import_demo_documents(self, workspace_id: str = "") -> tuple[int, list[str]]:
+        demo_dir = Path(DATA_DIR) / "samples" / "demo"
+        if not demo_dir.exists():
+            raise ValueError(f"示例资料目录不存在：{demo_dir}")
+
+        demo_files = sorted(file_path for file_path in demo_dir.iterdir() if file_path.is_file())
+        if not demo_files:
+            raise ValueError("示例资料目录为空，无法导入")
+
+        total = 0
+        imported_sources: list[str] = []
+        for file_path in demo_files:
+            imported_sources.append(file_path.name)
+            total += self.ingest_file(
+                str(file_path),
+                source_name=file_path.name,
+                version_mode="replace",
+                workspace_id=workspace_id,
+            )
+        return total, imported_sources
+
     def ingest_file(
         self,
         file_path: str,

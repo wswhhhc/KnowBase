@@ -183,6 +183,9 @@ class FakeKnowledgeBase:
     def clear_workspace(self, workspace_id=""):
         return self.document_count_for_workspace(workspace_id)
 
+    def import_demo_documents(self, workspace_id=""):
+        return 3, ["contract_notice.md", "meeting_notes.md", "tech_manual.md"]
+
     def clear(self):
         pass
 
@@ -578,6 +581,23 @@ class APIEndpointTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["ok"], True)
+
+    def test_import_demo_documents(self):
+        with patch.object(
+            self.fake_kb,
+            "import_demo_documents",
+            return_value=(3, ["contract_notice.md", "meeting_notes.md", "tech_manual.md"]),
+        ) as mock_import_demo:
+            resp = self.client.post("/api/documents/import-demo?workspace_id=ws-demo")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["chunk_count"], 3)
+        self.assertEqual(
+            data["imported_sources"],
+            ["contract_notice.md", "meeting_notes.md", "tech_manual.md"],
+        )
+        mock_import_demo.assert_called_once_with(workspace_id="ws-demo")
 
     # ---- Metrics ----
     def test_metrics_logs_happy_path(self):
