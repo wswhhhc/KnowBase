@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import App from '@/App'
@@ -93,15 +93,16 @@ describe('App component', () => {
     })
   })
 
-  it('renders Sidebar and ChatArea by default', () => {
+  it('renders Sidebar and ChatArea by default', async () => {
     render(<App />)
     expect(screen.getByTestId('sidebar')).toBeInTheDocument()
-    expect(screen.getByTestId('chatarea')).toBeInTheDocument()
+    expect(await screen.findByTestId('chatarea')).toBeInTheDocument()
   })
 
   it('clears chat state and refreshes workspace-scoped props when the workspace changes', async () => {
     render(<App />)
 
+    expect(await screen.findByTestId('chatarea')).toBeInTheDocument()
     await userEvent.click(screen.getByText('sync-summary'))
     expect(screen.getByTestId('chatarea')).toHaveTextContent('Alpha:2:1')
 
@@ -111,7 +112,7 @@ describe('App component', () => {
     expect(mockChat.setWorkspaceId).toHaveBeenCalledWith('ws-2')
 
     await userEvent.click(screen.getAllByText('知识库')[0])
-    expect(screen.getByTestId('browserpage')).toHaveTextContent('workspace:ws-2')
+    expect(await screen.findByTestId('browserpage')).toHaveTextContent('workspace:ws-2')
   })
 
   it('dispatches the upload trigger when the mobile FAB is clicked on the browser view', async () => {
@@ -132,7 +133,7 @@ describe('App component', () => {
     render(<App />)
 
     await userEvent.click(screen.getAllByText('知识库')[0])
-    expect(screen.getByTestId('browserpage')).toHaveTextContent('upload-events:0')
+    expect(await screen.findByTestId('browserpage')).toHaveTextContent('upload-events:0')
 
     await userEvent.click(screen.getByTitle('上传文档'))
 
@@ -142,7 +143,7 @@ describe('App component', () => {
     expect(sessionStorage.getItem('kb_trigger_upload')).toBe('true')
   })
 
-  it('hides the mobile upload FAB outside the browser view', () => {
+  it('hides the mobile upload FAB outside the browser view', async () => {
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       value: (query: string) => ({
@@ -159,6 +160,7 @@ describe('App component', () => {
 
     render(<App />)
 
+    expect(await screen.findByTestId('chatarea')).toBeInTheDocument()
     expect(screen.queryByTitle('上传文档')).not.toBeInTheDocument()
   })
 })

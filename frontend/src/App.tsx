@@ -1,18 +1,42 @@
 import { Toaster } from 'sonner'
-import { useState, useCallback, useEffect } from 'react'
+import { lazy, Suspense, useState, useCallback, useEffect } from 'react'
 import { useChat } from '@/hooks/useChat'
 import type { Source } from '@/lib/api'
 import Sidebar from '@/components/Sidebar'
-import ChatArea from '@/components/ChatArea'
-import BrowserPage from '@/components/BrowserPage'
-import DashboardPage from '@/components/DashboardPage'
-import SettingsPage from '@/components/SettingsPage'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { Sparkles, BookOpen, BarChart3, Settings, Upload } from 'lucide-react'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
 
 export type ViewType = 'chat' | 'browser' | 'dashboard' | 'settings'
 const UPLOAD_TRIGGER_EVENT = 'kb-trigger-upload'
+const loadChatArea = () => import('@/components/ChatArea')
+const loadBrowserPage = () => import('@/components/BrowserPage')
+const loadDashboardPage = () => import('@/components/DashboardPage')
+const loadSettingsPage = () => import('@/components/SettingsPage')
+
+const ChatArea = lazy(loadChatArea)
+const BrowserPage = lazy(loadBrowserPage)
+const DashboardPage = lazy(loadDashboardPage)
+const SettingsPage = lazy(loadSettingsPage)
+
+const PAGE_COPY: Record<ViewType, { loading: string, error: string }> = {
+  chat: {
+    loading: '正在加载聊天页面…',
+    error: '聊天组件异常，请刷新页面',
+  },
+  browser: {
+    loading: '正在加载知识库页面…',
+    error: '知识库组件异常，请刷新页面',
+  },
+  dashboard: {
+    loading: '正在加载指标页面…',
+    error: '指标面板异常，请刷新页面',
+  },
+  settings: {
+    loading: '正在加载设置页面…',
+    error: '设置面板异常，请刷新页面',
+  },
+}
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
@@ -57,6 +81,24 @@ function App() {
     sessionStorage.removeItem('highlightChunkId')
   }, [activeView])
 
+  useEffect(() => {
+    if (import.meta.env.MODE === 'test') return
+
+    const preloadViews = () => {
+      void loadBrowserPage()
+      void loadDashboardPage()
+      void loadSettingsPage()
+    }
+
+    if ('requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(preloadViews)
+      return () => window.cancelIdleCallback(idleId)
+    }
+
+    const timeoutId = globalThis.setTimeout(preloadViews, 800)
+    return () => globalThis.clearTimeout(timeoutId)
+  }, [])
+
   const handleCitationClick = useCallback((source: Source) => {
     if (source.chunk_id) setHighlightChunkId(source.chunk_id)
     setActiveView('browser')
@@ -81,6 +123,77 @@ function App() {
     setActiveWsId(wsId)
     chat.setWorkspaceId(wsId)
   }, [activeWsId, chat])
+
+  const renderActiveView = () => {
+    const renderStatus = (message: string) => (
+      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground">
+        {message}
+      </div>
+    )
+
+    switch (activeView) {
+      case 'chat':
+        return (
+          <ErrorBoundary key="chat" fallback={renderStatus(PAGE_COPY.chat.error)}>
+            <Suspense fallback={renderStatus(PAGE_COPY.chat.loading)}>
+              <ChatArea
+                key={`chat-${activeWsId || 'default'}`}
+                chat={chat}
+                onOpenSidebar={() => setSidebarOpen(true)}
+                sidebarOpen={sidebarOpen}
+                onNavigate={setActiveView}
+                isLoadingMessages={isLoadingMessages}
+                onCitationClick={handleCitationClick}
+                onSendQuestion={handleSendQuestion}
+                workspaceSummary={workspaceSummary}
+                isMobile={isMobile}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        )
+      case 'browser':
+        return (
+          <ErrorBoundary key="browser" fallback={renderStatus(PAGE_COPY.browser.error)}>
+            <Suspense fallback={renderStatus(PAGE_COPY.browser.loading)}>
+              <BrowserPage
+                key={`browser-${activeWsId || 'default'}`}
+                onOpenSidebar={() => setSidebarOpen(true)}
+                sidebarOpen={sidebarOpen}
+                onNavigate={setActiveView}
+                highlightChunkId={highlightChunkId}
+                onHighlightConsumed={() => setHighlightChunkId(null)}
+                workspaceId={activeWsId}
+                workspaceName={workspaceSummary.workspaceName}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        )
+      case 'dashboard':
+        return (
+          <ErrorBoundary key="dashboard" fallback={renderStatus(PAGE_COPY.dashboard.error)}>
+            <Suspense fallback={renderStatus(PAGE_COPY.dashboard.loading)}>
+              <DashboardPage
+                onOpenSidebar={() => setSidebarOpen(true)}
+                sidebarOpen={sidebarOpen}
+                onNavigate={setActiveView}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        )
+      case 'settings':
+        return (
+          <ErrorBoundary key="settings" fallback={renderStatus(PAGE_COPY.settings.error)}>
+            <Suspense fallback={renderStatus(PAGE_COPY.settings.loading)}>
+              <SettingsPage
+                onOpenSidebar={() => setSidebarOpen(true)}
+                sidebarOpen={sidebarOpen}
+                onNavigate={setActiveView}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        )
+    }
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background noise-overlay">
@@ -119,54 +232,7 @@ function App() {
       </div>
 
       <main className="relative flex flex-1 flex-col min-w-0 pb-safe">
-        {activeView === 'chat' && (
-          <ErrorBoundary fallback={<div className="flex items-center justify-center flex-1 p-8 text-center text-muted-foreground text-sm">聊天组件异常，请刷新页面</div>}>
-          <ChatArea
-            key={`chat-${activeWsId || 'default'}`}
-            chat={chat}
-            onOpenSidebar={() => setSidebarOpen(true)}
-            sidebarOpen={sidebarOpen}
-            onNavigate={setActiveView}
-            isLoadingMessages={isLoadingMessages}
-            onCitationClick={handleCitationClick}
-            onSendQuestion={handleSendQuestion}
-            workspaceSummary={workspaceSummary}
-            isMobile={isMobile}
-          />
-          </ErrorBoundary>
-        )}
-        {activeView === 'browser' && (
-          <ErrorBoundary fallback={<div className="flex items-center justify-center flex-1 p-8 text-center text-muted-foreground text-sm">知识库组件异常，请刷新页面</div>}>
-          <BrowserPage
-            key={`browser-${activeWsId || 'default'}`}
-            onOpenSidebar={() => setSidebarOpen(true)}
-            sidebarOpen={sidebarOpen}
-            onNavigate={setActiveView}
-            highlightChunkId={highlightChunkId}
-            onHighlightConsumed={() => setHighlightChunkId(null)}
-            workspaceId={activeWsId}
-            workspaceName={workspaceSummary.workspaceName}
-          />
-          </ErrorBoundary>
-        )}
-        {activeView === 'dashboard' && (
-          <ErrorBoundary fallback={<div className="flex items-center justify-center flex-1 p-8 text-center text-muted-foreground text-sm">指标面板异常，请刷新页面</div>}>
-          <DashboardPage
-            onOpenSidebar={() => setSidebarOpen(true)}
-            sidebarOpen={sidebarOpen}
-            onNavigate={setActiveView}
-          />
-          </ErrorBoundary>
-        )}
-        {activeView === 'settings' && (
-          <ErrorBoundary fallback={<div className="flex items-center justify-center flex-1 p-8 text-center text-muted-foreground text-sm">设置面板异常，请刷新页面</div>}>
-          <SettingsPage
-            onOpenSidebar={() => setSidebarOpen(true)}
-            sidebarOpen={sidebarOpen}
-            onNavigate={setActiveView}
-          />
-          </ErrorBoundary>
-        )}
+        {renderActiveView()}
 
         {/* Mobile bottom tab bar */}
         {isMobile && (
