@@ -237,7 +237,9 @@ describe('MessageBubble', () => {
       },
     })
 
-    expect(screen.getByText('策略：未知')).toBeInTheDocument()
     expect(screen.getByText('重排：否')).toBeInTheDocument()
+    expect(screen.getByText('联网：否')).toBeInTheDocument()
+    expect(screen.queryByText(/策略：/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/耗时：/)).not.toBeInTheDocument()
   })
 })

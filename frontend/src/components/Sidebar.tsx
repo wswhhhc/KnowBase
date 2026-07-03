@@ -62,11 +62,6 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   const workspaceSelectValue = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
   const workspaceScopeKey = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
 
-  const sumNodeElapsed = (debugInfo: DebugInfo | undefined) =>
-    Array.isArray(debugInfo?.nodes)
-      ? debugInfo.nodes.reduce((total, node) => total + node.elapsed_ms, 0)
-      : 0
-
   // Refresh conversation list when workspace changes or new conv created
   useEffect(() => {
     if (convRefreshKey !== prevKey.current) {
@@ -134,7 +129,6 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
             evidence_summary: typeof debugRecord?.evidence_summary === 'string' ? debugRecord.evidence_summary : undefined,
             outcome_category: typeof debugRecord?.outcome_category === 'string' ? debugRecord.outcome_category : undefined,
             usedRerank: typeof debugRecord?.used_rerank === 'boolean' ? debugRecord.used_rerank : undefined,
-            elapsedMs: sumNodeElapsed(debugInfo) || undefined,
             convId: conversation.id,
             assistantMsgId: m.role === 'assistant' ? m.id : undefined,
           }

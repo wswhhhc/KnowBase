@@ -70,10 +70,10 @@ export default function AssistantMessageBubble({
   const nodeElapsedMs = Array.isArray(message.debugData?.nodes)
     ? message.debugData.nodes.reduce((total, node) => total + node.elapsed_ms, 0)
     : undefined
-  const strategyLabel = STRATEGY_LABELS[message.searchStrategy || ''] || '未知'
-  const rerankLabel = formatBooleanEcho(message.usedRerank ?? message.debugData?.used_rerank)
-  const webSearchLabel = formatBooleanEcho(message.webSearchEnabled ?? message.debugData?.used_web_search)
-  const elapsedLabel = formatElapsed(message.elapsedMs, nodeElapsedMs)
+  const strategyLabel = message.searchStrategy ? STRATEGY_LABELS[message.searchStrategy] : undefined
+  const rerankValue = message.usedRerank ?? message.debugData?.used_rerank
+  const webSearchValue = message.webSearchEnabled ?? message.debugData?.used_web_search
+  const elapsedLabel = message.elapsedMs != null ? formatElapsed(message.elapsedMs, nodeElapsedMs) : undefined
 
   const handleBookmarkConfirm = async () => {
     const convId = message.convId || threadId
@@ -180,10 +180,18 @@ export default function AssistantMessageBubble({
         {!message.streaming && (
           <>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-2xs text-muted-foreground/80">
-              <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">策略：{strategyLabel}</span>
-              <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">重排：{rerankLabel}</span>
-              <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">联网：{webSearchLabel}</span>
-              <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">耗时：{elapsedLabel}</span>
+              {strategyLabel && (
+                <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">策略：{strategyLabel}</span>
+              )}
+              {rerankValue != null && (
+                <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">重排：{formatBooleanEcho(rerankValue)}</span>
+              )}
+              {webSearchValue != null && (
+                <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">联网：{formatBooleanEcho(webSearchValue)}</span>
+              )}
+              {elapsedLabel && (
+                <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">耗时：{elapsedLabel}</span>
+              )}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">

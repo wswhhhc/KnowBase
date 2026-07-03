@@ -347,6 +347,32 @@ describe('Sidebar interactions', () => {
     expect(loaded[1].elapsedMs).toBeUndefined()
   })
 
+  it('does not reconstruct elapsedMs from persisted debug nodes after refresh', async () => {
+    vi.mocked(api.getMessages).mockResolvedValue([
+      {
+        ...mockMessages[1],
+        debug_info: {
+          nodes: [
+            { name: 'retrieve_docs', label: '检索文档', elapsed_ms: 1800, summary: '3 条结果' },
+            { name: 'generate_answer', label: '生成回答', elapsed_ms: 2700, summary: '完成' },
+          ],
+          used_rerank: false,
+        },
+      },
+    ] as any)
+    const loadMessages = vi.fn()
+
+    render(<Sidebar {...defaultProps} chat={{ ...defaultProps.chat, loadMessages }} />)
+    await userEvent.click(screen.getAllByText('测试对话')[0])
+
+    await waitFor(() => {
+      expect(loadMessages).toHaveBeenCalled()
+    })
+
+    const loaded = loadMessages.mock.calls[0][0] as any[]
+    expect(loaded[0].elapsedMs).toBeUndefined()
+  })
+
   it('closes the drawer on mobile when switching conversation', async () => {
     vi.mocked(api.getMessages).mockResolvedValue(mockMessages as any)
     const onClose = vi.fn()
