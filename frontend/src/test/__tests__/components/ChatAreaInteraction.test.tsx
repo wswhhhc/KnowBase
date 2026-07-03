@@ -27,7 +27,7 @@ vi.mock('lucide-react', () => {
     MessageSquare: 'MessageSquare',
     Bookmark: 'Bookmark', BookmarkCheck: 'BookmarkCheck', ExternalLink: 'ExternalLink', Upload: 'Upload',
     RefreshCw: 'RefreshCw', AlignLeft: 'AlignLeft', Paperclip: 'Paperclip', Pin: 'Pin', X: 'X',
-    ArrowRight: 'ArrowRight', LibraryBig: 'LibraryBig',
+    ArrowRight: 'ArrowRight', LibraryBig: 'LibraryBig', MessageSquareText: 'MessageSquareText', History: 'History',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>])
@@ -212,7 +212,7 @@ describe('ChatArea interactions', () => {
 
   it('renders welcome message when no messages', () => {
     renderChatArea()
-    expect(screen.getByText('工作区问答助手')).toBeInTheDocument()
+    expect(screen.getByText('当前工作区还没有资料')).toBeInTheDocument()
   })
 
   it('shows a compact strategy trigger instead of the full strategy group on mobile', () => {

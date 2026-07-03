@@ -1015,6 +1015,54 @@
         }
       }
     },
+    "/api/documents/import-demo": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Import Demo Documents",
+        "operationId": "import_demo_documents_api_documents_import_demo_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/documents/source/{source_name}": {
       "delete": {
         "tags": [
@@ -2595,6 +2643,43 @@
           "content"
         ],
         "title": "DebugSearchResult"
+      },
+      "DemoImportResponse": {
+        "properties": {
+          "chunk_count": {
+            "type": "integer",
+            "title": "Chunk Count"
+          },
+          "total_docs": {
+            "type": "integer",
+            "title": "Total Docs"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "imported_sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Imported Sources"
+          },
+          "suggested_questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggested Questions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chunk_count",
+          "total_docs",
+          "message"
+        ],
+        "title": "DemoImportResponse"
       },
       "ExportOut": {
         "properties": {

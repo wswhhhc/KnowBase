@@ -66,6 +66,8 @@ vi.mock('lucide-react', () => {
     X: icon('X'),
     ArrowRight: icon('ArrowRight'),
     LibraryBig: icon('LibraryBig'),
+    MessageSquareText: icon('MessageSquareText'),
+    History: icon('History'),
   }
 })
 
@@ -114,8 +116,24 @@ describe('ChatArea', () => {
   it('renders the welcome message when no messages', () => {
     render(<ChatArea {...defaultProps} />)
 
-    expect(screen.getByText('工作区问答助手')).toBeInTheDocument()
-    expect(screen.getByText(/先把资料放进当前工作区/)).toBeInTheDocument()
+    expect(screen.getByText('当前工作区还没有资料')).toBeInTheDocument()
+    expect(screen.getByText('未导入资料')).toBeInTheDocument()
+  })
+
+  it('shows a first-question prompt when the workspace has documents but no conversations yet', () => {
+    render(
+      <ChatArea
+        {...defaultProps}
+        workspaceSummary={{
+          workspaceName: '默认工作区',
+          documentCount: 5,
+          conversationCount: 0,
+        }}
+      />,
+    )
+
+    expect(screen.getByText('资料已导入，还没开始提问')).toBeInTheDocument()
+    expect(screen.getByText('去知识库核对来源')).toBeInTheDocument()
   })
 
   it('shows a return-user prompt when the workspace already has documents and conversations', () => {
@@ -130,8 +148,8 @@ describe('ChatArea', () => {
       />,
     )
 
-    expect(screen.getByText('继续当前工作区')).toBeInTheDocument()
-    expect(screen.getByText('继续提问')).toBeInTheDocument()
+    expect(screen.getByText('已有历史对话，可继续推进')).toBeInTheDocument()
+    expect(screen.getByText('继续当前问题')).toBeInTheDocument()
   })
 
   it('renders the browser navigation label as 知识库', () => {

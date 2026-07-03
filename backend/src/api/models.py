@@ -78,6 +78,14 @@ class IngestResponse(BaseModel):
     existing_version: bool = False
 
 
+class DemoImportResponse(BaseModel):
+    chunk_count: int
+    total_docs: int
+    message: str
+    imported_sources: list[str] = Field(default_factory=list)
+    suggested_questions: list[str] = Field(default_factory=list)
+
+
 class URLIngestRequest(BaseModel):
     url: str = Field(..., min_length=1, description="Public URL to fetch and ingest")
 

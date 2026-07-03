@@ -5,10 +5,10 @@ import type { Source } from '@/lib/api'
 import Sidebar from '@/components/Sidebar'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { Sparkles, BookOpen, BarChart3, Settings, Upload } from 'lucide-react'
+import { UPLOAD_TRIGGER_EVENT } from '@/lib/ui-events'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
 
 export type ViewType = 'chat' | 'browser' | 'dashboard' | 'settings'
-const UPLOAD_TRIGGER_EVENT = 'kb-trigger-upload'
 const loadChatArea = () => import('@/components/ChatArea')
 const loadBrowserPage = () => import('@/components/BrowserPage')
 const loadDashboardPage = () => import('@/components/DashboardPage')

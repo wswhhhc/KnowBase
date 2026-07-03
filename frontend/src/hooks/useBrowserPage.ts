@@ -3,8 +3,8 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 
 import * as api from '@/lib/api'
 import type { KBStats, KBChunk, KBConfig, DebugSearchResponse } from '@/lib/api'
+import { UPLOAD_TRIGGER_EVENT } from '@/lib/ui-events'
 
-const UPLOAD_TRIGGER_EVENT = 'kb-trigger-upload'
 const PAGE_SIZE = 50
 
 interface UseBrowserPageArgs {

@@ -211,6 +211,12 @@ class WorkspaceScopedFakeKnowledgeBase:
             self.hit_counter.pop(chunk_id, None)
         return len(remove_ids)
 
+    def import_demo_documents(self, workspace_id=""):
+        self._add_doc(workspace_id, "contract_notice.md", f"demo contract for {workspace_id or 'default'}")
+        self._add_doc(workspace_id, "meeting_notes.md", f"demo meeting for {workspace_id or 'default'}")
+        self._add_doc(workspace_id, "tech_manual.md", f"demo manual for {workspace_id or 'default'}")
+        return 3, ["contract_notice.md", "meeting_notes.md", "tech_manual.md"]
+
     def clear(self):
         self.all_docs = []
         self.doc_by_id = {}
@@ -264,6 +270,7 @@ class WorkspaceScopedKnowledgeBaseApiTests(unittest.TestCase):
             ("/api/documents/ingest-url-stream", "post"),
             ("/api/documents/upload", "post"),
             ("/api/documents/ingest-url", "post"),
+            ("/api/documents/import-demo", "post"),
             ("/api/documents/source/{source_name}", "delete"),
             ("/api/documents/clear", "post"),
             ("/api/knowledge-base/stats", "get"),
@@ -369,6 +376,31 @@ class WorkspaceScopedKnowledgeBaseApiTests(unittest.TestCase):
 
         beta_stats = self.client.get("/api/knowledge-base/stats?workspace_id=ws-beta").json()
         self.assertEqual(beta_stats["chunk_count"], 3)
+
+    def test_import_demo_only_touches_target_workspace(self):
+        resp = self.client.post("/api/documents/import-demo?workspace_id=ws-beta")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["imported_sources"], ["contract_notice.md", "meeting_notes.md", "tech_manual.md"])
+
+        beta_sources = self.client.get("/api/documents/sources?workspace_id=ws-beta").json()
+        self.assertEqual(
+            beta_sources,
+            [
+                {"source": "beta-only.txt", "count": 1},
+                {"source": "contract_notice.md", "count": 1},
+                {"source": "meeting_notes.md", "count": 1},
+                {"source": "tech_manual.md", "count": 1},
+            ],
+        )
+
+        default_sources = self.client.get("/api/documents/sources?workspace_id=").json()
+        self.assertEqual(
+            default_sources,
+            [
+                {"source": "default-only.txt", "count": 1},
+                {"source": "shared.txt", "count": 1},
+            ],
+        )
 
     def test_delete_source_only_removes_requested_workspace(self):
         resp = self.client.delete("/api/documents/source/shared.txt?workspace_id=ws-alpha")

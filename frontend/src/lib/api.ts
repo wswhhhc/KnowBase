@@ -18,6 +18,7 @@ export type DocSource = Schemas['SourceOut']
 export type HotspotEntry = Schemas['HotspotEntry']
 export type KBConfig = Schemas['KBConfig']
 export type IngestResponse = Schemas['IngestResponse']
+export type DemoImportResponse = Schemas['DemoImportResponse']
 export type KBChunk = Schemas['KBChunk']
 export type RuntimeSettings = Schemas['RuntimeSettingsOut']
 export type RuntimeSettingsUpdate = Schemas['RuntimeSettingsUpdate']
@@ -323,6 +324,9 @@ export const deleteSource = (source: string, workspaceId?: string) =>
 
 export const clearKnowledgeBase = (workspaceId?: string) =>
   req(withWorkspaceScope('/documents/clear', workspaceId), { method: 'POST' })
+
+export const importDemoDocuments = (workspaceId?: string) =>
+  req<DemoImportResponse>(withWorkspaceScope('/documents/import-demo', workspaceId), { method: 'POST' })
 
 // ── KB Browser ──
 

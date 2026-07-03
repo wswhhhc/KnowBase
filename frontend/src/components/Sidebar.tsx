@@ -15,6 +15,7 @@ import KBSummary from '@/components/sidebar/KBSummary'
 import DashboardSummary from '@/components/sidebar/DashboardSummary'
 import type { ChatMessage } from '@/hooks/useChat'
 import type { Conversation, DebugInfo, PinStateResponse } from '@/lib/api'
+import { OPEN_DOCUMENTS_PANEL_EVENT } from '@/lib/ui-events'
 import type { ViewType } from '@/App'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
 
@@ -92,6 +93,15 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   useEffect(() => {
     onWorkspaceChange?.(wss.activeWorkspaceId)
   }, [onWorkspaceChange, wss.activeWorkspaceId])
+
+  useEffect(() => {
+    const openDocumentsPanel = () => {
+      onNavigate('chat')
+      setTab('documents')
+    }
+    window.addEventListener(OPEN_DOCUMENTS_PANEL_EVENT, openDocumentsPanel)
+    return () => window.removeEventListener(OPEN_DOCUMENTS_PANEL_EVENT, openDocumentsPanel)
+  }, [onNavigate])
 
   const switchConversation = async (conversation: Conversation) => {
     onNavigate('chat')
@@ -269,7 +279,9 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
               sources={srcs.sources}
               onRefresh={srcs.refresh}
               workspaceId={wss.activeWorkspaceId}
+              workspaceName={wss.workspaces.find((ws) => ws.id === wss.activeWorkspaceId)?.name || '默认工作区'}
               onSendQuestion={(q) => { onNavigate('chat'); chat.sendMessage(q, false, 'balanced') }}
+              onOpenKnowledgeBase={() => onNavigate('browser')}
             />
           ) : (
             <BookmarkPanel
