@@ -1,17 +1,15 @@
 import { MessageSquare, Upload } from 'lucide-react'
+import { useChatContext } from './ChatContext'
 import type { OutcomeGuidance } from './types'
 
 interface OutcomeGuidancePanelProps {
   guidance: OutcomeGuidance
-  onNavigateBrowser?: () => void
-  onSendQuestion?: (question: string) => void
 }
 
 export default function OutcomeGuidancePanel({
   guidance,
-  onNavigateBrowser,
-  onSendQuestion,
 }: OutcomeGuidancePanelProps) {
+  const { onNavigateBrowser, onSendQuestion } = useChatContext()
   return (
     <div className="mt-3 rounded-lg border border-border/60 bg-surface/30 px-3.5 py-3">
       <p className="text-xs font-medium text-foreground/85">{guidance.title}</p>

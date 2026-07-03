@@ -12,6 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import DemoImportResponse, IngestResponse, URLIngestRequest, SourceOut
+from src.api.rate_limit import enforce_document_import_rate_limit
 from src.chat_utils import generate_suggested_questions
 from src.rag.models import normalize_source
 from src.rag.knowledge_base import KnowledgeBase
@@ -110,11 +111,15 @@ async def check_source(
     return {"exists": _source_exists(kb, source_name, workspace_id=workspace_id)}
 
 
-@router.post("/upload-stream")
+@router.post(
+    "/upload-stream",
+    responses={429: {"description": "请求过于频繁"}},
+)
 async def upload_file_stream(
     file: UploadFile = File(...),
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     workspace_id: str = Query(""),
+    _rate_limit: None = Depends(enforce_document_import_rate_limit),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ):
     """SSE streaming upload — sends progress events during ingestion."""
@@ -159,11 +164,15 @@ async def upload_file_stream(
         raise HTTPException(400, str(e))
 
 
-@router.post("/ingest-url-stream")
+@router.post(
+    "/ingest-url-stream",
+    responses={429: {"description": "请求过于频繁"}},
+)
 async def ingest_url_stream(
     body: URLIngestRequest,
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     workspace_id: str = Query(""),
+    _rate_limit: None = Depends(enforce_document_import_rate_limit),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ):
     """SSE streaming URL ingestion — sends progress events."""
@@ -208,11 +217,15 @@ async def ingest_url_stream(
         raise HTTPException(400, str(e))
 
 
-@router.post("/upload")
+@router.post(
+    "/upload",
+    responses={429: {"description": "请求过于频繁"}},
+)
 async def upload_file(
     file: UploadFile = File(...),
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     workspace_id: str = Query(""),
+    _rate_limit: None = Depends(enforce_document_import_rate_limit),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse:
     try:
@@ -247,11 +260,15 @@ async def upload_file(
         raise HTTPException(400, str(e))
 
 
-@router.post("/ingest-url")
+@router.post(
+    "/ingest-url",
+    responses={429: {"description": "请求过于频繁"}},
+)
 async def ingest_url(
     body: URLIngestRequest,
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     workspace_id: str = Query(""),
+    _rate_limit: None = Depends(enforce_document_import_rate_limit),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse:
     try:

@@ -22,6 +22,17 @@ describe('req helper (tested through public functions)', () => {
     await expect(api.getConversations()).rejects.toThrow(/Not Found/)
     vi.unstubAllGlobals()
   })
+
+  it('req extracts JSON detail for 429 responses', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: () => Promise.resolve(JSON.stringify({ detail: '请求过于频繁，请在 60 秒后重试。' })),
+      headers: new Headers({ 'Retry-After': '60' }),
+    }))
+    await expect(api.getConversations()).rejects.toThrow('请求过于频繁，请在 60 秒后重试。')
+    vi.unstubAllGlobals()
+  })
 })
 
 describe('Conversations API', () => {
@@ -300,13 +311,32 @@ describe('chatStream (SSE)', () => {
     const onError = vi.fn()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
-      text: () => Promise.resolve('Server Error'),
+      status: 429,
+      text: () => Promise.resolve(JSON.stringify({ detail: '请求过于频繁，请在 60 秒后重试。' })),
+      headers: new Headers({ 'Retry-After': '60' }),
     }))
 
     api.chatStream('q', null, false, 'balanced', { onError })
 
     await vi.waitFor(() => {
-      expect(onError).toHaveBeenCalledWith('Server Error')
+      expect(onError).toHaveBeenCalledWith('请求过于频繁，请在 60 秒后重试。')
+    })
+    vi.unstubAllGlobals()
+  })
+
+  it('uploadDocumentStream surfaces parsed 429 messages', async () => {
+    const onError = vi.fn()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: () => Promise.resolve(JSON.stringify({ detail: '导入过于频繁，请稍后再试。' })),
+      headers: new Headers({ 'Retry-After': '60' }),
+    }))
+
+    api.uploadDocumentStream(new File(['test'], 'test.txt', { type: 'text/plain' }), undefined, { onError }, 'ws-1')
+
+    await vi.waitFor(() => {
+      expect(onError).toHaveBeenCalledWith('导入过于频繁，请稍后再试。')
     })
     vi.unstubAllGlobals()
   })

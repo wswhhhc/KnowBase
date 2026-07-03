@@ -1,12 +1,13 @@
 import type { Source } from '@/lib/api'
+import { useChatContext } from './ChatContext'
 
 interface CitationTextProps {
   text: string
   sources?: Source[]
-  onCitationClick?: (source: Source) => void
 }
 
-export default function CitationText({ text, sources, onCitationClick }: CitationTextProps) {
+export default function CitationText({ text, sources }: CitationTextProps) {
+  const { onCitationClick } = useChatContext()
   const parts = text.split(/(\[\d+(?:,\d+)*\])/g)
   const sourceMap = new Map(sources?.map((source) => [source.index, source]) ?? [])
 

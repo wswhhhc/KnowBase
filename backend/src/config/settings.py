@@ -130,6 +130,15 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("API_KEY", "KNOWBASE_API_KEY"),
     )
 
+    chat_stream_rate_limit_per_minute: int = Field(
+        default=12,
+        validation_alias="CHAT_STREAM_RATE_LIMIT_PER_MINUTE",
+    )
+    document_import_rate_limit_per_minute: int = Field(
+        default=6,
+        validation_alias="DOCUMENT_IMPORT_RATE_LIMIT_PER_MINUTE",
+    )
+
     checkpoint_db_path: str = Field(
         default=str(ROOT_DIR / "data" / "checkpoints.db"),
         validation_alias="CHECKPOINT_DB_PATH",
@@ -141,7 +150,15 @@ class Settings(BaseSettings):
         path = Path(value)
         return path if path.is_absolute() else ROOT_DIR / path
 
-    @field_validator("chunk_size", "top_k_retrieval", "top_k_rerank", "vector_candidate_k", "max_upload_mb")
+    @field_validator(
+        "chunk_size",
+        "top_k_retrieval",
+        "top_k_rerank",
+        "vector_candidate_k",
+        "max_upload_mb",
+        "chat_stream_rate_limit_per_minute",
+        "document_import_rate_limit_per_minute",
+    )
     @classmethod
     def _positive_int(cls, value: int) -> int:
         if value <= 0:
