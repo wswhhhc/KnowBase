@@ -1,890 +1,57 @@
-"""Knowledge base ingestion, persistence, hybrid retrieval, and reranking support."""
+"""Public knowledge-base facade with stable APIs and clearer internal boundaries."""
 
 from __future__ import annotations
 
-from collections import Counter
+from collections.abc import Callable
 from datetime import UTC, datetime
 import json
 import logging
-import threading
 from pathlib import Path
+import threading
 
-logger = logging.getLogger(__name__)
-from typing import Callable, List, Optional, Tuple
-
-import jieba
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from rank_bm25 import BM25Okapi
 
+from src.api.models import HotspotEntry, KBChunk
 from src.config.settings import (
     CHROMA_PERSIST_DIR,
-    CHUNK_OVERLAP,
-    CHUNK_SIZE,
     DATA_DIR,
     EMBEDDING_MODEL,
-    ENABLE_CONTEXTUAL_RETRIEVAL,
-    RRF_K,
     SCORE_THRESHOLD,
     SILICONFLOW_BASE_URL,
     TOP_K_RETRIEVAL,
-    VECTOR_CANDIDATE_K,
-    require_siliconflow_api_key,
     get_runtime_setting,
+    require_siliconflow_api_key,
 )
-from src.rag.models import (
-    RetrievalResult,
-    FusionScore,
-    canonical_source_from_metadata,
-    content_hash as compute_content_hash,
-    chunk_id as _chunk_id,
-    infer_source_type,
-    metadata_workspace_id,
-    normalize_source,
-    normalize_workspace_id,
-    document_chunk_id as _document_chunk_id,
-    workspace_chunk_id,
-)
+from src.rag.kb_catalog import CatalogService
+from src.rag.kb_hotspots import HotspotTracker
+from src.rag.kb_ingestion import IngestionService
+from src.rag.kb_retrieval import Retriever, rrf_fuse
+from src.rag.kb_state import KnowledgeBaseState, workspace_matches
 from src.rag.loaders import load_document
-from src.api.models import HotspotEntry, KBChunk
+from src.rag.models import RetrievalResult
+
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingIndexMismatchError(ValueError):
     """Raised when the configured embedding model does not match persisted vectors."""
 
 
-def _workspace_matches(metadata: dict, workspace_id: str | None) -> bool:
-    if workspace_id is None:
-        return True
-    return metadata_workspace_id(metadata) == normalize_workspace_id(workspace_id)
+def _load_document(file_path: str, source_name: str | None = None) -> list[Document]:
+    return load_document(file_path, source_name=source_name)
 
 
-def rrf_fuse(
-    vector_ranked: list[tuple[str, float]],
-    bm25_ranked: list[tuple[str, float]],
-    limit: int,
-    k: int = RRF_K,
-) -> list[FusionScore]:
-    """Fuse ranked vector and BM25 results with reciprocal rank fusion."""
-    scores: dict[str, float] = {}
-    vector_scores = dict(vector_ranked)
-    bm25_scores = dict(bm25_ranked)
+def _load_url(url: str) -> list[Document]:
+    from src.rag.loaders import load_url
 
-    for ranked in (vector_ranked, bm25_ranked):
-        for rank, (chunk_id, _raw_score) in enumerate(ranked, start=1):
-            scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (k + rank)
-
-    return [
-        FusionScore(
-            chunk_id=chunk_id,
-            score=score,
-            vector_score=vector_scores.get(chunk_id),
-            bm25_score=bm25_scores.get(chunk_id),
-        )
-        for chunk_id, score in sorted(scores.items(), key=lambda item: item[1], reverse=True)[:limit]
-    ]
-
-
-class HotspotTracker:
-    """Tracks document retrieval hit counts, persisted to JSON."""
-
-    def __init__(self, hotspot_path: Path):
-        self.hit_counter: dict[str, int] = {}
-        self._hotspot_dirty = False
-        self._hotspot_path = hotspot_path
-        self._load_hotspots()
-
-    def _load_hotspots(self):
-        """Load hotspot counter from JSON file."""
-        try:
-            if self._hotspot_path.exists():
-                with open(self._hotspot_path) as f:
-                    self.hit_counter = json.load(f)
-        except Exception as exc:
-            logger.warning("热点计数加载失败: %s", exc)
-            self.hit_counter = {}
-
-    def _save_hotspots(self):
-        """Persist hotspot counter to JSON file (no-op if not dirty)."""
-        if not self._hotspot_dirty:
-            return
-        try:
-            self._hotspot_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._hotspot_path, "w") as f:
-                json.dump(self.hit_counter, f, ensure_ascii=False)
-            self._hotspot_dirty = False
-        except Exception as exc:
-            logger.warning("热点计数持久化失败: %s", exc)
-
-    def record_hit(self, chunk_id: str):
-        """Increment hit count for a chunk."""
-        self.hit_counter[chunk_id] = self.hit_counter.get(chunk_id, 0) + 1
-        self._hotspot_dirty = True
-
-    def get_hotspots(self, top_n: int, doc_by_id: dict[str, Document]) -> list[dict]:
-        """Return top-N hotspots with chunk info."""
-        sorted_chunks = sorted(
-            self.hit_counter.items(),
-            key=lambda x: x[1],
-            reverse=True,
-        )
-        result = []
-        for chunk_id, hits in sorted_chunks[:top_n]:
-            doc = doc_by_id.get(chunk_id)
-            result.append({
-                "chunk_id": chunk_id,
-                "source": doc.metadata.get("source", "") if doc else "",
-                "hits": hits,
-                "content_preview": doc.page_content[:80] if doc else "",
-            })
-        return result
-
-    def clear(self):
-        """Reset all hotspot data."""
-        self.hit_counter = {}
-        self._hotspot_dirty = True
-        self._save_hotspots()
-
-
-class IngestionService:
-    """Handles document loading, splitting, Chroma storage, and BM25 extension."""
-
-    def __init__(
-        self,
-        vector_store: Chroma,
-        all_docs: list[Document],
-        doc_by_id: dict[str, Document],
-        existing_chunk_ids: set[str],
-        bm25_corpus: list[list[str]],
-        bm25_index: list,
-    ):
-        self.vector_store = vector_store
-        self._all_docs = all_docs
-        self._doc_by_id = doc_by_id
-        self._existing_chunk_ids = existing_chunk_ids
-        self._bm25_corpus = bm25_corpus
-        self._bm25_index = bm25_index  # Mutable list wrapping BM25Okapi | None
-        self._loaded = False
-        self._load_lock = threading.Lock()
-
-    def _ensure_loaded(self):
-        """Lazy-load all documents from Chroma on first need (double-checked locking)."""
-        if self._loaded:
-            return
-        with self._load_lock:
-            if self._loaded:
-                return
-            result = self.vector_store.get(include=["documents", "metadatas"])
-            self._all_docs[:] = self._documents_from_chroma_result(result)
-            self._rebuild_all()
-            self._loaded = True
-
-    def _rebuild_all(self):
-        """Rebuild doc_by_id, existing_chunk_ids, and BM25 from all_docs."""
-        self._doc_by_id.clear()
-        self._doc_by_id.update(
-            (doc.metadata["chunk_id"], doc)
-            for doc in self._all_docs
-            if doc.metadata.get("chunk_id")
-        )
-        self._existing_chunk_ids.clear()
-        self._existing_chunk_ids.update(self._doc_by_id)
-        self._bm25_corpus.clear()
-        self._bm25_corpus.extend(self._tokenize(doc.page_content) for doc in self._all_docs)
-        self._bm25_index[0] = BM25Okapi(self._bm25_corpus) if self._bm25_corpus else None
-
-    def _extend_bm25(self, new_docs: list[Document]) -> None:
-        """Incrementally extend BM25 with new documents."""
-        for doc in new_docs:
-            self._bm25_corpus.append(self._tokenize(doc.page_content))
-        self._bm25_index[0] = BM25Okapi(self._bm25_corpus) if self._bm25_corpus else None
-
-    @staticmethod
-    def _documents_from_chroma_result(result: dict) -> list[Document]:
-        """Convert Chroma get() output into LangChain documents."""
-        contents = result.get("documents") or []
-        metadatas = result.get("metadatas") or []
-        ids = result.get("ids") or []
-
-        docs = []
-        for index, content in enumerate(contents):
-            if not content:
-                continue
-            metadata = dict(metadatas[index] or {}) if index < len(metadatas) else {}
-            source = canonical_source_from_metadata(metadata)
-            workspace_id = metadata_workspace_id(metadata)
-            content_hash = metadata.get("content_hash") or compute_content_hash(content)
-            chunk_index = int(metadata.get("chunk_index", index))
-            metadata["source"] = source
-            metadata["workspace_id"] = workspace_id
-            metadata.setdefault("content_hash", content_hash)
-            metadata.setdefault("chunk_index", chunk_index)
-            existing_chunk_id = metadata.get("chunk_id")
-            if existing_chunk_id:
-                expected_prefix = (
-                    f"{workspace_id}::{source}:{chunk_index}:"
-                    if workspace_id else
-                    f"{source}:{chunk_index}:"
-                )
-                if not str(existing_chunk_id).startswith(expected_prefix):
-                    metadata["legacy_chunk_id"] = str(existing_chunk_id)
-                    metadata["chunk_id"] = workspace_chunk_id(
-                        workspace_id,
-                        source,
-                        chunk_index,
-                        content_hash,
-                    )
-            else:
-                metadata["chunk_id"] = workspace_chunk_id(
-                    workspace_id,
-                    source,
-                    chunk_index,
-                    content_hash,
-                )
-            metadata.setdefault("legacy_chroma_id", ids[index] if index < len(ids) else "")
-            docs.append(Document(page_content=content, metadata=metadata))
-        return docs
-
-    @staticmethod
-    def _vector_store_id(doc: Document) -> str:
-        """Return the underlying Chroma row id for a document."""
-        return str(
-            doc.metadata.get("legacy_chroma_id")
-            or doc.metadata.get("chunk_id")
-            or ""
-        )
-
-    def _replace_old_chunks(self, source_name: str, new_docs: list[Document], workspace_id: str = "") -> None:
-        """Remove stale chunks for *source_name* that are not in *new_docs*."""
-        self._ensure_loaded()
-        src = normalize_source(source_name)
-        old_ids = {
-            doc.metadata["chunk_id"]
-            for doc in self._all_docs
-            if normalize_source(doc.metadata.get("source", "")) == src
-            and _workspace_matches(doc.metadata, workspace_id)
-        }
-        if not old_ids:
-            return
-        new_ids = {
-            d.metadata["chunk_id"]
-            for d in self._prepare_splits(new_docs, workspace_id=workspace_id)
-            if d.metadata.get("chunk_id")
-        }
-        stale_ids = old_ids - new_ids
-        if not stale_ids:
-            return
-        stale_docs = [
-            doc for doc in self._all_docs
-            if doc.metadata.get("chunk_id") in stale_ids
-        ]
-        vector_ids = [self._vector_store_id(doc) for doc in stale_docs if self._vector_store_id(doc)]
-        if vector_ids:
-            self.vector_store.delete(ids=vector_ids)
-        self._all_docs[:] = [
-            doc for doc in self._all_docs
-            if doc.metadata["chunk_id"] not in stale_ids
-        ]
-        self._rebuild_all()
-
-    @staticmethod
-    def _tokenize(text: str) -> list[str]:
-        """Tokenize Chinese and mixed-language text for BM25."""
-        return [token.strip().lower() for token in jieba.lcut(text) if token.strip()]
-
-    @staticmethod
-    def _prepare_splits(
-        docs: list[Document],
-        version_mode: str = "replace",
-        version_label: str = "",
-        workspace_id: str = "",
-    ) -> list[Document]:
-        """Split documents and attach stable chunk metadata.
-
-        Args:
-            docs: Documents to split.
-            version_mode: "replace" or "append". Append mode sets version metadata.
-            version_label: Explicit version label (e.g. "v2"). Auto-generated if empty.
-            workspace_id: Workspace scope for generated chunks.
-        """
-        chunk_size = get_runtime_setting("chunk_size", CHUNK_SIZE)
-        chunk_overlap = get_runtime_setting("chunk_overlap", CHUNK_OVERLAP)
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            separators=["\n## ", "\n### ", "\n#### ", "\n\n", "\n", "。", "！", "？", ""],
-        )
-        splits = splitter.split_documents(docs)
-        per_source_counts: Counter[str] = Counter()
-        ingested_at = datetime.now(UTC).isoformat()
-
-        current_heading: dict[str, str] = {}
-
-        for split in splits:
-            source = normalize_source(split.metadata.get("source", "unknown"))
-            normalized_workspace_id = normalize_workspace_id(workspace_id)
-            chunk_index = per_source_counts[source]
-            per_source_counts[source] += 1
-            content_hash = compute_content_hash(split.page_content)
-
-            first_line = split.page_content.split("\n")[0].strip()
-            if first_line.startswith("## ") or first_line.startswith("# "):
-                current_heading[source] = first_line.lstrip("#").strip()
-
-            source_type = split.metadata.get("source_type") or infer_source_type(split.metadata.get("source", ""))
-            meta = {
-                "source": source,
-                "source_type": source_type,
-                "workspace_id": normalized_workspace_id,
-                "chunk_index": chunk_index,
-                "content_hash": content_hash,
-                "chunk_id": workspace_chunk_id(
-                    normalized_workspace_id,
-                    source,
-                    chunk_index,
-                    content_hash,
-                ),
-                "section": current_heading.get(source, ""),
-                "ingested_at": split.metadata.get("ingested_at", ingested_at),
-            }
-            if version_mode == "append":
-                vl = version_label or f"v{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
-                meta["version"] = vl
-                meta["version_ingested_at"] = ingested_at
-            split.metadata.update(meta)
-
-        if get_runtime_setting("enable_contextual_retrieval", ENABLE_CONTEXTUAL_RETRIEVAL):
-            for split in splits:
-                original = split.page_content
-                section = split.metadata.get("section", "")
-                source = split.metadata.get("source", "")
-                ctx_parts = [f"本段属于文档「{source}」"]
-                if section:
-                    ctx_parts.append(f"章节：{section}")
-                context_prefix = "，".join(ctx_parts)
-                split.metadata["original_content"] = original
-                split.page_content = f"{context_prefix}\n{original}"
-
-        return splits
-
-    def _process_documents(
-        self,
-        docs: list[Document],
-        version_mode: str = "replace",
-        version_label: str = "",
-        workspace_id: str = "",
-    ) -> int:
-        """Split documents, store new chunks in Chroma, and extend BM25 incrementally."""
-        self._ensure_loaded()
-        splits = self._prepare_splits(
-            docs,
-            version_mode=version_mode,
-            version_label=version_label,
-            workspace_id=workspace_id,
-        )
-        new_splits = [
-            doc
-            for doc in splits
-            if doc.metadata["chunk_id"] not in self._existing_chunk_ids
-        ]
-
-        if not new_splits:
-            return 0
-
-        ids = [doc.metadata["chunk_id"] for doc in new_splits]
-        self.vector_store.add_documents(new_splits, ids=ids)
-        self._all_docs.extend(new_splits)
-        for doc in new_splits:
-            self._doc_by_id[doc.metadata["chunk_id"]] = doc
-        self._existing_chunk_ids.update(doc.metadata["chunk_id"] for doc in new_splits)
-        self._extend_bm25(new_splits)
-        return len(new_splits)
-
-    def load_preset_documents(self, workspace_id: str = "") -> int:
-        """Load sample text documents from data/ without duplicating existing chunks."""
-        txt_files = sorted(Path(DATA_DIR).glob("sample_*.txt"))
-        total = 0
-        for file_path in txt_files:
-            total += self.ingest_file(
-                str(file_path),
-                source_name=file_path.name,
-                workspace_id=workspace_id,
-            )
-        return total
-
-    def ingest_file(
-        self,
-        file_path: str,
-        source_name: str | None = None,
-        version_mode: str = "replace",
-        progress_callback: Callable[[str, int], None] | None = None,
-        workspace_id: str = "",
-    ) -> int:
-        """Ingest a file and return the number of new chunks."""
-        if progress_callback:
-            progress_callback("loading", 25)
-        docs = load_document(file_path, source_name=source_name)
-        if source_name and version_mode == "skip":
-            self._ensure_loaded()
-            src_norm = normalize_source(source_name)
-            existing = any(
-                normalize_source(d.metadata.get("source", "")) == src_norm
-                and _workspace_matches(d.metadata, workspace_id)
-                for d in self._all_docs
-            )
-            if existing:
-                return 0
-
-        if progress_callback:
-            progress_callback("splitting", 50)
-
-        if source_name and version_mode == "replace":
-            self._replace_old_chunks(source_name, docs, workspace_id=workspace_id)
-
-        vl = ""
-        if version_mode == "append":
-            existing_versions = set()
-            src_norm = normalize_source(source_name or "")
-            for d in self._all_docs:
-                if (
-                    normalize_source(d.metadata.get("source", "")) == src_norm
-                    and _workspace_matches(d.metadata, workspace_id)
-                ):
-                    v = d.metadata.get("version", "")
-                    if v:
-                        existing_versions.add(v)
-            next_v = 1
-            while f"v{next_v}" in existing_versions:
-                next_v += 1
-            vl = f"v{next_v}"
-
-        if progress_callback:
-            progress_callback("embedding", 75)
-        new_count = self._process_documents(
-            docs,
-            version_mode=version_mode,
-            version_label=vl,
-            workspace_id=workspace_id,
-        )
-        return new_count
-
-    def ingest_url(
-        self,
-        url: str,
-        version_mode: str = "replace",
-        progress_callback: Callable[[str, int], None] | None = None,
-        workspace_id: str = "",
-    ) -> int:
-        """Fetch a public URL and ingest its content."""
-        from src.rag.loaders import load_url
-
-        if progress_callback:
-            progress_callback("loading", 25)
-        docs = load_url(url)
-
-        if version_mode == "skip":
-            self._ensure_loaded()
-            url_norm = normalize_source(url)
-            existing = any(
-                normalize_source(d.metadata.get("source", "")) == url_norm
-                and _workspace_matches(d.metadata, workspace_id)
-                for d in self._all_docs
-            )
-            if existing:
-                return 0
-
-        if progress_callback:
-            progress_callback("splitting", 50)
-
-        if version_mode == "replace":
-            self._replace_old_chunks(url, docs, workspace_id=workspace_id)
-
-        version_label = ""
-        if version_mode == "append":
-            existing_versions = set()
-            url_norm = normalize_source(url)
-            for d in self._all_docs:
-                if (
-                    normalize_source(d.metadata.get("source", "")) == url_norm
-                    and _workspace_matches(d.metadata, workspace_id)
-                ):
-                    version = d.metadata.get("version", "")
-                    if version:
-                        existing_versions.add(version)
-            next_v = 1
-            while f"v{next_v}" in existing_versions:
-                next_v += 1
-            version_label = f"v{next_v}"
-
-        if progress_callback:
-            progress_callback("embedding", 75)
-        new_count = self._process_documents(
-            docs,
-            version_mode=version_mode,
-            version_label=version_label,
-            workspace_id=workspace_id,
-        )
-        return new_count
-
-    def add_document(self, file_path: str, workspace_id: str = "") -> int:
-        """Compatibility wrapper for older UI code."""
-        return self.ingest_file(file_path, source_name=Path(file_path).name, workspace_id=workspace_id)
-
-
-class Retriever:
-    """Handles hybrid search, neighbor chunk retrieval, full-text search, and source management."""
-
-    def __init__(
-        self,
-        vector_store: Chroma,
-        all_docs: list[Document],
-        doc_by_id: dict[str, Document],
-        existing_chunk_ids: set[str],
-        bm25_corpus: list[list[str]],
-        bm25_index: list,
-        ingestion: IngestionService,
-        hotspots: HotspotTracker,
-    ):
-        self.vector_store = vector_store
-        self._all_docs = all_docs
-        self._doc_by_id = doc_by_id
-        self._existing_chunk_ids = existing_chunk_ids
-        self._bm25_corpus = bm25_corpus
-        self._bm25_index = bm25_index
-        self._ingestion = ingestion
-        self._hotspots = hotspots
-
-    def _workspace_docs(self, workspace_id: str | None) -> list[Document]:
-        self._ingestion._ensure_loaded()
-        return [
-            doc
-            for doc in self._all_docs
-            if _workspace_matches(doc.metadata, workspace_id)
-        ]
-
-    def hybrid_search(
-        self,
-        query: str,
-        k: int = TOP_K_RETRIEVAL,
-        *,
-        score_threshold: float | None = SCORE_THRESHOLD,
-        vector_candidate_k: int | None = None,
-        filter: dict | None = None,
-        workspace_id: str | None = None,
-    ) -> list[RetrievalResult]:
-        """Hybrid retrieval with vector search, candidate-set BM25, and RRF fusion."""
-        self._ingestion._ensure_loaded()
-        normalized_workspace_id = normalize_workspace_id(workspace_id)
-        if vector_candidate_k is None:
-            doc_count = len(self._workspace_docs(workspace_id))
-            min_candidates = 30
-            max_candidates = 100
-            candidate_k = min(max(min_candidates, int(doc_count * 0.3)), max_candidates)
-        else:
-            candidate_k = vector_candidate_k
-        vector_filter = dict(filter or {})
-        if workspace_id is not None:
-            vector_filter["workspace_id"] = normalized_workspace_id
-        vector_results = self.vector_store.similarity_search_with_score(
-            query,
-            k=candidate_k,
-            filter=vector_filter or None,
-        )
-        if workspace_id is not None:
-            vector_results = [
-                (doc, score)
-                for doc, score in vector_results
-                if _workspace_matches(doc.metadata, workspace_id)
-            ]
-        vector_ranked = [(_document_chunk_id(doc), float(score)) for doc, score in vector_results]
-        vector_doc_map = {_document_chunk_id(doc): doc for doc, _score in vector_results}
-
-        bm25_ranked: list[tuple[str, float]] = []
-        bm25_index = self._bm25_index[0]
-        if bm25_index and vector_doc_map:
-            query_tokens = IngestionService._tokenize(query)
-            candidate_docs = [
-                self._doc_by_id[cid]
-                for cid in vector_doc_map
-                if cid in self._doc_by_id
-            ]
-            if candidate_docs:
-                tokenized = [IngestionService._tokenize(doc.page_content) for doc in candidate_docs]
-                candidate_bm25 = BM25Okapi(tokenized)
-                bm25_scores = candidate_bm25.get_scores(query_tokens)
-                bm25_ranked = [
-                    (candidate_docs[i].metadata["chunk_id"], float(bm25_scores[i]))
-                    for i in range(len(candidate_docs))
-                    if bm25_scores[i] > 0
-                ]
-                bm25_ranked.sort(key=lambda x: x[1], reverse=True)
-                bm25_ranked = bm25_ranked[: k * 2]
-
-        fused = rrf_fuse(vector_ranked, bm25_ranked, limit=k)
-        results = []
-        for item in fused:
-            if score_threshold is not None and item.score < score_threshold:
-                continue
-            doc = vector_doc_map.get(item.chunk_id) or self._doc_by_id.get(item.chunk_id)
-            if doc is None:
-                continue
-            self._hotspots.record_hit(item.chunk_id)
-            results.append(
-                RetrievalResult(
-                    chunk_id=item.chunk_id,
-                    document=doc,
-                    score=item.score,
-                    vector_score=item.vector_score,
-                    bm25_score=item.bm25_score,
-                )
-            )
-        self._hotspots._save_hotspots()
-        return results
-
-    def debug_search_breakdown(
-        self,
-        query: str,
-        k: int = TOP_K_RETRIEVAL,
-        *,
-        filter: dict | None = None,
-        vector_candidate_k: int | None = None,
-        workspace_id: str | None = None,
-    ) -> dict[str, list[RetrievalResult]]:
-        """Return vector, BM25, and fused results for retrieval debugging."""
-        self._ingestion._ensure_loaded()
-        if vector_candidate_k is None:
-            doc_count = len(self._workspace_docs(workspace_id))
-            candidate_k = max(k * 3, min(max(30, int(doc_count * 0.3)), 100))
-        else:
-            candidate_k = max(k, vector_candidate_k)
-
-        normalized_workspace_id = normalize_workspace_id(workspace_id)
-        vector_filter = dict(filter or {})
-        if workspace_id is not None:
-            vector_filter["workspace_id"] = normalized_workspace_id
-        vector_results = self.vector_store.similarity_search_with_score(
-            query,
-            k=candidate_k,
-            filter=vector_filter or None,
-        )
-        if workspace_id is not None:
-            vector_results = [
-                (doc, score)
-                for doc, score in vector_results
-                if _workspace_matches(doc.metadata, workspace_id)
-            ]
-        vector_ranked = [(_document_chunk_id(doc), float(score)) for doc, score in vector_results]
-        vector_doc_map = {_document_chunk_id(doc): doc for doc, score in vector_results}
-
-        query_tokens = IngestionService._tokenize(query)
-        bm25_ranked: list[tuple[str, float]] = []
-        bm25_index = self._bm25_index[0]
-        if bm25_index and query_tokens:
-            scoped_docs = self._workspace_docs(workspace_id)
-            scoped_bm25 = (
-                BM25Okapi([IngestionService._tokenize(doc.page_content) for doc in scoped_docs])
-                if scoped_docs else None
-            )
-            raw_scores = scoped_bm25.get_scores(query_tokens) if scoped_bm25 else []
-            bm25_ranked = [
-                (scoped_docs[i].metadata["chunk_id"], float(raw_scores[i]))
-                for i in range(len(scoped_docs))
-                if raw_scores[i] > 0
-            ]
-            bm25_ranked.sort(key=lambda item: item[1], reverse=True)
-
-        fused = rrf_fuse(vector_ranked, bm25_ranked, limit=candidate_k)
-
-        def _as_result(chunk_id: str, score: float, *, vector_score: float | None = None, bm25_score: float | None = None) -> RetrievalResult | None:
-            doc = vector_doc_map.get(chunk_id) or self._doc_by_id.get(chunk_id)
-            if doc is None:
-                return None
-            return RetrievalResult(
-                chunk_id=chunk_id,
-                document=doc,
-                score=score,
-                vector_score=vector_score,
-                bm25_score=bm25_score,
-            )
-
-        vector_top = [
-            result
-            for chunk_id, score in vector_ranked[:k]
-            if (result := _as_result(chunk_id, score, vector_score=score)) is not None
-        ]
-        bm25_top = [
-            result
-            for chunk_id, score in bm25_ranked[:k]
-            if (result := _as_result(chunk_id, score, bm25_score=score)) is not None
-        ]
-        fused_top = [
-            result
-            for item in fused[:k]
-            if (
-                result := _as_result(
-                    item.chunk_id,
-                    item.score,
-                    vector_score=item.vector_score,
-                    bm25_score=item.bm25_score,
-                )
-            ) is not None
-        ]
-
-        return {
-            "vector_results": vector_top,
-            "bm25_results": bm25_top,
-            "fused_results": fused_top,
-        }
-
-    def get_neighbor_chunks(self, chunk_id: str, window: int = 1, workspace_id: str | None = None) -> list[Document]:
-        """Return neighbor chunks around a given chunk_id from the same source."""
-        self._ingestion._ensure_loaded()
-        doc = self._doc_by_id.get(chunk_id)
-        if doc is None:
-            return []
-        if workspace_id is not None and not _workspace_matches(doc.metadata, workspace_id):
-            return []
-
-        source = doc.metadata.get("source", "")
-        chunk_index = doc.metadata.get("chunk_index")
-        if not source or chunk_index is None:
-            return [doc]
-
-        same_source = sorted(
-            [
-                d for d in self._all_docs
-                if d.metadata.get("source") == source and _workspace_matches(d.metadata, workspace_id)
-            ],
-            key=lambda d: d.metadata.get("chunk_index", 0),
-        )
-        if not same_source:
-            return [doc]
-
-        positions = {d.metadata.get("chunk_id"): i for i, d in enumerate(same_source)}
-        pos = positions.get(chunk_id)
-        if pos is None:
-            return [doc]
-
-        start = max(0, pos - window)
-        end = min(len(same_source), pos + window + 1)
-        return same_source[start:end]
-
-    def search_content(self, query: str, workspace_id: str | None = None) -> list[Document]:
-        """Full-text search across all in-memory documents."""
-        scoped_docs = self._workspace_docs(workspace_id)
-        if not query or not scoped_docs:
-            return []
-        keywords = [kw.strip().lower() for kw in query.split() if kw.strip()]
-        if not keywords:
-            return []
-        results = []
-        for doc in scoped_docs:
-            text = doc.page_content.lower()
-            if any(kw in text for kw in keywords):
-                results.append(doc)
-        return results[:50]
-
-    @property
-    def document_count(self) -> int:
-        """Return the number of indexed chunks."""
-        return len(self._existing_chunk_ids)
-
-    def source_counts(self, workspace_id: str | None = None) -> list[Tuple[str, int]]:
-        """Return chunk counts by source file."""
-        docs = self._workspace_docs(workspace_id)
-        counts: Counter[str] = Counter()
-        for doc in docs:
-            src = normalize_source(doc.metadata.get("source", "未知来源"))
-            version = doc.metadata.get("version", "")
-            key = f"{src} ({version})" if version else src
-            counts[key] += 1
-        return sorted(counts.items())
-
-    def delete_source(self, source_name: str, workspace_id: str | None = None) -> int:
-        """Delete all chunks belonging to a source file (and version if specified).
-
-        Supports ``"doc.txt"`` (all versions) or ``"doc.txt (v2)"`` (single version).
-        Returns the number of chunks removed.
-        """
-        self._ingestion._ensure_loaded()
-        import re as _re
-        version_filter = None
-        m = _re.match(r"^(.+?)\s+\(v(\d+)\)$", source_name)
-        if m:
-            source_name = m.group(1).strip()
-            version_filter = f"v{m.group(2)}"
-        source_name = normalize_source(source_name)
-        before = sum(
-            1
-            for doc in self._all_docs
-            if normalize_source(doc.metadata.get("source", "")) == source_name
-            and (version_filter is None or doc.metadata.get("version") == version_filter)
-            and _workspace_matches(doc.metadata, workspace_id)
-        )
-        target_docs = [
-            doc
-            for doc in self._all_docs
-            if normalize_source(doc.metadata.get("source", "")) == source_name
-            and (version_filter is None or doc.metadata.get("version") == version_filter)
-            and _workspace_matches(doc.metadata, workspace_id)
-        ]
-        vector_ids = [
-            IngestionService._vector_store_id(doc)
-            for doc in target_docs
-            if IngestionService._vector_store_id(doc)
-        ]
-        if vector_ids:
-            self.vector_store.delete(ids=vector_ids)
-
-        self._all_docs[:] = [
-            doc
-            for doc in self._all_docs
-            if not (
-                normalize_source(doc.metadata.get("source", "")) == source_name
-                and (version_filter is None or doc.metadata.get("version") == version_filter)
-                and _workspace_matches(doc.metadata, workspace_id)
-            )
-        ]
-        self._ingestion._rebuild_all()
-        return before
-
-    def clear_workspace(self, workspace_id: str | None = None) -> int:
-        docs = self._workspace_docs(workspace_id)
-        vector_ids = [
-            IngestionService._vector_store_id(doc)
-            for doc in docs
-            if IngestionService._vector_store_id(doc)
-        ]
-        if vector_ids:
-            self.vector_store.delete(ids=vector_ids)
-        removed = len(docs)
-        if removed == 0:
-            return 0
-        self._all_docs[:] = [
-            doc for doc in self._all_docs
-            if not _workspace_matches(doc.metadata, workspace_id)
-        ]
-        self._ingestion._rebuild_all()
-        return removed
-
-    def clear(self):
-        """Clear all in-memory knowledge base state.  KnowledgeBase facade handles vector store."""
-        self._all_docs.clear()
-        self._doc_by_id.clear()
-        self._existing_chunk_ids.clear()
-        self._bm25_corpus.clear()
-        self._bm25_index[0] = None
-        self._ingestion._loaded = False
-        self._hotspots.clear()
+    return load_url(url)
 
 
 class KnowledgeBase:
-    """Facade managing document ingestion, vector storage, BM25 indexing, and retrieval.
-
-    Delegates to HotspotTracker, IngestionService, and Retriever under the hood.
-    """
+    """Facade managing ingestion, retrieval, and catalog operations for the KB."""
 
     def __init__(self):
         api_key = require_siliconflow_api_key()
@@ -898,46 +65,41 @@ class KnowledgeBase:
         )
         self.vector_store = self._init_vector_store()
 
-        # Shared mutable state for IngestionService + Retriever
-        self.all_docs: List[Document] = []
-        self.doc_by_id: dict[str, Document] = {}
-        self.existing_chunk_ids: set[str] = set(self.vector_store.get(include=[])["ids"])
-
-        # Wrapped in a list so IngestionService and Retriever share a mutable reference to BM25 index
-        self._bm25_ref: list = [None]
-        self._bm25_corpus_list: List[List[str]] = []
+        self.state = KnowledgeBaseState(initial_chunk_ids=self.vector_store.get(include=[])["ids"])
+        self.all_docs = self.state.all_docs
+        self.doc_by_id = self.state.doc_by_id
+        self.existing_chunk_ids = self.state.existing_chunk_ids
+        self._bm25_ref = self.state.bm25_index_ref
+        self._bm25_corpus_list = self.state.bm25_corpus
         self._refresh_index_metadata_state()
 
         self.hotspots = HotspotTracker(hotspot_path=Path(DATA_DIR) / "hotspots.json")
-
         self.ingestion = IngestionService(
             vector_store=self.vector_store,
-            all_docs=self.all_docs,
-            doc_by_id=self.doc_by_id,
-            existing_chunk_ids=self.existing_chunk_ids,
-            bm25_corpus=self._bm25_corpus_list,
-            bm25_index=self._bm25_ref,
+            state=self.state,
+            document_loader=_load_document,
+            url_loader=_load_url,
         )
-
         self.retriever = Retriever(
             vector_store=self.vector_store,
-            all_docs=self.all_docs,
-            doc_by_id=self.doc_by_id,
-            existing_chunk_ids=self.existing_chunk_ids,
-            bm25_corpus=self._bm25_corpus_list,
-            bm25_index=self._bm25_ref,
+            state=self.state,
+            ingestion=self.ingestion,
+            hotspots=self.hotspots,
+        )
+        self.catalog = CatalogService(
+            vector_store=self.vector_store,
+            state=self.state,
             ingestion=self.ingestion,
             hotspots=self.hotspots,
         )
 
-        # Write lock serializes concurrent upload/delete/clear operations.
         self._write_lock = threading.Lock()
 
     def _read_index_metadata(self) -> dict:
         try:
             if self._index_meta_path.exists():
-                with open(self._index_meta_path, encoding="utf-8") as f:
-                    return json.load(f)
+                with open(self._index_meta_path, encoding="utf-8") as file:
+                    return json.load(file)
         except Exception as exc:
             logger.warning("向量索引元数据读取失败: %s", exc)
         return {}
@@ -945,13 +107,13 @@ class KnowledgeBase:
     def _write_index_metadata(self) -> None:
         try:
             self._index_meta_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._index_meta_path, "w", encoding="utf-8") as f:
+            with open(self._index_meta_path, "w", encoding="utf-8") as file:
                 json.dump(
                     {
                         "embedding_model": self.embedding_model,
                         "updated_at": datetime.now(UTC).isoformat(),
                     },
-                    f,
+                    file,
                     ensure_ascii=False,
                     indent=2,
                 )
@@ -984,14 +146,11 @@ class KnowledgeBase:
             raise EmbeddingIndexMismatchError(self._embedding_mismatch_error)
 
     def _init_vector_store(self) -> Chroma:
-        """Initialize the persistent vector store."""
         return Chroma(
             persist_directory=CHROMA_PERSIST_DIR,
             embedding_function=self.embeddings,
             collection_name="knowbase",
         )
-
-    # -- Public delegation --
 
     def hybrid_search(
         self,
@@ -1002,11 +161,14 @@ class KnowledgeBase:
         vector_candidate_k: int | None = None,
         filter: dict | None = None,
         workspace_id: str | None = None,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         self._ensure_embedding_compatible()
         return self.retriever.hybrid_search(
-            query, k=k, score_threshold=score_threshold,
-            vector_candidate_k=vector_candidate_k, filter=filter,
+            query,
+            k=k,
+            score_threshold=score_threshold,
+            vector_candidate_k=vector_candidate_k,
+            filter=filter,
             workspace_id=workspace_id,
         )
 
@@ -1028,10 +190,10 @@ class KnowledgeBase:
             workspace_id=workspace_id,
         )
 
-    def get_neighbor_chunks(self, chunk_id: str, window: int = 1, workspace_id: str | None = None) -> List[Document]:
+    def get_neighbor_chunks(self, chunk_id: str, window: int = 1, workspace_id: str | None = None) -> list[Document]:
         return self.retriever.get_neighbor_chunks(chunk_id, window=window, workspace_id=workspace_id)
 
-    def search_content(self, query: str, workspace_id: str | None = None) -> List[Document]:
+    def search_content(self, query: str, workspace_id: str | None = None) -> list[Document]:
         return self.retriever.search_content(query, workspace_id=workspace_id)
 
     def load_preset_documents(self, workspace_id: str = "") -> int:
@@ -1080,60 +242,37 @@ class KnowledgeBase:
 
     def delete_source(self, source_name: str, workspace_id: str | None = None) -> int:
         with self._write_lock:
-            return self.retriever.delete_source(source_name, workspace_id=workspace_id)
+            return self.catalog.delete_source(source_name, workspace_id=workspace_id)
 
-    def clear(self):
+    def clear(self) -> None:
         with self._write_lock:
             self.vector_store.delete_collection()
             self.vector_store = self._init_vector_store()
-            self.retriever.vector_store = self.vector_store
             self.ingestion.vector_store = self.vector_store
-            self.retriever.clear()
+            self.retriever.vector_store = self.vector_store
+            self.catalog.vector_store = self.vector_store
+            self.catalog.clear()
             self._refresh_index_metadata_state()
 
     def clear_workspace(self, workspace_id: str = "") -> int:
         with self._write_lock:
-            return self.retriever.clear_workspace(workspace_id=workspace_id)
+            return self.catalog.clear_workspace(workspace_id=workspace_id)
 
-    def get_hotspots(self, top_n: int = 50, workspace_id: str | None = None) -> List[dict]:
-        self.retriever._ingestion._ensure_loaded()
-        scoped_docs = {chunk_id: doc for chunk_id, doc in self.doc_by_id.items() if _workspace_matches(doc.metadata, workspace_id)}
-        raw = self.hotspots.get_hotspots(top_n, scoped_docs if workspace_id is not None else self.doc_by_id)
-        return [HotspotEntry(**entry) for entry in raw]
+    def get_hotspots(self, top_n: int = 50, workspace_id: str | None = None) -> list[HotspotEntry]:
+        return self.catalog.get_hotspots(top_n=top_n, workspace_id=workspace_id)
 
     def get_chunk_by_id(self, chunk_id: str, workspace_id: str | None = None) -> KBChunk | None:
-        """Look up a single chunk by its chunk_id from the in-memory index."""
-        self.retriever._ingestion._ensure_loaded()
-        doc = self.doc_by_id.get(chunk_id)
-        if doc is None:
-            return None
-        if workspace_id is not None and not _workspace_matches(doc.metadata, workspace_id):
-            return None
-        return KBChunk(
-            source=doc.metadata.get("source", ""),
-            chunk_index=doc.metadata.get("chunk_index", 0),
-            chunk_id=chunk_id,
-            page=doc.metadata.get("page"),
-            content=doc.page_content,
-            original_content=doc.metadata.get("original_content"),
-            section=doc.metadata.get("section"),
-        )
+        return self.catalog.get_chunk_by_id(chunk_id, workspace_id=workspace_id)
 
     @property
     def document_count(self) -> int:
         return self.retriever.document_count
 
     def document_count_for_workspace(self, workspace_id: str = "") -> int:
-        return len(self.retriever._workspace_docs(workspace_id))
+        return self.catalog.document_count_for_workspace(workspace_id)
 
     def stats(self, workspace_id: str = "") -> dict[str, int]:
-        docs = self.retriever._workspace_docs(workspace_id)
-        sources = self.retriever.source_counts(workspace_id)
-        return {
-            "chunk_count": len(docs),
-            "source_count": len(sources),
-            "total_chars": sum(len(doc.page_content) for doc in docs),
-        }
+        return self.catalog.stats(workspace_id=workspace_id)
 
     def list_chunks(
         self,
@@ -1144,37 +283,27 @@ class KnowledgeBase:
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[int, list[KBChunk]]:
-        docs = self.retriever._workspace_docs(workspace_id)
-        if source:
-            normalized_source = normalize_source(source)
-            import re as _re
-            version_filter = None
-            match = _re.match(r"^(.+?)\s+\(v(\d+)\)$", normalized_source)
-            if match:
-                normalized_source = match.group(1).strip()
-                version_filter = f"v{match.group(2)}"
-            docs = [
-                doc for doc in docs
-                if doc.metadata.get("source", "") == normalized_source
-                and (version_filter is None or doc.metadata.get("version") == version_filter)
-            ]
-        if search:
-            keywords = [kw.strip().lower() for kw in search.split() if kw.strip()]
-            docs = [doc for doc in docs if any(kw in doc.page_content.lower() for kw in keywords)]
-        total = len(docs)
-        page = docs[skip: skip + limit]
-        return total, [
-            KBChunk(
-                source=doc.metadata.get("source", ""),
-                chunk_index=doc.metadata.get("chunk_index", 0),
-                chunk_id=doc.metadata.get("chunk_id", ""),
-                page=doc.metadata.get("page"),
-                content=doc.page_content,
-                original_content=doc.metadata.get("original_content"),
-                section=doc.metadata.get("section"),
-            )
-            for doc in page
-        ]
+        return self.catalog.list_chunks(
+            workspace_id=workspace_id,
+            source=source,
+            search=search,
+            skip=skip,
+            limit=limit,
+        )
 
-    def source_counts(self, workspace_id: str | None = None) -> List[Tuple[str, int]]:
-        return self.retriever.source_counts(workspace_id=workspace_id)
+    def source_counts(self, workspace_id: str | None = None) -> list[tuple[str, int]]:
+        return self.catalog.source_counts(workspace_id=workspace_id)
+
+
+__all__ = [
+    "CatalogService",
+    "EmbeddingIndexMismatchError",
+    "HotspotTracker",
+    "IngestionService",
+    "KnowledgeBase",
+    "KnowledgeBaseState",
+    "Retriever",
+    "RetrievalResult",
+    "rrf_fuse",
+    "workspace_matches",
+]
