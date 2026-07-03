@@ -134,6 +134,15 @@ class ConversationEdgeCaseTests(unittest.TestCase):
         result = conversations.list_conversations()
         self.assertEqual(result, [])
 
+    def test_list_conversations_includes_last_message_preview(self):
+        conv = conversations.create_conversation("预览测试")
+        conversations.add_message(conv["id"], "user", "第一条消息")
+        conversations.add_message(conv["id"], "assistant", "第二条消息需要被显示为摘要\n并且换行会被压平")
+
+        result = conversations.list_conversations()
+
+        self.assertEqual(result[0]["last_message_preview"], "第二条消息需要被显示为摘要 并且换行会被压平")
+
     def test_export_conversation_returns_markdown(self):
         conv = conversations.create_conversation("导出测试")
         conversations.add_message(conv["id"], "user", "你好")

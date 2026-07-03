@@ -49,7 +49,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
           setTotalCostSummary(null)
           return
         }
-        setLogs(result.logs)
+        setLogs(result.logs ?? [])
         setTotalCostSummary(result.total_cost)
       })
       .catch(() => {})

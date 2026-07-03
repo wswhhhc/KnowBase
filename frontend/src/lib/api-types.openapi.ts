@@ -715,6 +715,11 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at: string;
+            /**
+             * Last Message Preview
+             * @default
+             */
+            last_message_preview: string;
         };
         /** DebugSearchRequest */
         DebugSearchRequest: {

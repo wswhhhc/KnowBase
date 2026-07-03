@@ -1,41 +1,42 @@
 import type {
-  Source, Conversation, ApiMessage, KBStats, QueryLogEntry,
-  DebugNodeInfo, DebugInfo, DocSource, HotspotEntry, KBConfig, IngestResponse, KBChunk,
-  RuntimeSettings, SettingsUpdateResult,
-} from './api-types'
-
-export interface QueryLogsResponse {
-  logs: QueryLogEntry[]
-  total_cost: number
-  total_tokens: number
-  total_prompt_tokens: number
-  total_completion_tokens: number
-}
-
-export type {
-  Source,
-  Conversation,
-  KBStats,
-  QueryLogEntry,
   DebugNodeInfo,
   DebugInfo,
-  DocSource,
-  HotspotEntry,
-  KBConfig,
-  IngestResponse,
-  KBChunk,
-  RuntimeSettings,
-  SettingsUpdateResult,
+  ChatStreamDonePayload,
+  ChatStreamSourcesPayload,
+} from './api-types'
+import type { components } from './api-types.openapi'
+
+type Schemas = components['schemas']
+
+export type Source = Schemas['ChatSource']
+export type Conversation = Schemas['ConversationOut']
+export type ApiMessage = Schemas['MessageOut']
+export type KBStats = Schemas['KBStats']
+export type QueryLogEntry = Schemas['QueryLogEntry']
+export type QueryLogsResponse = Schemas['QueryLogsResponse']
+export type DocSource = Schemas['SourceOut']
+export type HotspotEntry = Schemas['HotspotEntry']
+export type KBConfig = Schemas['KBConfig']
+export type IngestResponse = Schemas['IngestResponse']
+export type KBChunk = Schemas['KBChunk']
+export type RuntimeSettings = Schemas['RuntimeSettingsOut']
+export type RuntimeSettingsUpdate = Schemas['RuntimeSettingsUpdate']
+export type SettingsUpdateResult = Schemas['SettingsUpdateResult']
+export type Workspace = Schemas['WorkspaceOut']
+export type Bookmark = Schemas['BookmarkOut']
+export type DebugSearchHit = Schemas['DebugSearchResult']
+export type DebugSearchResponse = Schemas['DebugSearchResponse']
+export type PinStateResponse = Schemas['PinStateOut']
+
+export type {
+  DebugNodeInfo,
+  DebugInfo,
+  ChatStreamDonePayload,
+  ChatStreamSourcesPayload,
 }
 
 export interface Message extends ApiMessage {
   role: 'user' | 'assistant'
-}
-
-export interface PinStateResponse {
-  thread_id: string
-  pinned_chunk_ids: string[]
-  excluded_chunk_ids: string[]
 }
 
 export interface KBChunkResponse {
@@ -76,14 +77,6 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 // ── Conversations ──
-
-export interface Workspace {
-  id: string
-  name: string
-  description: string
-  created_at: string
-  updated_at: string
-}
 
 export const getConversations = (workspaceId?: string) => {
   return req<Conversation[]>(withWorkspaceScope('/conversations', workspaceId))
@@ -148,40 +141,6 @@ export const deleteWorkspace = (id: string) =>
   req(`/workspaces/${id}`, { method: 'DELETE' })
 
 // ── Bookmarks ──
-
-export interface Bookmark {
-  id: number
-  workspace_id: string
-  conversation_id: string
-  message_id: number
-  chunk_id: string
-  note: string
-  content: string
-  source: string
-  tags: string
-  created_at: string
-}
-
-export interface DebugSearchHit {
-  chunk_id: string
-  source: string
-  content: string
-  score: number | null
-  vector_score: number | null
-  bm25_score: number | null
-  rrf_score: number | null
-  vector_rank: number | null
-  bm25_rank: number | null
-  rrf_rank: number | null
-  rerank_rank: number | null
-}
-
-export interface DebugSearchResponse {
-  strategy: string
-  vector_results: DebugSearchHit[]
-  bm25_results: DebugSearchHit[]
-  fused_results: DebugSearchHit[]
-}
 
 export const MASKED_SECRET_VALUE = '__KEEP_EXISTING_SECRET__'
 
@@ -406,7 +365,7 @@ export const queryLogs = (days: number = 7, limit: number = 500) =>
 export const getSettings = () =>
   req<RuntimeSettings>('/settings')
 
-export const updateSettings = (data: Partial<RuntimeSettings>) =>
+export const updateSettings = (data: RuntimeSettingsUpdate) =>
   req<SettingsUpdateResult>('/settings', {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -503,8 +462,8 @@ export interface ChatStreamCallbacks {
   onNode?: (label: string, nodes: string[]) => void
   onToken?: (text: string) => void
   onDebug?: (data: DebugInfo) => void
-  onSources?: (data: { sources: Source[]; quality_reason: string; evidence_level: string; evidence_summary: string; outcome_category: string }) => void
-  onDone?: (data: { thread_id: string; conv_id: string; assistant_msg_id: number; answer: string; sources: Source[]; quality_reason: string; evidence_level: string; evidence_summary: string; outcome_category: string; elapsed_ms: number }) => void
+  onSources?: (data: ChatStreamSourcesPayload) => void
+  onDone?: (data: ChatStreamDonePayload) => void
   onError?: (message: string) => void
 }
 

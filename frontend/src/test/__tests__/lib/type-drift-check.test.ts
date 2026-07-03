@@ -12,7 +12,7 @@ import type {
   RuntimeSettings,
   SettingsUpdateResult,
   Source,
-} from '@/lib/api-types'
+} from '@/lib/api'
 
 describe('api type contracts', () => {
   it('QueryLogEntry includes the metrics fields used by the dashboard', () => {

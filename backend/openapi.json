@@ -2408,6 +2408,11 @@
           "updated_at": {
             "type": "string",
             "title": "Updated At"
+          },
+          "last_message_preview": {
+            "type": "string",
+            "title": "Last Message Preview",
+            "default": ""
           }
         },
         "type": "object",

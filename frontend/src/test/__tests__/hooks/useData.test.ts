@@ -222,7 +222,7 @@ describe('useConversations error paths', () => {
   })
 
   it('remove when activeId differs does not clear', async () => {
-    const initialConvs = [{ id: 'conv-1', thread_id: 't1', title: 'A', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }]
+    const initialConvs = [{ id: 'conv-1', thread_id: 't1', title: 'A', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', last_message_preview: '上次的摘要' }]
     vi.mocked(api.getConversations).mockResolvedValue(initialConvs)
     vi.mocked(api.deleteConversation).mockResolvedValue(undefined)
 
