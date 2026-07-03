@@ -5,11 +5,15 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  searchStrategy?: string
+  webSearchEnabled?: boolean
   sources?: Source[]
   quality_reason?: string
   evidence_level?: string
   evidence_summary?: string
   outcome_category?: string
+  usedRerank?: boolean
+  elapsedMs?: number
   streaming?: boolean
   debugData?: DebugInfo
   convId?: string

@@ -34,6 +34,25 @@ const FEEDBACK_OPTIONS = [
   { key: 'other', label: '其他' },
 ] as const
 
+const STRATEGY_LABELS: Record<string, string> = {
+  fast: '快速',
+  balanced: '标准',
+  high_quality: '严谨',
+  deep: '深度',
+}
+
+function formatElapsed(elapsedMs?: number, nodeElapsedMs?: number) {
+  const total = elapsedMs ?? nodeElapsedMs
+  if (!total || total <= 0) return '未知'
+  if (total < 1000) return `${total}ms`
+  return `${(total / 1000).toFixed(1)}s`
+}
+
+function formatBooleanEcho(value?: boolean) {
+  if (value == null) return '未知'
+  return value ? '是' : '否'
+}
+
 interface CitationTextProps {
   text: string
   sources?: Source[]
@@ -202,6 +221,11 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
   const feedbackDialogOpen = activeDialog === 'feedback'
   const exportDialogOpen = activeDialog === 'export'
   const feedbackReasonName = `feedback-reason-${message.id}`
+  const nodeElapsedMs = message.debugData?.nodes.reduce((total, node) => total + node.elapsed_ms, 0)
+  const strategyLabel = STRATEGY_LABELS[message.searchStrategy || ''] || '未知'
+  const rerankLabel = formatBooleanEcho(message.usedRerank ?? message.debugData?.used_rerank)
+  const webSearchLabel = formatBooleanEcho(message.webSearchEnabled ?? message.debugData?.used_web_search)
+  const elapsedLabel = formatElapsed(message.elapsedMs, nodeElapsedMs)
 
   const handleBookmarkToggle = () => {
     if (bookmarked) return
@@ -311,6 +335,13 @@ export default function MessageBubble({ message, prevMessage, threadId, onCitati
 
             {!message.streaming && (
               <>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-2xs text-muted-foreground/80">
+                  <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">策略：{strategyLabel}</span>
+                  <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">重排：{rerankLabel}</span>
+                  <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">联网：{webSearchLabel}</span>
+                  <span className="rounded-full border border-border/70 bg-surface/40 px-2.5 py-1">耗时：{elapsedLabel}</span>
+                </div>
+
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {message.evidence_level && message.outcome_category === 'success' && (
                     <TooltipProvider>

@@ -202,4 +202,21 @@ describe('MessageBubble', () => {
       expect(screen.queryByRole('dialog', { name: '导出对话' })).not.toBeInTheDocument()
     })
   })
+
+  it('shows the answer strategy echo for assistant messages', () => {
+    renderBubble({
+      message: {
+        ...baseMessage,
+        searchStrategy: 'high_quality',
+        webSearchEnabled: true,
+        usedRerank: true,
+        elapsedMs: 1520,
+      },
+    })
+
+    expect(screen.getByText('策略：严谨')).toBeInTheDocument()
+    expect(screen.getByText('重排：是')).toBeInTheDocument()
+    expect(screen.getByText('联网：是')).toBeInTheDocument()
+    expect(screen.getByText('耗时：1.5s')).toBeInTheDocument()
+  })
 })

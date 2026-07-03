@@ -12,6 +12,7 @@ interface AssistantCompletion {
   outcome_category: string
   conv_id: string
   assistant_msg_id: number
+  elapsed_ms: number
 }
 
 export function useChatMessages(maxVisibleMessages = 100) {
@@ -21,7 +22,11 @@ export function useChatMessages(maxVisibleMessages = 100) {
     ? messages.slice(-maxVisibleMessages)
     : messages
 
-  const appendPendingExchange = (question: string, assistantId: string) => {
+  const appendPendingExchange = (
+    question: string,
+    assistantId: string,
+    metadata?: { searchStrategy?: string; webSearchEnabled?: boolean },
+  ) => {
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -33,6 +38,8 @@ export function useChatMessages(maxVisibleMessages = 100) {
       content: '',
       streaming: true,
       originalQuestion: question,
+      searchStrategy: metadata?.searchStrategy,
+      webSearchEnabled: metadata?.webSearchEnabled,
     }
 
     setMessages((prev) => [...prev, userMessage, assistantMessage])
@@ -86,6 +93,8 @@ export function useChatMessages(maxVisibleMessages = 100) {
               evidence_level: payload.evidence_level,
               evidence_summary: payload.evidence_summary,
               outcome_category: payload.outcome_category,
+              usedRerank: debugData?.used_rerank,
+              elapsedMs: payload.elapsed_ms,
               streaming: false,
               debugData,
               convId: payload.conv_id,

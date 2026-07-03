@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Button, Input, ConfirmDialog } from '@/components/ui'
 import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
@@ -27,6 +27,17 @@ export default function ConversationList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false)
+  const [searchValue, setSearchValue] = useState('')
+
+  const filteredConversations = useMemo(() => {
+    const keyword = searchValue.trim().toLowerCase()
+    if (!keyword) return conversations
+    return conversations.filter((conversation) => conversation.title.toLowerCase().includes(keyword))
+  }, [conversations, searchValue])
+
+  const visibleConversationIds = filteredConversations.map((conversation) => conversation.id)
+  const allVisibleSelected = visibleConversationIds.length > 0
+    && visibleConversationIds.every((id) => selectedIds.has(id))
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -61,6 +72,18 @@ export default function ConversationList({
     }
   }
 
+  const toggleSelectVisible = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allVisibleSelected) {
+        visibleConversationIds.forEach((id) => next.delete(id))
+      } else {
+        visibleConversationIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
   return (
     <div className="space-y-1">
       {/* New + Select All + Batch Delete */}
@@ -72,14 +95,8 @@ export default function ConversationList({
           <label className="flex items-center gap-1 cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors px-1">
             <input
               type="checkbox"
-              checked={selectedIds.size === conversations.length && conversations.length > 0}
-              onChange={() =>
-                setSelectedIds(
-                  selectedIds.size === conversations.length
-                    ? new Set()
-                    : new Set(conversations.map((c) => c.id)),
-                )
-              }
+              checked={allVisibleSelected}
+              onChange={toggleSelectVisible}
               className="h-3.5 w-3.5 accent-primary shrink-0 cursor-pointer"
             />
             全选
@@ -92,8 +109,21 @@ export default function ConversationList({
         )}
       </div>
 
+      {conversations.length > 0 && (
+        <div className="mb-3">
+          <Input
+            type="search"
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            placeholder="搜索对话标题"
+            aria-label="搜索对话"
+            className="h-8 text-xs"
+          />
+        </div>
+      )}
+
       {/* Conversation Items */}
-      {conversations.map((c) => (
+      {filteredConversations.map((c) => (
         <div
           key={c.id}
           className={`group flex items-center rounded-md px-3 py-2 text-sm transition-all ${
@@ -164,6 +194,9 @@ export default function ConversationList({
       {conversations.length === 0 && !loading && (
         <p className="text-xs text-muted-foreground text-center py-6">暂无对话</p>
       )}
+      {conversations.length > 0 && filteredConversations.length === 0 && !loading && (
+        <p className="text-xs text-muted-foreground text-center py-6">没有匹配的对话</p>
+      )}
 
       {/* Single delete confirm */}
       <ConfirmDialog
@@ -183,21 +216,7 @@ export default function ConversationList({
         onOpenChange={setBatchDeleteOpen}
         title="批量删除"
         description={`确定要删除选中的 ${selectedIds.size} 个对话吗？此操作不可撤销。`}
-        onConfirm={async () => {
-          const ids = Array.from(selectedIds)
-          try {
-            await api.deleteConversations(ids)
-            if (activeId && selectedIds.has(activeId)) {
-              clearMessages()
-              setActiveId(null)
-            }
-            setSelectedIds(new Set())
-            onBatchDelete(ids)
-            toast.success(`已删除 ${ids.length} 个对话`)
-          } catch (err) {
-            toast.error('批量删除失败', { description: String(err) })
-          }
-        }}
+        onConfirm={handleBatchDelete}
       />
     </div>
   )

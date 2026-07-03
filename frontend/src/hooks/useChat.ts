@@ -44,7 +44,10 @@ export function useChat(onNewConversation?: (threadId: string) => void) {
       setStreamingNodes([])
 
       const assistantId = `assistant-${Date.now()}`
-      appendPendingExchange(question, assistantId)
+      appendPendingExchange(question, assistantId, {
+        searchStrategy,
+        webSearchEnabled,
+      })
 
       let accumulatedContent = ''
       let debugData: DebugInfo | undefined
