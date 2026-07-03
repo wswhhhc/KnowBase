@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
+import logging
 from pathlib import Path
 import threading
 
@@ -30,6 +31,8 @@ from src.rag.models import (
     normalize_workspace_id,
     workspace_chunk_id,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionService:
@@ -62,9 +65,42 @@ class IngestionService:
             if self._loaded:
                 return
             result = self.vector_store.get(include=["documents", "metadatas"])
+            result = self._backfill_legacy_workspace_metadata(result)
             self._all_docs[:] = self._documents_from_chroma_result(result)
             self._rebuild_all()
             self._loaded = True
+
+    def _backfill_legacy_workspace_metadata(self, result: dict) -> dict:
+        """Persist missing workspace metadata for legacy default-workspace rows."""
+        ids = list(result.get("ids") or [])
+        metadatas = list(result.get("metadatas") or [])
+        if not ids or not metadatas:
+            return result
+
+        patched_metadatas: list[dict] = []
+        update_ids: list[str] = []
+        update_metadatas: list[dict] = []
+
+        for index, metadata in enumerate(metadatas):
+            patched = dict(metadata or {})
+            if "workspace_id" not in patched:
+                patched["workspace_id"] = ""
+                if index < len(ids):
+                    update_ids.append(ids[index])
+                    update_metadatas.append(dict(patched))
+            patched_metadatas.append(patched)
+
+        if update_ids:
+            collection = getattr(self.vector_store, "_collection", None)
+            if collection is not None:
+                try:
+                    collection.update(ids=update_ids, metadatas=update_metadatas)
+                except Exception as exc:  # pragma: no cover - defensive fallback
+                    logger.warning("旧向量数据 workspace_id 回填失败: %s", exc)
+
+        patched_result = dict(result)
+        patched_result["metadatas"] = patched_metadatas
+        return patched_result
 
     def _rebuild_all(self) -> None:
         self._state.rebuild(self._tokenize)
