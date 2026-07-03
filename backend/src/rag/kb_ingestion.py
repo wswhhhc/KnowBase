@@ -54,11 +54,18 @@ class IngestionService:
         self._existing_chunk_ids = state.existing_chunk_ids
         self._bm25_corpus = state.bm25_corpus
         self._bm25_index = state.bm25_index_ref
-        self._loaded = False
         self._load_lock = threading.Lock()
 
+    @property
+    def _loaded(self) -> bool:
+        return self._state.docs_loaded
+
+    @_loaded.setter
+    def _loaded(self, value: bool) -> None:
+        self._state.docs_loaded = value
+
     def _ensure_loaded(self) -> None:
-        """Lazy-load all documents from Chroma on first need."""
+        """Lazy-load full documents from Chroma only when doc content is required."""
         if self._loaded:
             return
         with self._load_lock:
@@ -66,9 +73,11 @@ class IngestionService:
                 return
             result = self.vector_store.get(include=["documents", "metadatas"])
             result = self._backfill_legacy_workspace_metadata(result)
-            self._all_docs[:] = self._documents_from_chroma_result(result)
-            self._rebuild_all()
-            self._loaded = True
+            self._state.load_docs(self._documents_from_chroma_result(result))
+
+    def _ensure_bm25_loaded(self) -> None:
+        self._ensure_loaded()
+        self._state.ensure_bm25(self._tokenize)
 
     def _backfill_legacy_workspace_metadata(self, result: dict) -> dict:
         """Persist missing workspace metadata for legacy default-workspace rows."""
@@ -103,10 +112,26 @@ class IngestionService:
         return patched_result
 
     def _rebuild_all(self) -> None:
-        self._state.rebuild(self._tokenize)
+        self._state.rebuild()
 
     def _extend_bm25(self, new_docs: list[Document]) -> None:
-        self._state.extend_bm25(new_docs, self._tokenize)
+        if new_docs:
+            self._state.invalidate_bm25()
+
+    @staticmethod
+    def _has_canonical_chunk_id(chunk_id: str) -> bool:
+        try:
+            prefix, chunk_index, hash_prefix = chunk_id.rsplit(":", 2)
+        except ValueError:
+            return False
+        return bool(prefix) and chunk_index.isdigit() and bool(hash_prefix)
+
+    def _ensure_chunk_ids_ready(self) -> None:
+        if self._loaded or not self._existing_chunk_ids:
+            return
+        if all(self._has_canonical_chunk_id(chunk_id) for chunk_id in self._existing_chunk_ids):
+            return
+        self._ensure_loaded()
 
     @staticmethod
     def _documents_from_chroma_result(result: dict) -> list[Document]:
@@ -324,7 +349,7 @@ class IngestionService:
         version_label: str = "",
         workspace_id: str = "",
     ) -> int:
-        self._ensure_loaded()
+        self._ensure_chunk_ids_ready()
         splits = self._prepare_splits(
             docs,
             version_mode=version_mode,
@@ -341,9 +366,10 @@ class IngestionService:
 
         ids = [doc.metadata["chunk_id"] for doc in new_splits]
         self.vector_store.add_documents(new_splits, ids=ids)
-        self._all_docs.extend(new_splits)
-        for doc in new_splits:
-            self._doc_by_id[doc.metadata["chunk_id"]] = doc
+        if self._loaded:
+            self._all_docs.extend(new_splits)
+            for doc in new_splits:
+                self._doc_by_id[doc.metadata["chunk_id"]] = doc
         self._existing_chunk_ids.update(doc.metadata["chunk_id"] for doc in new_splits)
         self._extend_bm25(new_splits)
         return len(new_splits)

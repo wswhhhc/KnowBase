@@ -67,7 +67,10 @@ class Retriever:
     def _candidate_k(self, requested: int | None, *, workspace_id: str | None, minimum: int = 0) -> int:
         if requested is not None:
             return requested
-        doc_count = len(self._workspace_docs(workspace_id))
+        if self._ingestion._loaded:
+            doc_count = len(self._workspace_docs(workspace_id))
+        else:
+            doc_count = len(self._existing_chunk_ids)
         base = min(max(30, int(doc_count * 0.3)), 100)
         return max(minimum, base)
 
@@ -102,13 +105,12 @@ class Retriever:
         *,
         limit: int,
     ) -> list[tuple[str, float]]:
-        if not self._bm25_index[0] or not vector_doc_map:
+        if not vector_doc_map:
             return []
         query_tokens = IngestionService._tokenize(query)
         candidate_docs = [
-            self._doc_by_id[chunk_id]
+            vector_doc_map[chunk_id]
             for chunk_id in vector_doc_map
-            if chunk_id in self._doc_by_id
         ]
         if not candidate_docs:
             return []
@@ -125,8 +127,7 @@ class Retriever:
         return ranked[:limit]
 
     def _workspace_bm25_rankings(self, query: str, workspace_id: str | None) -> list[tuple[str, float]]:
-        if not self._bm25_index[0]:
-            return []
+        self._ingestion._ensure_bm25_loaded()
         query_tokens = IngestionService._tokenize(query)
         if not query_tokens:
             return []
@@ -176,7 +177,6 @@ class Retriever:
         filter: dict | None = None,
         workspace_id: str | None = None,
     ) -> list[RetrievalResult]:
-        self._ingestion._ensure_loaded()
         candidate_k = self._candidate_k(vector_candidate_k, workspace_id=workspace_id)
         vector_results = self._vector_results(
             query,
@@ -196,7 +196,7 @@ class Retriever:
                 item.chunk_id,
                 item.score,
                 vector_doc_map=vector_doc_map,
-                doc_by_id=self._doc_by_id,
+                doc_by_id={},
                 vector_score=item.vector_score,
                 bm25_score=item.bm25_score,
             )

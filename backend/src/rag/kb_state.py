@@ -41,6 +41,8 @@ class KnowledgeBaseState:
         self.existing_chunk_ids: set[str] = set(initial_chunk_ids or [])
         self.bm25_corpus: list[list[str]] = []
         self.bm25_index_ref: list[BM25Okapi | None] = [None]
+        self.docs_loaded = False
+        self.bm25_loaded = False
 
     def workspace_docs(self, workspace_id: str | None) -> list[Document]:
         return [
@@ -49,7 +51,7 @@ class KnowledgeBaseState:
             if workspace_matches(doc.metadata, workspace_id)
         ]
 
-    def rebuild(self, tokenize: Callable[[str], list[str]]) -> None:
+    def rebuild(self) -> None:
         self.doc_by_id.clear()
         self.doc_by_id.update(
             (doc.metadata["chunk_id"], doc)
@@ -58,18 +60,29 @@ class KnowledgeBaseState:
         )
         self.existing_chunk_ids.clear()
         self.existing_chunk_ids.update(self.doc_by_id)
+        self.docs_loaded = True
+        self.invalidate_bm25()
+
+    def load_docs(self, docs: Iterable[Document]) -> None:
+        self.all_docs[:] = list(docs)
+        self.rebuild()
+
+    def invalidate_bm25(self) -> None:
+        self.bm25_corpus.clear()
+        self.bm25_index_ref[0] = None
+        self.bm25_loaded = False
+
+    def ensure_bm25(self, tokenize: Callable[[str], list[str]]) -> None:
+        if self.bm25_loaded:
+            return
         self.bm25_corpus.clear()
         self.bm25_corpus.extend(tokenize(doc.page_content) for doc in self.all_docs)
         self.bm25_index_ref[0] = BM25Okapi(self.bm25_corpus) if self.bm25_corpus else None
-
-    def extend_bm25(self, docs: list[Document], tokenize: Callable[[str], list[str]]) -> None:
-        for doc in docs:
-            self.bm25_corpus.append(tokenize(doc.page_content))
-        self.bm25_index_ref[0] = BM25Okapi(self.bm25_corpus) if self.bm25_corpus else None
+        self.bm25_loaded = True
 
     def clear(self) -> None:
         self.all_docs.clear()
         self.doc_by_id.clear()
         self.existing_chunk_ids.clear()
-        self.bm25_corpus.clear()
-        self.bm25_index_ref[0] = None
+        self.docs_loaded = False
+        self.invalidate_bm25()

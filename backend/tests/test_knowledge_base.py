@@ -482,11 +482,30 @@ class ProcessDocumentsTests(_BaseKBMockTest):
         count2 = self.kb.ingestion._process_documents(docs)
         self.assertEqual(count2, 0)
 
-    def test_first_ingestion_calls_ensure_loaded(self):
-        """_process_documents calls _ensure_loaded before adding new docs."""
+    def test_first_ingestion_with_canonical_chunk_ids_skips_full_load(self):
         self.kb.ingestion._loaded = False
-        self.kb.all_docs.clear()
-        self.kb.ingestion._rebuild_all()
+        self.kb.vector_store.get.reset_mock()
+        self.kb.ingestion._bm25_index[0] = None
+
+        docs = [
+            Document(page_content="首次添加" * 50, metadata={"source": "first_test.txt"}),
+        ]
+        count = self.kb.ingestion._process_documents(docs)
+        self.assertGreater(count, 0)
+        self.assertFalse(self.kb.ingestion._loaded)
+        self.kb.vector_store.get.assert_not_called()
+        self.assertIsNone(self.kb.ingestion._bm25_index[0])
+
+    def test_legacy_chunk_ids_force_full_load_before_dedup(self):
+        self.kb.ingestion._loaded = False
+        self.kb.existing_chunk_ids.clear()
+        self.kb.existing_chunk_ids.add("legacy-uuid-row-id")
+        self.kb.vector_store.get.reset_mock()
+        self.kb.vector_store.get.return_value = {
+            "ids": ["legacy-uuid-row-id"],
+            "documents": ["old content"],
+            "metadatas": [{"source": "legacy.txt", "chunk_index": 0}],
+        }
 
         docs = [
             Document(page_content="首次添加" * 50, metadata={"source": "first_test.txt"}),
@@ -494,6 +513,7 @@ class ProcessDocumentsTests(_BaseKBMockTest):
         count = self.kb.ingestion._process_documents(docs)
         self.assertGreater(count, 0)
         self.assertTrue(self.kb.ingestion._loaded)
+        self.kb.vector_store.get.assert_called_once()
 
 
 class HybridSearchTests(_BaseKBMockTest):
@@ -565,11 +585,14 @@ class HybridSearchTests(_BaseKBMockTest):
         _, kwargs = call_kwargs
         self.assertEqual(kwargs.get("filter"), {"source": "ai.txt"})
 
-    def test_search_calls_ensure_loaded(self):
-        """Verify hybrid_search triggers _ensure_loaded."""
+    def test_search_skips_full_load_when_vector_results_are_sufficient(self):
         self.kb.ingestion._loaded = False
+        self.kb.vector_store.get.reset_mock()
         results = self.kb.hybrid_search("测试查询")
-        self.assertTrue(self.kb.ingestion._loaded)
+        self.assertGreater(len(results), 0)
+        self.assertFalse(self.kb.ingestion._loaded)
+        self.kb.vector_store.get.assert_not_called()
+        self.assertIsNone(self.kb.ingestion._bm25_index[0])
 
     def test_score_threshold_filters_results(self):
         """score_threshold should remove results below the threshold."""
@@ -708,42 +731,43 @@ class LoadSaveHotspotsTests(_BaseKBMockTest):
         self.assertEqual(self.kb.hotspots.hit_counter, {"old": 1})
 
 
-class ExtendBM25Tests(_BaseKBMockTest):
-    """Test _extend_bm25."""
+class LazyBM25Tests(_BaseKBMockTest):
+    """Test lazy BM25 lifecycle."""
 
     def setUp(self):
         super().setUp()
-        # Start with clean BM25
         self.kb.ingestion._bm25_corpus.clear()
         self.kb.ingestion._bm25_index[0] = None
+        self.kb.state.bm25_loaded = False
 
-    def test_adding_docs_rebuilds_bm25_index(self):
+    def test_ensure_bm25_loaded_builds_index_from_loaded_docs(self):
         docs = [
             Document(page_content="测试内容A", metadata={"source": "test.txt", "chunk_id": "test.txt:0:a"}),
             Document(page_content="测试内容B", metadata={"source": "test.txt", "chunk_id": "test.txt:1:b"}),
         ]
-        self.kb.ingestion._extend_bm25(docs)
+        self.kb.all_docs[:] = docs
+        self.kb.ingestion._rebuild_all()
+        self.kb.ingestion._ensure_bm25_loaded()
         self.assertIsNotNone(self.kb.ingestion._bm25_index[0])
         self.assertEqual(len(self.kb.ingestion._bm25_corpus), 2)
 
-    def test_adding_to_empty_corpus_sets_bm25_to_none_if_still_empty(self):
-        # _extend_bm25 with empty list should not build index from empty corpus
-        self.kb.ingestion._extend_bm25([])
+    def test_ensure_bm25_loaded_keeps_empty_state_for_empty_docs(self):
+        self.kb.all_docs.clear()
+        self.kb.ingestion._rebuild_all()
+        self.kb.ingestion._ensure_bm25_loaded()
         self.assertIsNone(self.kb.ingestion._bm25_index[0])
         self.assertEqual(self.kb.ingestion._bm25_corpus, [])
 
-    def test_extend_preserves_existing_corpus(self):
-        initial = [
-            Document(page_content="原文", metadata={"source": "a.txt", "chunk_id": "a.txt:0:0"}),
-        ]
-        self.kb.ingestion._extend_bm25(initial)
-        original_len = len(self.kb.ingestion._bm25_corpus)
+    def test_extend_marks_bm25_stale_until_explicit_rebuild(self):
+        self.kb.ingestion._ensure_bm25_loaded()
+        self.assertIsNotNone(self.kb.ingestion._bm25_index[0])
 
-        more = [
-            Document(page_content="新增内容", metadata={"source": "b.txt", "chunk_id": "b.txt:0:1"}),
-        ]
+        more = [Document(page_content="新增内容", metadata={"source": "b.txt", "chunk_id": "b.txt:0:1"})]
         self.kb.ingestion._extend_bm25(more)
-        self.assertEqual(len(self.kb.ingestion._bm25_corpus), original_len + 1)
+
+        self.assertIsNone(self.kb.ingestion._bm25_index[0])
+        self.assertEqual(self.kb.ingestion._bm25_corpus, [])
+        self.assertFalse(self.kb.state.bm25_loaded)
 
 
 class KnowledgeBaseIngestTests(_BaseKBMockTest):
@@ -1233,6 +1257,24 @@ class KBEnsureLoadedTests(_BaseKBMockTest):
         self.assertTrue(self.kb.ingestion._loaded)
         self.assertEqual(len(self.kb.all_docs), 2)
         self.assertEqual(len(self.kb.doc_by_id), 2)
+        self.assertIsNone(self.kb.ingestion._bm25_index[0])
+
+    def test_ensure_bm25_loaded_builds_index_after_docs_are_loaded(self):
+        self.kb.ingestion._loaded = False
+        self.kb.all_docs.clear()
+        self.kb.doc_by_id.clear()
+
+        self.kb.vector_store.get.return_value = {
+            "ids": ["doc.txt:0:aaa"],
+            "documents": ["content1"],
+            "metadatas": [
+                {"source": "doc.txt", "chunk_index": 0, "chunk_id": "doc.txt:0:aaa"},
+            ],
+        }
+
+        self.kb.ingestion._ensure_bm25_loaded()
+
+        self.assertTrue(self.kb.ingestion._loaded)
         self.assertIsNotNone(self.kb.ingestion._bm25_index[0])
 
 
