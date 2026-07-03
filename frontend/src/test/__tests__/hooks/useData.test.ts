@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react'
-import { useConversations, useSources } from '@/hooks/useData'
+import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
 import * as api from '@/lib/api'
 import { mockConversations, mockSources } from '@/test/mocks/data'
 
@@ -9,10 +9,15 @@ vi.mock('@/lib/api', () => ({
   deleteConversation: vi.fn(),
   renameConversation: vi.fn(),
   getSources: vi.fn(),
+  getWorkspaces: vi.fn(),
+  createWorkspace: vi.fn(),
+  deleteWorkspace: vi.fn(),
+  renameWorkspace: vi.fn(),
 }))
 
 beforeEach(() => {
   vi.clearAllMocks()
+  localStorage.clear()
 })
 
 describe('useConversations', () => {
@@ -27,6 +32,19 @@ describe('useConversations', () => {
     })
 
     expect(result.current.conversations).toEqual(mockConversations)
+  })
+
+  it('restores the persisted active conversation for the current workspace', async () => {
+    vi.mocked(api.getConversations).mockResolvedValue(mockConversations)
+    localStorage.setItem('knowbase-active-conversation:default', 'conv-2')
+
+    const { result } = renderHook(() => useConversations())
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    expect(result.current.activeId).toBe('conv-2')
   })
 
   it('create creates conversation, refreshes list, sets activeId', async () => {
@@ -90,6 +108,71 @@ describe('useConversations', () => {
     })
 
     expect(api.renameConversation).toHaveBeenCalledWith('conv-1', '新标题')
+  })
+
+  it('persists activeId updates for the current workspace', async () => {
+    vi.mocked(api.getConversations).mockResolvedValue(mockConversations)
+
+    const { result } = renderHook(() => useConversations())
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    act(() => {
+      result.current.setActiveId('conv-1')
+    })
+
+    expect(localStorage.getItem('knowbase-active-conversation:default')).toBe('conv-1')
+
+    act(() => {
+      result.current.setActiveId(null)
+    })
+
+    expect(localStorage.getItem('knowbase-active-conversation:default')).toBeNull()
+  })
+})
+
+describe('useWorkspaces', () => {
+  it('restores the persisted active workspace when it still exists', async () => {
+    vi.mocked(api.getWorkspaces).mockResolvedValue([
+      { id: '', name: '默认工作区', description: '', created_at: '', updated_at: '' },
+      { id: 'ws-2', name: 'Alpha', description: '', created_at: '', updated_at: '' },
+    ])
+    localStorage.setItem('knowbase-active-workspace', 'ws-2')
+
+    const { result } = renderHook(() => useWorkspaces())
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    expect(result.current.activeWorkspaceId).toBe('ws-2')
+  })
+
+  it('persists workspace selection changes', async () => {
+    vi.mocked(api.getWorkspaces).mockResolvedValue([
+      { id: '', name: '默认工作区', description: '', created_at: '', updated_at: '' },
+      { id: 'ws-2', name: 'Alpha', description: '', created_at: '', updated_at: '' },
+    ])
+
+    const { result } = renderHook(() => useWorkspaces())
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    act(() => {
+      result.current.setActiveWorkspaceId('ws-2')
+    })
+
+    expect(localStorage.getItem('knowbase-active-workspace')).toBe('ws-2')
+
+    act(() => {
+      result.current.setActiveWorkspaceId('')
+    })
+
+    expect(localStorage.getItem('knowbase-active-workspace')).toBeNull()
   })
 })
 
@@ -236,12 +319,12 @@ describe('useConversations error paths', () => {
       result.current.setActiveId('conv-1')
     })
 
-    vi.mocked(api.getConversations).mockResolvedValue([])
+    vi.mocked(api.getConversations).mockResolvedValue(initialConvs)
 
     await act(async () => {
       await result.current.remove('conv-2')  // different id
     })
 
-    expect(result.current.activeId).toBe('conv-1')  // not cleared
+    expect(result.current.activeId).toBe('conv-1')  // still present in refreshed list
   })
 })

@@ -72,7 +72,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const defaultProps = {
-  chat: { messages: [] as any[], loadMessages: vi.fn(), clearMessages: vi.fn(), sendMessage: vi.fn() },
+  chat: { messages: [] as any[], loadMessages: vi.fn(), clearMessages: vi.fn(), sendMessage: vi.fn(), threadId: null, workspaceId: '' },
   activeView: 'chat' as const,
   onNavigate: vi.fn(),
   onClose: vi.fn(),
@@ -328,6 +328,25 @@ describe('Sidebar interactions', () => {
     })
   })
 
+  it('switching conversation tolerates historical debug_info objects without nodes', async () => {
+    vi.mocked(api.getMessages).mockResolvedValue([
+      { ...mockMessages[0], debug_info: {} },
+      { ...mockMessages[1], debug_info: { used_rerank: false, used_web_search: false } },
+    ] as any)
+    const loadMessages = vi.fn()
+
+    render(<Sidebar {...defaultProps} chat={{ ...defaultProps.chat, loadMessages }} />)
+    await userEvent.click(screen.getAllByText('测试对话')[0])
+
+    await waitFor(() => {
+      expect(loadMessages).toHaveBeenCalled()
+    })
+
+    const loaded = loadMessages.mock.calls[0][0] as any[]
+    expect(loaded[0].elapsedMs).toBeUndefined()
+    expect(loaded[1].elapsedMs).toBeUndefined()
+  })
+
   it('closes the drawer on mobile when switching conversation', async () => {
     vi.mocked(api.getMessages).mockResolvedValue(mockMessages as any)
     const onClose = vi.fn()
@@ -337,6 +356,18 @@ describe('Sidebar interactions', () => {
     await waitFor(() => {
       expect(onClose).toHaveBeenCalled()
     })
+  })
+
+  it('auto-restores the persisted active conversation on mount', async () => {
+    vi.mocked(api.getMessages).mockResolvedValue(mockMessages as any)
+    const loadMessages = vi.fn()
+
+    render(<Sidebar {...defaultProps} chat={{ ...defaultProps.chat, loadMessages, threadId: null }} />)
+
+    await waitFor(() => {
+      expect(api.getMessages).toHaveBeenCalledWith('conv-1')
+    })
+    expect(loadMessages).toHaveBeenCalled()
   })
 
   // ── upload/ingest-url refresh 结果逻辑 ──

@@ -228,4 +228,16 @@ describe('MessageBubble', () => {
     expect(screen.getByText('联网：是')).toBeInTheDocument()
     expect(screen.getByText('耗时：1.5s')).toBeInTheDocument()
   })
+
+  it('renders safely when debugData exists without nodes', () => {
+    renderBubble({
+      message: {
+        ...baseMessage,
+        debugData: { used_rerank: false, used_web_search: false } as any,
+      },
+    })
+
+    expect(screen.getByText('策略：未知')).toBeInTheDocument()
+    expect(screen.getByText('重排：否')).toBeInTheDocument()
+  })
 })

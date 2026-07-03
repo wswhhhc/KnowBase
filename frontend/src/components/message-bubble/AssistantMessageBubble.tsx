@@ -67,7 +67,9 @@ export default function AssistantMessageBubble({
 
   const questionContext = message.originalQuestion || (prevMessage?.role === 'user' ? prevMessage.content : '')
   const guidance = getOutcomeGuidance(message, workspaceSummary, questionContext)
-  const nodeElapsedMs = message.debugData?.nodes.reduce((total, node) => total + node.elapsed_ms, 0)
+  const nodeElapsedMs = Array.isArray(message.debugData?.nodes)
+    ? message.debugData.nodes.reduce((total, node) => total + node.elapsed_ms, 0)
+    : undefined
   const strategyLabel = STRATEGY_LABELS[message.searchStrategy || ''] || '未知'
   const rerankLabel = formatBooleanEcho(message.usedRerank ?? message.debugData?.used_rerank)
   const webSearchLabel = formatBooleanEcho(message.webSearchEnabled ?? message.debugData?.used_web_search)

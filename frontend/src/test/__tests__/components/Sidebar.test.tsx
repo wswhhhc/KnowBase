@@ -66,7 +66,7 @@ vi.mock('@/lib/api', () => ({
 const { useConversations, useSources, useWorkspaces } = await import('@/hooks/useData')
 
 const defaultProps = {
-  chat: { messages: [] as any[], loadMessages: vi.fn(), clearMessages: vi.fn(), sendMessage: vi.fn() },
+  chat: { messages: [] as any[], loadMessages: vi.fn(), clearMessages: vi.fn(), sendMessage: vi.fn(), threadId: null, workspaceId: 'ws-1' },
   activeView: 'chat' as const,
   onNavigate: vi.fn(),
   onClose: vi.fn(),
@@ -146,7 +146,7 @@ describe('Sidebar', () => {
 
   it('clicking 新对话 button clears messages and navigates to chat', async () => {
     const onNavigate = vi.fn()
-    const chat = { messages: [{ role: 'user', content: 'hi' }], loadMessages: vi.fn(), clearMessages: vi.fn(), sendMessage: vi.fn() }
+    const chat = { messages: [{ role: 'user', content: 'hi' }], loadMessages: vi.fn(), clearMessages: vi.fn(), sendMessage: vi.fn(), threadId: null, workspaceId: 'ws-1' }
     render(<Sidebar {...defaultProps} chat={chat as any} onNavigate={onNavigate} />)
     const newBtn = screen.getByText('新对话')
     await userEvent.click(newBtn)

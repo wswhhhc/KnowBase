@@ -2,24 +2,69 @@ import { useEffect, useRef, useState } from 'react'
 import * as api from '@/lib/api'
 import type { Conversation, DocSource, Workspace } from '@/lib/api'
 
+const ACTIVE_WORKSPACE_STORAGE_KEY = 'knowbase-active-workspace'
+const ACTIVE_CONVERSATION_STORAGE_PREFIX = 'knowbase-active-conversation:'
+const DEFAULT_WORKSPACE_STORAGE_SCOPE = 'default'
+
+function getConversationStorageKey(workspaceId?: string) {
+  return `${ACTIVE_CONVERSATION_STORAGE_PREFIX}${workspaceId || DEFAULT_WORKSPACE_STORAGE_SCOPE}`
+}
+
+function readActiveWorkspaceId() {
+  return localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY) || ''
+}
+
+function writeActiveWorkspaceId(workspaceId: string) {
+  if (workspaceId) {
+    localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId)
+    return
+  }
+  localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY)
+}
+
+function readActiveConversationId(workspaceId?: string) {
+  return localStorage.getItem(getConversationStorageKey(workspaceId))
+}
+
+function writeActiveConversationId(workspaceId: string | undefined, conversationId: string | null) {
+  const storageKey = getConversationStorageKey(workspaceId)
+  if (conversationId) {
+    localStorage.setItem(storageKey, conversationId)
+    return
+  }
+  localStorage.removeItem(storageKey)
+}
+
 export function useConversations(workspaceId?: string) {
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeId, setActiveIdState] = useState<string | null>(() => readActiveConversationId(workspaceId))
   const [loading, setLoading] = useState(true)
   const requestTokenRef = useRef(0)
+
+  const setActiveId = (nextActiveId: string | null) => {
+    setActiveIdState(nextActiveId)
+    writeActiveConversationId(workspaceId, nextActiveId)
+  }
 
   const refresh = async (resetBeforeLoad = false) => {
     const requestToken = requestTokenRef.current + 1
     requestTokenRef.current = requestToken
     if (resetBeforeLoad) {
       setConversations([])
-      setActiveId(null)
+      setActiveIdState(null)
       setLoading(true)
     }
     try {
       const list = await api.getConversations(workspaceId)
       if (requestToken !== requestTokenRef.current) return []
+      const persistedActiveId = readActiveConversationId(workspaceId)
+      const nextActiveId = persistedActiveId && list.some((conversation) => conversation.id === persistedActiveId)
+        ? persistedActiveId
+        : activeId && list.some((conversation) => conversation.id === activeId)
+          ? activeId
+          : null
       setConversations(list)
+      setActiveId(nextActiveId)
       return list
     } catch (e) {
       if (requestToken !== requestTokenRef.current) return []
@@ -59,18 +104,27 @@ export function useConversations(workspaceId?: string) {
 
 export function useWorkspaces() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('')
+  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string>(() => readActiveWorkspaceId())
   const [loading, setLoading] = useState(true)
+
+  const setActiveWorkspaceId = (nextWorkspaceId: string) => {
+    setActiveWorkspaceIdState(nextWorkspaceId)
+    writeActiveWorkspaceId(nextWorkspaceId)
+  }
 
   const refresh = async () => {
     try {
       const list = await api.getWorkspaces()
       setWorkspaces(list)
-      // Auto-select default workspace ("") if no selection
-      if (list.length > 0 && !activeWorkspaceId) {
-        const defaultWs = list.find((ws) => ws.id === '') || list[0]
-        setActiveWorkspaceId(defaultWs.id)
-      }
+      const persistedWorkspaceId = readActiveWorkspaceId()
+      const nextWorkspaceId = persistedWorkspaceId && list.some((ws) => ws.id === persistedWorkspaceId)
+        ? persistedWorkspaceId
+        : activeWorkspaceId && list.some((ws) => ws.id === activeWorkspaceId)
+          ? activeWorkspaceId
+          : list.length > 0
+            ? (list.find((ws) => ws.id === '') || list[0]).id
+            : ''
+      setActiveWorkspaceId(nextWorkspaceId)
       return list
     } catch (e) {
       console.error('加载工作区列表失败:', e)

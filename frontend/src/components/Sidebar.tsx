@@ -25,6 +25,8 @@ interface SidebarProps {
     loadMessages: (msgs: ChatMessage[], threadId?: string, pinState?: PinStateResponse) => void
     clearMessages: () => void
     sendMessage: (q: string, webSearchEnabled: boolean, searchStrategy: string) => void
+    threadId: string | null
+    workspaceId: string
   }
   activeView: ViewType
   onNavigate: (v: ViewType) => void
@@ -56,11 +58,14 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   const [createName, setCreateName] = useState('')
   const [deleteWsOpen, setDeleteWsOpen] = useState(false)
   const prevKey = useRef(convRefreshKey)
+  const autoLoadedConversationKeyRef = useRef<string | null>(null)
   const workspaceSelectValue = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
   const workspaceScopeKey = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
 
   const sumNodeElapsed = (debugInfo: DebugInfo | undefined) =>
-    debugInfo?.nodes.reduce((total, node) => total + node.elapsed_ms, 0) || 0
+    Array.isArray(debugInfo?.nodes)
+      ? debugInfo.nodes.reduce((total, node) => total + node.elapsed_ms, 0)
+      : 0
 
   // Refresh conversation list when workspace changes or new conv created
   useEffect(() => {
@@ -103,7 +108,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     return () => window.removeEventListener(OPEN_DOCUMENTS_PANEL_EVENT, openDocumentsPanel)
   }, [onNavigate])
 
-  const switchConversation = async (conversation: Conversation) => {
+  const loadConversation = async (conversation: Conversation, closeOnMobile = true) => {
     onNavigate('chat')
     onLoadingMessages?.(true)
     try {
@@ -137,11 +142,39 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         conversation.thread_id,
         pinState,
       )
-      if (isMobile) onClose()
+      if (closeOnMobile && isMobile) onClose()
     } catch (e) {
       console.error('切换对话失败:', e)
     }
     onLoadingMessages?.(false)
+  }
+
+  useEffect(() => {
+    if (convs.loading || chat.workspaceId !== wss.activeWorkspaceId || !convs.activeId) return
+    const activeConversation = convs.conversations.find((conversation) => conversation.id === convs.activeId)
+    if (!activeConversation) return
+
+    const conversationScopeKey = `${workspaceScopeKey}:${activeConversation.id}`
+    if (chat.threadId === activeConversation.thread_id) {
+      autoLoadedConversationKeyRef.current = conversationScopeKey
+      return
+    }
+    if (autoLoadedConversationKeyRef.current === conversationScopeKey) return
+
+    autoLoadedConversationKeyRef.current = conversationScopeKey
+    void loadConversation(activeConversation, false)
+  }, [
+    chat.threadId,
+    chat.workspaceId,
+    convs.activeId,
+    convs.conversations,
+    convs.loading,
+    workspaceScopeKey,
+    wss.activeWorkspaceId,
+  ])
+
+  const switchConversation = async (conversation: Conversation) => {
+    await loadConversation(conversation)
   }
 
   const handleNewConversation = () => {
