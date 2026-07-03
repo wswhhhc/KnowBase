@@ -11,17 +11,17 @@ backend/**/__pycache__/
 frontend/node_modules/
 frontend/dist/
 frontend/.env
+frontend/.generated/
 frontend/tsconfig.tsbuildinfo
 .playwright-cli/
 
+# Runtime data in repo root (keep versioned demo fixtures under data/samples/)
 chroma_demo.py
 data/chroma_db/
 data/chroma_db_backup_*/
 data/checkpoints.db*
 data/.thread_id
 data/rag_logs/
-data/sample_*
-/scripts/
 .venv/
 __pycache__/
 */__pycache__/

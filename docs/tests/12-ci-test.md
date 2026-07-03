@@ -2,118 +2,79 @@
 
 ## 1. 概述
 
-**目标**: 定义 KnowBase 的持续集成流程，确保每次代码提交自动运行测试和覆盖率检查。
+KnowBase 当前使用 GitHub Actions 作为默认 CI。目标不是只“跑得通测试”，而是阻止以下几类常见回归进入 `main`：
 
-**技术栈**: GitHub Actions
+- 后端行为回归
+- 前端行为回归
+- 前端构建失败
+- 后端 OpenAPI 快照与前端生成类型漂移
 
-**触发器**: `push` 和 `pull_request` 到任意分支
+## 2. 当前 Workflow
 
----
+实际 workflow 文件为 `.github/workflows/ci.yml`，当前包含两个 job：
 
-## 2. Workflow 定义
+### Backend
 
-```yaml
-# .github/workflows/ci.yml
-name: CI
+- 安装 Python 3.12 与 `uv`
+- 在仓库根目录执行 `uv sync`
+- 运行 `uv run pytest backend/tests --tb=short -q`
 
-on:
-  push:
-    branches: [main, '**']
-  pull_request:
-    branches: [main]
+### Frontend
 
-jobs:
-  backend:
-    name: Backend Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+- 安装 Node.js 20
+- 在 `frontend/` 执行 `npm ci`
+- 运行 `npm test`
+- 运行 `npm run build`
+- 运行 `npm run check-api-types`
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        with:
-          version: "latest"
+## 3. 质量门禁
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+以下检查默认阻断合并：
 
-      - name: Install dependencies
-        run: cd backend && uv sync
+- 后端 pytest 失败
+- 前端 vitest 失败
+- 前端 TypeScript / Vite 构建失败
+- `npm run check-api-types` 发现生成类型未同步
 
-      - name: Run tests
-        run: cd backend && uv run python -m unittest discover -v
+其中 `npm run check-api-types` 的行为是：
 
-  frontend:
-    name: Frontend Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+1. 重新读取 `backend/openapi.json`
+2. 生成 `frontend/src/lib/api-types.openapi.ts`
+3. 对生成物执行 `git diff --exit-code`
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
+如果接口变了但生成物没提交，CI 会失败。
 
-      - name: Install dependencies
-        run: cd frontend && npm ci
+## 4. 契约同步约定
 
-      - name: Run tests
-        run: cd frontend && npm test
-```
+当前仓库的 API 契约链路是：
 
----
+1. FastAPI 应用
+2. `backend/openapi.json`
+3. `frontend/src/lib/api-types.openapi.ts`
+4. `frontend/src/lib/api.ts` 与消费代码
 
-## 3. CI 阶段说明
-
-### 3.1 Backend job
-
-| 步骤 | 说明 | 预期时间 |
-|------|------|---------|
-| Checkout | 拉取代码 | < 10s |
-| Setup Python | 安装 Python 3.12 | < 30s |
-| Install uv | 安装 uv 包管理器 | < 10s |
-| uv sync | 安装依赖 | < 60s |
-| Run tests | 执行 unittest discover | < 30s |
-
-### 3.2 Frontend job
-
-| 步骤 | 说明 | 预期时间 |
-|------|------|---------|
-| Checkout | 拉取代码 | < 10s |
-| Setup Node | 安装 Node.js 20 | < 20s |
-| npm ci | 安装依赖（使用缓存） | < 60s |
-| Run tests | 执行 vitest | < 30s |
-
----
-
-## 4. 质量门禁
-
-| 检查项 | 要求 | 阻断合并 |
-|--------|------|---------|
-| 后端测试通过率 | 100% | 是 |
-| 前端测试通过率 | 100% | 是 |
-| 后端覆盖率达到基线 | >= 80% | 建议 |
-| 前端覆盖率达到基线 | >= 60% | 建议 |
-
----
+后端测试还会校验 `backend/openapi.json` 是否与当前 FastAPI schema 一致，因此快照陈旧同样会阻断提交。
 
 ## 5. 本地模拟 CI
 
+提交前建议按下面顺序执行：
+
 ```bash
-# 在提交前本地运行全部测试
-cd backend && uv run python -m unittest discover -v
+uv run pytest backend/tests --tb=short -q
 cd frontend && npm test
+cd frontend && npm run build
+cd frontend && npm run check-api-types
 ```
 
----
+如果后端接口发生变化，再补：
 
-## 6. 通过标准
+```bash
+uv run python backend/scripts/export_openapi.py
+cd frontend && npm run gen-api-types
+```
 
-- CI 流程正常触发并完成
-- 后端和前端 job 均通过
-- 总运行时间 < 3 分钟
-- push 和 pull_request 均触发
+## 6. 维护要求
+
+- 本文档必须与 `.github/workflows/ci.yml` 保持一致
+- 若 CI 新增或移除门禁，要同步更新本文档、`README.md` 与 `CONTRIBUTING.md`
+- 不要在文档里保留已经下线的 CI 命令或旧测试发现方式
