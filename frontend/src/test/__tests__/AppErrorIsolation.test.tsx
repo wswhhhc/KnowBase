@@ -11,15 +11,21 @@ vi.mock('@/components/ChatArea', () => ({
     throw new Error('chat exploded')
   },
 }))
-vi.mock('@/components/BrowserPage', () => ({
-  default: () => <div data-testid="browserpage">BrowserPage Mock</div>,
-}))
-vi.mock('@/components/DashboardPage', () => ({
-  default: () => <div data-testid="dashboardpage">DashboardPage Mock</div>,
-}))
-vi.mock('@/components/SettingsPage', () => ({
-  default: () => <div data-testid="settingspage">SettingsPage Mock</div>,
-}))
+vi.mock('@/components/BrowserPage', async () => {
+  return {
+    default: () => <div data-testid="browserpage">BrowserPage Mock</div>,
+  }
+})
+vi.mock('@/components/DashboardPage', async () => {
+  return {
+    default: () => <div data-testid="dashboardpage">DashboardPage Mock</div>,
+  }
+})
+vi.mock('@/components/SettingsPage', async () => {
+  return {
+    default: () => <div data-testid="settingspage">SettingsPage Mock</div>,
+  }
+})
 vi.mock('@/hooks/useChat', () => ({
   useChat: () => ({
     messages: [],
@@ -52,11 +58,11 @@ describe('App error isolation', () => {
   it('keeps other views usable after a single view crashes', async () => {
     render(<App />)
 
-    expect(screen.getByText('聊天组件异常，请刷新页面')).toBeInTheDocument()
+    expect(await screen.findByText('聊天组件异常，请刷新页面')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '知识库' }))
 
-    expect(screen.getByTestId('browserpage')).toBeInTheDocument()
+    expect(await screen.findByTestId('browserpage')).toBeInTheDocument()
     expect(screen.queryByText('聊天组件异常，请刷新页面')).not.toBeInTheDocument()
   })
 })
