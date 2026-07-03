@@ -58,6 +58,9 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   const workspaceSelectValue = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
   const workspaceScopeKey = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
 
+  const sumNodeElapsed = (debugInfo: DebugInfo | undefined) =>
+    debugInfo?.nodes.reduce((total, node) => total + node.elapsed_ms, 0) || 0
+
   // Refresh conversation list when workspace changes or new conv created
   useEffect(() => {
     if (convRefreshKey !== prevKey.current) {
@@ -100,19 +103,27 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
       ])
       convs.setActiveId(conversation.id)
       chat.loadMessages(
-        msgs.map((m) => ({
-          id: `${m.role}-${m.id}`,
-          role: m.role,
-          content: m.content,
-          sources: m.sources,
-          quality_reason: m.quality_reason,
-          debugData: m.debug_info as DebugInfo | undefined,
-          evidence_level: (m.debug_info as Record<string, string> | undefined)?.evidence_level,
-          evidence_summary: (m.debug_info as Record<string, string> | undefined)?.evidence_summary,
-          outcome_category: (m.debug_info as Record<string, string> | undefined)?.outcome_category,
-          convId: conversation.id,
-          assistantMsgId: m.role === 'assistant' ? m.id : undefined,
-        })),
+        msgs.map((m) => {
+          const debugInfo = m.debug_info as DebugInfo | undefined
+          const debugRecord = m.debug_info as Record<string, unknown> | undefined
+          return {
+            id: `${m.role}-${m.id}`,
+            role: m.role,
+            content: m.content,
+            searchStrategy: typeof debugRecord?.search_strategy === 'string' ? debugRecord.search_strategy : undefined,
+            webSearchEnabled: typeof debugRecord?.used_web_search === 'boolean' ? debugRecord.used_web_search : undefined,
+            sources: m.sources,
+            quality_reason: m.quality_reason,
+            debugData: debugInfo,
+            evidence_level: typeof debugRecord?.evidence_level === 'string' ? debugRecord.evidence_level : undefined,
+            evidence_summary: typeof debugRecord?.evidence_summary === 'string' ? debugRecord.evidence_summary : undefined,
+            outcome_category: typeof debugRecord?.outcome_category === 'string' ? debugRecord.outcome_category : undefined,
+            usedRerank: typeof debugRecord?.used_rerank === 'boolean' ? debugRecord.used_rerank : undefined,
+            elapsedMs: sumNodeElapsed(debugInfo) || undefined,
+            convId: conversation.id,
+            assistantMsgId: m.role === 'assistant' ? m.id : undefined,
+          }
+        }),
         conversation.thread_id,
         pinState,
       )

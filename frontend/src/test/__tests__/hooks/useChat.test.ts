@@ -45,6 +45,8 @@ describe('useChat', () => {
     expect(result.current.messages[0].role).toBe('user')
     expect(result.current.messages[0].content).toBe('你好')
     expect(result.current.messages[1].role).toBe('assistant')
+    expect(result.current.messages[1].searchStrategy).toBe('balanced')
+    expect(result.current.messages[1].webSearchEnabled).toBe(false)
   })
 
   it('onDone finalizes message with streaming=false and correct content', async () => {
@@ -74,6 +76,7 @@ describe('useChat', () => {
     expect(assistantMsg.role).toBe('assistant')
     expect(assistantMsg.streaming).toBeFalsy()
     expect(assistantMsg.content).toBeTruthy()
+    expect(assistantMsg.elapsedMs).toBe(500)
   })
 
   it('onError sets error content', async () => {

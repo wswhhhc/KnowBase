@@ -13,7 +13,6 @@ frontend/dist/
 frontend/.env
 frontend/.generated/
 frontend/tsconfig.tsbuildinfo
-.playwright-cli/
 
 # Runtime data in repo root (keep versioned demo fixtures under data/samples/)
 chroma_demo.py
@@ -31,10 +30,16 @@ __pycache__/
 .DS_Store
 *.egg-info/
 data/conversations.db
-data/eval_reports/
-frontend/coverage/
 backend/.coverage
 backend/.coverage.*
 videos/
 output/
 .claude/worktrees/
+
+# Local test and evaluation artifacts
+.playwright-cli/
+frontend/coverage/
+data/eval_reports/
+
+# Keep generated API contract snapshots under version control
+!backend/openapi.json

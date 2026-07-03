@@ -257,6 +257,24 @@ describe('Sidebar interactions', () => {
     expect(screen.queryByText('2')).not.toBeInTheDocument()
   })
 
+  it('filters conversations by title in real time without breaking batch delete on visible items', async () => {
+    vi.mocked(api.deleteConversations!).mockResolvedValue({ ok: true } as any)
+
+    render(<Sidebar {...defaultProps} />)
+
+    await userEvent.type(screen.getByRole('searchbox', { name: '搜索对话' }), 'LLM')
+
+    expect(screen.queryByText('测试对话')).not.toBeInTheDocument()
+    expect(screen.getByText('关于 LLM 的讨论')).toBeInTheDocument()
+
+    const checkboxes = screen.getAllByRole('checkbox')
+    await userEvent.click(checkboxes[0])
+    await userEvent.click(screen.getByText('1'))
+    await userEvent.click(screen.getByText('确认删除'))
+
+    expect(api.deleteConversations).toHaveBeenCalledWith(['conv-2'])
+  })
+
   it('batch delete calls deleteConversations with selected ids on success', async () => {
     vi.mocked(api.deleteConversations!).mockResolvedValue({ ok: true } as any)
 
