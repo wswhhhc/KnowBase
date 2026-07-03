@@ -917,6 +917,27 @@ class KnowledgeBaseIngestTests(_BaseKBMockTest):
 
 
 class WorkspaceScopedKnowledgeBaseTests(_BaseKBMockTest):
+    def test_ensure_loaded_backfills_missing_workspace_metadata_for_legacy_rows(self):
+        collection = MagicMock()
+        self.kb.vector_store._collection = collection
+        self.kb.vector_store.get.return_value = {
+            "ids": ["legacy-row-id"],
+            "documents": ["legacy content"],
+            "metadatas": [{"source": "legacy.txt", "chunk_index": 0}],
+        }
+        self.kb.ingestion._loaded = False
+        self.kb.all_docs.clear()
+        self.kb.doc_by_id.clear()
+        self.kb.existing_chunk_ids.clear()
+
+        self.kb.ingestion._ensure_loaded()
+
+        collection.update.assert_called_once_with(
+            ids=["legacy-row-id"],
+            metadatas=[{"source": "legacy.txt", "chunk_index": 0, "workspace_id": ""}],
+        )
+        self.assertEqual(self.kb.all_docs[0].metadata["workspace_id"], "")
+
     def test_documents_from_chroma_result_defaults_missing_workspace_id_to_empty(self):
         result = {
             "ids": ["legacy-row-id"],
