@@ -15,12 +15,14 @@ def build_debug_payload(
     evidence_level: str,
     evidence_summary: str,
     outcome_category: str,
+    search_strategy: str,
 ) -> str:
     """Serialize the debug payload stored with assistant messages."""
     payload = debug_info.model_dump()
     payload["evidence_level"] = evidence_level
     payload["evidence_summary"] = evidence_summary
     payload["outcome_category"] = outcome_category
+    payload["search_strategy"] = search_strategy
     return json.dumps(payload)
 
 
