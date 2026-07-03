@@ -1,22 +1,18 @@
 import { ExternalLink, MessageSquare, Pin, X } from 'lucide-react'
 import type { Source } from '@/lib/api'
 import type { PinnedSource } from '@/hooks/useChat'
+import { useChatContext } from './ChatContext'
 
 interface SourceCardProps {
   source: Source
   pinnedState?: PinnedSource
-  onCitationClick?: (source: Source) => void
-  onSendQuestion?: (question: string) => void
-  onPinToggle?: (chunkId: string, action: 'pin' | 'unpin' | 'exclude' | 'unexclude') => void
 }
 
 export default function SourceCard({
   source,
   pinnedState,
-  onCitationClick,
-  onSendQuestion,
-  onPinToggle,
 }: SourceCardProps) {
+  const { onCitationClick, onSendQuestion, onPinToggle } = useChatContext()
   const isExcluded = pinnedState?.excluded
   const isPinned = pinnedState?.pinned
 

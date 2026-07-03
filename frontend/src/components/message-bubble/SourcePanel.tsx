@@ -1,25 +1,18 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import type { Source } from '@/lib/api'
-import type { PinnedSource } from '@/hooks/useChat'
 import SourceCard from './SourceCard'
+import { useChatContext } from './ChatContext'
 
 interface SourcePanelProps {
   open: boolean
   sources?: Source[]
-  pinnedSources?: PinnedSource[]
-  onCitationClick?: (source: Source) => void
-  onSendQuestion?: (question: string) => void
-  onPinToggle?: (chunkId: string, action: 'pin' | 'unpin' | 'exclude' | 'unexclude') => void
 }
 
 export default function SourcePanel({
   open,
   sources,
-  pinnedSources,
-  onCitationClick,
-  onSendQuestion,
-  onPinToggle,
 }: SourcePanelProps) {
+  const { pinnedSources } = useChatContext()
   return (
     <AnimatePresence>
       {open && sources && (
@@ -36,9 +29,6 @@ export default function SourcePanel({
                 key={`${source.chunk_id ?? source.source}-${index}`}
                 source={source}
                 pinnedState={pinnedSources?.find((item) => item.chunk_id === source.chunk_id)}
-                onCitationClick={onCitationClick}
-                onSendQuestion={onSendQuestion}
-                onPinToggle={onPinToggle}
               />
             ))}
         </motion.div>

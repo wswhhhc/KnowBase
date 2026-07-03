@@ -1,4 +1,5 @@
 import AssistantMessageBubble from '@/components/message-bubble/AssistantMessageBubble'
+import { ChatContextProvider } from '@/components/message-bubble/ChatContext'
 import type { MessageBubbleProps } from '@/components/message-bubble/types'
 
 export default function MessageBubble(props: MessageBubbleProps) {
@@ -14,5 +15,17 @@ export default function MessageBubble(props: MessageBubbleProps) {
     )
   }
 
-  return <AssistantMessageBubble {...props} />
+  return (
+    <ChatContextProvider
+      value={{
+        onCitationClick: props.onCitationClick,
+        onSendQuestion: props.onSendQuestion,
+        onNavigateBrowser: props.onNavigateBrowser,
+        pinnedSources: props.pinnedSources,
+        onPinToggle: props.onPinToggle,
+      }}
+    >
+      <AssistantMessageBubble {...props} />
+    </ChatContextProvider>
+  )
 }

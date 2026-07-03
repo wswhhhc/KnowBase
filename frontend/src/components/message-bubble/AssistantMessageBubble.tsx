@@ -20,6 +20,7 @@ import SourcePanel from './SourcePanel'
 import BookmarkDialog from './Dialogs/BookmarkDialog'
 import FeedbackDialog from './Dialogs/FeedbackDialog'
 import ExportDialog from './Dialogs/ExportDialog'
+import { useChatContext } from './ChatContext'
 import {
   formatBooleanEcho,
   formatElapsed,
@@ -47,14 +48,10 @@ export default function AssistantMessageBubble({
   message,
   prevMessage,
   threadId,
-  onCitationClick,
-  onSendQuestion,
-  onNavigateBrowser,
-  pinnedSources,
-  onPinToggle,
   workspaceId,
   workspaceSummary,
 }: MessageBubbleProps) {
+  const { onCitationClick, onSendQuestion, onNavigateBrowser } = useChatContext()
   const [sourceOpen, setSourceOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -171,7 +168,7 @@ export default function AssistantMessageBubble({
       <div className="flex-1 min-w-0">
         <div className="prose-chat text-sm text-foreground">
           {message.content ? (
-            <CitationText text={message.content} sources={message.sources} onCitationClick={onCitationClick} />
+            <CitationText text={message.content} sources={message.sources} />
           ) : (
             <span className="text-muted-foreground animate-pulse-soft italic">思考中…</span>
           )}
@@ -256,11 +253,7 @@ export default function AssistantMessageBubble({
             </div>
 
             {guidance && (
-              <OutcomeGuidancePanel
-                guidance={guidance}
-                onNavigateBrowser={onNavigateBrowser}
-                onSendQuestion={onSendQuestion}
-              />
+              <OutcomeGuidancePanel guidance={guidance} />
             )}
 
             {message.outcome_category === 'success' && message.content && (
@@ -363,10 +356,6 @@ export default function AssistantMessageBubble({
             <SourcePanel
               open={sourceOpen}
               sources={message.sources}
-              pinnedSources={pinnedSources}
-              onCitationClick={onCitationClick}
-              onSendQuestion={onSendQuestion}
-              onPinToggle={onPinToggle}
             />
 
             {message.debugData && <DebugPanel debugData={message.debugData} />}

@@ -104,6 +104,27 @@ describe('useChat', () => {
     expect(assistantMsg.content).toContain('错误：')
   })
 
+  it('shows a clear error when chat stream receives HTTP 429', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: () => Promise.resolve(JSON.stringify({ detail: '请求过于频繁，请在 60 秒后重试。' })),
+      headers: new Headers({ 'Retry-After': '60' }),
+    }))
+
+    const { result } = renderHook(() => useChat())
+
+    act(() => {
+      result.current.sendMessage('你好', false, 'balanced')
+    })
+
+    await waitFor(() => {
+      expect(result.current.isStreaming).toBe(false)
+    })
+
+    expect(result.current.messages[1].content).toContain('请求过于频繁，请在 60 秒后重试。')
+  })
+
   it('stopStreaming aborts and resets streaming state', async () => {
     // Create a stream that never ends to keep streaming active
     const stream = new ReadableStream({

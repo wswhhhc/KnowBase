@@ -45,6 +45,18 @@ export interface KBChunkResponse {
   total: number
 }
 
+export class ApiError extends Error {
+  status: number
+  retryAfter?: number
+
+  constructor(status: number, message: string, retryAfter?: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.retryAfter = retryAfter
+  }
+}
+
 const BASE = '/api'
 
 function authHeaders(): Record<string, string> {
@@ -71,10 +83,38 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
     ...init,
   })
   if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || `HTTP ${res.status}`)
+    throw await createApiErrorFromResponse(res)
   }
   return res.json()
+}
+
+async function createApiErrorFromResponse(res: Response): Promise<ApiError> {
+  const retryAfter = Number(res.headers.get('Retry-After') || '') || undefined
+  const text = await res.text()
+  let message = text.trim()
+
+  if (message) {
+    try {
+      const parsed = JSON.parse(message)
+      if (typeof parsed === 'string') {
+        message = parsed
+      } else if (typeof parsed?.detail === 'string') {
+        message = parsed.detail
+      } else if (typeof parsed?.message === 'string') {
+        message = parsed.message
+      }
+    } catch {
+      // Keep plain-text responses unchanged.
+    }
+  }
+
+  if (!message) {
+    message = res.status === 429 && retryAfter
+      ? `请求过于频繁，请在 ${retryAfter} 秒后重试。`
+      : `HTTP ${res.status}`
+  }
+
+  return new ApiError(res.status, message, retryAfter)
 }
 
 // ── Conversations ──
@@ -188,7 +228,7 @@ export const uploadDocument = async (file: File, versionMode?: string, workspace
   if (versionMode) params.set('version_mode', versionMode)
   const headers: Record<string, string> = authHeaders()
   const res = await fetch(`${BASE}${withWorkspaceScope('/documents/upload', workspaceId, params)}`, { method: 'POST', body: form, headers })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw await createApiErrorFromResponse(res)
   return res.json()
 }
 
@@ -215,7 +255,10 @@ export function uploadDocumentStream(
     signal: controller.signal,
   })
     .then(async (res) => {
-      if (!res.ok) { callbacks.onError?.(await res.text()); return }
+      if (!res.ok) {
+        callbacks.onError?.((await createApiErrorFromResponse(res)).message)
+        return
+      }
       const reader = res.body?.getReader()
       if (!reader) return
       const decoder = new TextDecoder()
@@ -260,7 +303,10 @@ export function ingestUrlStream(
     signal: controller.signal,
   })
     .then(async (res) => {
-      if (!res.ok) { callbacks.onError?.(await res.text()); return }
+      if (!res.ok) {
+        callbacks.onError?.((await createApiErrorFromResponse(res)).message)
+        return
+      }
       const reader = res.body?.getReader()
       if (!reader) return
       const decoder = new TextDecoder()
@@ -499,8 +545,7 @@ export function chatStream(
   })
     .then(async (res) => {
       if (!res.ok) {
-        const text = await res.text()
-        callbacks.onError?.(text)
+        callbacks.onError?.((await createApiErrorFromResponse(res)).message)
         return
       }
 
