@@ -24,13 +24,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: cd backend && uv sync
+        run: uv sync
 
-      - name: Run tests
-        run: cd backend && uv run python -m unittest discover -v
+      - name: Run backend pytest suite
+        run: uv run pytest backend/tests --tb=short -q
 
   frontend:
-    name: Frontend Tests
+    name: Frontend Tests And Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,5 +45,11 @@ jobs:
       - name: Install dependencies
         run: cd frontend && npm ci
 
-      - name: Run tests
+      - name: Run frontend tests
         run: cd frontend && npm test
+
+      - name: Run frontend build
+        run: cd frontend && npm run build
+
+      - name: Check generated API types are up to date
+        run: cd frontend && npm run check-api-types
