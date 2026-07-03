@@ -1,6 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import type { ComponentProps } from 'react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MessageBubble from '@/components/MessageBubble'
+import * as api from '@/lib/api'
 
 vi.mock('framer-motion', () => ({
   motion: {
@@ -14,6 +16,12 @@ vi.mock('framer-motion', () => ({
 
 vi.mock('@/components/DebugPanel', () => ({
   default: () => <div>DebugPanel</div>,
+}))
+
+vi.mock('@/lib/api', () => ({
+  createBookmark: vi.fn(),
+  updateFeedback: vi.fn(),
+  exportConversation: vi.fn(),
 }))
 
 vi.mock('lucide-react', () => {
@@ -55,26 +63,143 @@ describe('MessageBubble', () => {
     evidence_summary: '多个片段支持该结论',
     outcome_category: 'success',
     originalQuestion: '我们上午几点上班？',
+    convId: 'conv-1',
+    assistantMsgId: 42,
+  }
+
+  const createBookmarkMock = vi.mocked(api.createBookmark)
+  const updateFeedbackMock = vi.mocked(api.updateFeedback)
+  const exportConversationMock = vi.mocked(api.exportConversation)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    createBookmarkMock.mockResolvedValue({ id: 1 } as any)
+    updateFeedbackMock.mockResolvedValue({ ok: true } as any)
+    exportConversationMock.mockResolvedValue({ markdown: '# exported' } as any)
+  })
+
+  function renderBubble(props?: Partial<ComponentProps<typeof MessageBubble>>) {
+    return render(
+      <MessageBubble
+        message={baseMessage}
+        onSendQuestion={vi.fn()}
+        threadId="thread-1"
+        {...props}
+      />,
+    )
   }
 
   it('keeps only the primary actions visible by default', () => {
-    render(<MessageBubble message={baseMessage} onSendQuestion={vi.fn()} />)
+    renderBubble()
 
     expect(screen.getByRole('button', { name: /1 个来源/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /继续追问/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /更多操作/i })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /重新回答/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /更简洁/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /导出对话/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /重新回答/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /更简洁/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('导出对话')).not.toBeInTheDocument()
   })
 
-  it('reveals secondary actions only after opening the more-actions menu', async () => {
-    render(<MessageBubble message={baseMessage} onSendQuestion={vi.fn()} />)
+  it('reveals secondary actions only after opening the more-actions menu and closes on escape', async () => {
+    renderBubble()
 
     await userEvent.click(screen.getByRole('button', { name: /更多操作/i }))
 
-    expect(screen.getByRole('button', { name: /重新回答/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /更简洁/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /导出对话/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /重新回答/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /更简洁/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /导出对话/i })).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}')
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menuitem', { name: /重新回答/i })).not.toBeInTheDocument()
+    })
+  })
+
+  it('opens and closes the bookmark dialog, then saves a note', async () => {
+    renderBubble()
+
+    await userEvent.click(screen.getByRole('button', { name: /收藏回答/i }))
+    expect(screen.getByRole('dialog', { name: '收藏回答' })).toBeInTheDocument()
+
+    const overlay = document.body.querySelector('.fixed.inset-0') as HTMLElement | null
+    expect(overlay).not.toBeNull()
+    if (overlay) {
+      await userEvent.click(overlay)
+    }
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '收藏回答' })).not.toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: /收藏回答/i }))
+    await userEvent.type(screen.getByLabelText('备注'), '用于核对考勤')
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(createBookmarkMock).toHaveBeenCalledWith(expect.objectContaining({
+        conversation_id: 'conv-1',
+        message_id: 42,
+        note: '用于核对考勤',
+      }))
+    })
+    expect(screen.queryByRole('dialog', { name: '收藏回答' })).not.toBeInTheDocument()
+  })
+
+  it('submits unhelpful feedback without leaking state into other overlays', async () => {
+    renderBubble()
+
+    await userEvent.click(screen.getByRole('button', { name: '无帮助' }))
+    expect(screen.getByRole('dialog', { name: '这条回答哪里不理想？' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByLabelText('答非所问'))
+    await userEvent.type(screen.getByLabelText('补充说明'), '没有回答时间范围')
+    await userEvent.click(screen.getByRole('button', { name: '提交反馈' }))
+
+    await waitFor(() => {
+      expect(updateFeedbackMock).toHaveBeenCalledWith(
+        'conv-1',
+        42,
+        'unhelpful',
+        'off_topic',
+        '没有回答时间范围',
+      )
+    })
+
+    expect(screen.queryByRole('dialog', { name: '这条回答哪里不理想？' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: '收藏回答' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: '导出对话' })).not.toBeInTheDocument()
+  })
+
+  it('opens export as a separate dialog from the menu and remains usable in a narrow container', async () => {
+    render(
+      <div style={{ width: 280 }}>
+        <MessageBubble
+          message={baseMessage}
+          onSendQuestion={vi.fn()}
+          threadId="thread-1"
+        />
+      </div>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /更多操作/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /导出对话/i }))
+
+    expect(screen.queryByRole('menuitem', { name: /重新回答/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '导出对话' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByLabelText('JSON'))
+    await userEvent.click(screen.getByLabelText('包含调试信息'))
+
+    expect(screen.getByLabelText('JSON')).toBeChecked()
+    expect(screen.getByLabelText('包含调试信息')).toBeChecked()
+    expect(screen.getByRole('button', { name: /确认导出/i })).toBeEnabled()
+    expect(exportConversationMock).not.toHaveBeenCalled()
+
+    await userEvent.keyboard('{Escape}')
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '导出对话' })).not.toBeInTheDocument()
+    })
   })
 })
