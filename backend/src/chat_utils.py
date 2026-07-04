@@ -6,7 +6,8 @@ import logging
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.config.settings import LLM_MODEL, get_runtime_setting
+from src.config.constants import LLM_MODEL
+from src.config.runtime_overrides import get_runtime_setting
 from src.api.models import DebugInfo
 from src.metrics import log_query
 

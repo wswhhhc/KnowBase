@@ -14,14 +14,9 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from src.config.settings import (
-    CHUNK_OVERLAP,
-    CHUNK_SIZE,
-    DEMO_DOCUMENTS_DIR,
-    ENABLE_CONTEXTUAL_RETRIEVAL,
-    PRESET_DOCUMENTS_DIR,
-    get_runtime_setting,
-)
+from src.config.constants import CHUNK_OVERLAP, CHUNK_SIZE, ENABLE_CONTEXTUAL_RETRIEVAL
+from src.config.runtime_overrides import get_runtime_setting
+from src.config.settings import DEMO_DOCUMENTS_DIR, PRESET_DOCUMENTS_DIR
 from src.rag.kb_state import KnowledgeBaseState, workspace_matches
 from src.rag.models import (
     canonical_source_from_metadata,

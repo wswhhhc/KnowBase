@@ -9,14 +9,9 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from pydantic import ValidationError
 
-from src.config.settings import (
-    SILICONFLOW_BASE_URL,
-    LLM_MAX_TOKENS,
-    LLM_MODEL,
-    LLM_TEMPERATURE,
-    require_siliconflow_api_key,
-    get_runtime_setting,
-)
+from src.config.constants import LLM_MAX_TOKENS, LLM_MODEL, LLM_TEMPERATURE, SILICONFLOW_BASE_URL
+from src.config.runtime_overrides import get_runtime_setting
+from src.config.settings import require_siliconflow_api_key
 from src.graph.state import GraphSource, QualityDecision, RerankDecision
 from src.rag.models import RetrievalResult
 from src.utils import json_from_text

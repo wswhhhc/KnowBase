@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 
 from src.api.deps import _security, verify_api_key
-from src.config.settings import get_runtime_setting
+from src.config.runtime_overrides import get_runtime_setting
 
 
 class InMemoryRateLimiter:

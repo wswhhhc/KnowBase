@@ -9,7 +9,8 @@ from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import KBChunk, KBStats, HotspotEntry, KBConfig
 from src.rag.models import RetrievalResult
 from src.rag.knowledge_base import KnowledgeBase
-from src.config.settings import CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_RETRIEVAL, get_runtime_setting
+from src.config.constants import CHUNK_OVERLAP, CHUNK_SIZE, TOP_K_RETRIEVAL
+from src.config.runtime_overrides import get_runtime_setting
 
 
 class DebugSearchRequest(BaseModel):

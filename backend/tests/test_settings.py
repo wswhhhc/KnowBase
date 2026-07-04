@@ -88,18 +88,18 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.checkpoint_db_path, str(repo_root / "runtime" / "custom" / "checkpoints.db"))
 
     def test_update_runtime_settings_coerces_types(self):
-        settings_module.update_runtime_settings({
+        runtime_overrides_module.update_runtime_settings({
             "llm_temperature": "0.7",
             "top_k_retrieval": "8",
             "enable_quality_check": False,
         })
 
-        self.assertEqual(settings_module.get_runtime_setting("llm_temperature"), 0.7)
-        self.assertEqual(settings_module.get_runtime_setting("top_k_retrieval"), 8)
-        self.assertFalse(settings_module.get_runtime_setting("enable_quality_check"))
+        self.assertEqual(runtime_overrides_module.get_runtime_setting("llm_temperature"), 0.7)
+        self.assertEqual(runtime_overrides_module.get_runtime_setting("top_k_retrieval"), 8)
+        self.assertFalse(runtime_overrides_module.get_runtime_setting("enable_quality_check"))
 
     def test_require_siliconflow_api_key_prefers_runtime_override(self):
-        settings_module.update_runtime_settings({"siliconflow_api_key": "sk-runtime-1234567890"})
+        runtime_overrides_module.update_runtime_settings({"siliconflow_api_key": "sk-runtime-1234567890"})
 
         self.assertEqual(
             settings_module.require_siliconflow_api_key(),

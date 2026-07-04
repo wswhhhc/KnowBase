@@ -8,7 +8,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.rag.knowledge_base import KnowledgeBase
-from src.config.settings import settings, get_runtime_setting
+from src.config.runtime_overrides import get_runtime_setting
+from src.config.settings import settings
 
 _security = HTTPBearer(auto_error=False)
 
