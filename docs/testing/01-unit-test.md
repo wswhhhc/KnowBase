@@ -5,7 +5,7 @@
 **目标**: 验证 KnowBase 各模块的纯函数和类方法在隔离环境下的正确性，确保每个最小可测试单元的行为符合预期。
 
 **测试范围**:
-- 后端: graph/graph.py, rag/knowledge_base.py, conversations.py, utils.py, loaders.py, metrics.py, rag/web_search.py, api/models.py, config/settings.py
+- 后端: graph/graph.py, rag/knowledge_base.py, persistence/*_repository.py, utils.py, loaders.py, metrics.py, rag/web_search.py, api/models.py, config/settings.py
 - 前端: lib/utils.ts, hooks/useTheme.ts, hooks/useChat.ts, hooks/useData.ts, lib/api.ts
 
 **Mock 策略**: 
@@ -76,7 +76,7 @@
 | UT-KB-20 | `clear()` 重置所有状态 | 有数据后 clear | 所有数据清空 | P0 |
 | UT-KB-21 | `hybrid_search` 空知识库 | 无文档 | 空列表 | P1 |
 
-### 2.3 conversations.py — 对话管理
+### 2.3 persistence repositories / conversation_store — 对话管理测试入口
 
 | 编号 | 测试用例 | 输入 | 预期输出 | 优先级 |
 |------|---------|------|---------|--------|

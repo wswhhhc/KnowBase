@@ -7,7 +7,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src import conversations
+from tests import conversation_store as conversations
 from src.config import settings as settings_module
 from src.persistence import database as database_module
 

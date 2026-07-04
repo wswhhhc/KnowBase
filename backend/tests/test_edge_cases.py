@@ -15,7 +15,7 @@ from langchain_core.documents import Document
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
-from src import conversations
+from tests import conversation_store as conversations
 from src.persistence import database
 
 

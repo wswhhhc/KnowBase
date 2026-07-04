@@ -1,4 +1,6 @@
-"""Conversation facade with SQLite-backed persistence repositories."""
+"""Test-only conversation storage helpers backed by persistence repositories."""
+
+from __future__ import annotations
 
 from pathlib import Path
 
@@ -29,8 +31,7 @@ def _run_migrations() -> None:
     database.run_migrations()
 
 
-def init_db():
-    """Compatibility wrapper for the extracted database bootstrap."""
+def init_db() -> None:
     _sync_db_path_override()
     database.init_db()
 
@@ -55,7 +56,7 @@ def update_title(conv_id: str, title: str) -> bool:
     return conversation_repository.update_title(database.get_connection, conv_id, title)
 
 
-def delete_conversations(conv_ids: list[str]):
+def delete_conversations(conv_ids: list[str]) -> None:
     conversation_repository.delete_conversations(database.get_connection, conv_ids)
 
 
@@ -90,9 +91,6 @@ def export_conversation(conv_id: str, fmt: str = "markdown", include_sources: bo
     )
 
 
-# ── Bookmarks ──
-
-
 def create_bookmark(workspace_id: str = "", conversation_id: str = "", message_id: int = 0,
                     chunk_id: str = "", note: str = "", content: str = "", source: str = "",
                     tags: str = "") -> dict:
@@ -109,9 +107,6 @@ def update_bookmark(bm_id: int, **kwargs) -> dict | None:
 
 def delete_bookmark(bm_id: int) -> bool:
     return bookmark_repository.delete_bookmark(database.get_connection, bm_id)
-
-
-# ── Pinned Sources ──
 
 
 def clear_pin_state(thread_id: str) -> None:
@@ -132,9 +127,6 @@ def load_pin_state(thread_id: str) -> list[dict]:
 
 def load_pin_state_summary(thread_id: str) -> dict:
     return pin_state_repository.load_pin_state_summary(database.get_connection, thread_id)
-
-
-# ── Workspaces ──
 
 
 def create_workspace(name: str = "新工作区", description: str = "") -> dict:
