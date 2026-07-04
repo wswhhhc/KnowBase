@@ -64,16 +64,34 @@ export function useSidebarConversations({
 }: UseSidebarConversationsArgs) {
   const prevRefreshKeyRef = useRef(convRefreshKey)
   const autoLoadedConversationKeyRef = useRef<string | null>(null)
+  const loadRequestTokenRef = useRef(0)
+  const workspaceScopeRef = useRef(workspaceScopeKey)
+
+  useEffect(() => {
+    workspaceScopeRef.current = workspaceScopeKey
+    autoLoadedConversationKeyRef.current = null
+    loadRequestTokenRef.current += 1
+  }, [workspaceScopeKey])
 
   const loadConversation = useCallback(async (conversation: Conversation, closeOnMobile = true) => {
     onNavigate('chat')
     onLoadingMessages?.(true)
+    const requestToken = loadRequestTokenRef.current + 1
+    loadRequestTokenRef.current = requestToken
+    const requestWorkspaceScopeKey = workspaceScopeKey
 
     try {
       const [messages, pinState] = await Promise.all([
         api.getMessages(conversation.id, activeWorkspaceId),
         api.getConversationPinState(conversation.id, activeWorkspaceId),
       ])
+
+      if (
+        loadRequestTokenRef.current !== requestToken
+        || workspaceScopeRef.current !== requestWorkspaceScopeKey
+      ) {
+        return
+      }
 
       convs.setActiveId(conversation.id)
       chat.loadMessages(
@@ -88,9 +106,11 @@ export function useSidebarConversations({
     } catch (error) {
       console.error('切换对话失败:', error)
     } finally {
-      onLoadingMessages?.(false)
+      if (loadRequestTokenRef.current === requestToken) {
+        onLoadingMessages?.(false)
+      }
     }
-  }, [chat, convs, isMobile, onClose, onLoadingMessages, onNavigate])
+  }, [activeWorkspaceId, chat, convs, isMobile, onClose, onLoadingMessages, onNavigate, workspaceScopeKey])
 
   useEffect(() => {
     if (convRefreshKey !== prevRefreshKeyRef.current) {
