@@ -1,7 +1,7 @@
 import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import DashboardPage from '@/components/DashboardPage'
+import DashboardPage from '@/pages/dashboard/DashboardPage'
 import * as api from '@/lib/api'
 import { mockQueryLogs } from '@/test/mocks/data'
 
