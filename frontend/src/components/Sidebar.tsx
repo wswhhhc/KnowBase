@@ -15,6 +15,7 @@ import DashboardSummary from '@/components/sidebar/DashboardSummary'
 import type { ChatMessage } from '@/hooks/useChat'
 import type { PinStateResponse } from '@/shared/api'
 import { useSidebarConversations } from '@/features/sidebar/hooks/useSidebarConversations'
+import { DEFAULT_WORKSPACE_SELECT_VALUE, useSidebarWorkspaceState } from '@/features/sidebar/hooks/useSidebarWorkspaceState'
 import { OPEN_DOCUMENTS_PANEL_EVENT } from '@/lib/ui-events'
 import { APP_NAV_ITEMS, type ViewType } from '@/app/navigation'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
@@ -38,39 +39,34 @@ interface SidebarProps {
   onWorkspaceSummaryChange?: (summary: WorkspaceSummary) => void
   isMobile?: boolean
 }
-
-const DEFAULT_WORKSPACE_SELECT_VALUE = '__default_workspace__'
-
 export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages, onWorkspaceChange, onWorkspaceSummaryChange, isMobile = false }: SidebarProps) {
   const theme = useTheme()
   const wss = useWorkspaces()
   const convs = useConversations(wss.activeWorkspaceId || undefined)
   const srcs = useSources(wss.activeWorkspaceId)
   const [tab, setTab] = useState<'conversations' | 'documents' | 'bookmarks'>('conversations')
-  const [createOpen, setCreateOpen] = useState(false)
-  const [createName, setCreateName] = useState('')
-  const [deleteWsOpen, setDeleteWsOpen] = useState(false)
-  const workspaceSelectValue = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
-  const workspaceScopeKey = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
-
-  useEffect(() => {
-    const activeWorkspace = wss.workspaces.find((ws) => ws.id === wss.activeWorkspaceId)
-    onWorkspaceSummaryChange?.({
-      workspaceName: activeWorkspace?.name || '默认工作区',
-      documentCount: srcs.sources.length,
-      conversationCount: convs.conversations.length,
-    })
-  }, [
-    convs.conversations.length,
+  const {
+    activeWorkspaceName,
+    createName,
+    createOpen,
+    deleteWsOpen,
+    requestDeleteWorkspace,
+    closeCreateDialog,
+    openCreateDialog,
+    setCreateName,
+    setCreateOpen,
+    setDeleteWsOpen,
+    submitCreateWorkspace,
+    workspaceScopeKey,
+    workspaceSelectValue,
+    handleWorkspaceValueChange,
+  } = useSidebarWorkspaceState({
+    convs,
+    onWorkspaceChange,
     onWorkspaceSummaryChange,
-    srcs.sources.length,
-    wss.activeWorkspaceId,
-    wss.workspaces,
-  ])
-
-  useEffect(() => {
-    onWorkspaceChange?.(wss.activeWorkspaceId)
-  }, [onWorkspaceChange, wss.activeWorkspaceId])
+    srcs,
+    wss,
+  })
 
   useEffect(() => {
     const openDocumentsPanel = () => {
@@ -127,17 +123,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         <div className="flex items-center gap-1">
           <Select
             value={workspaceSelectValue}
-            onValueChange={(value) => {
-              const workspaceId = value === DEFAULT_WORKSPACE_SELECT_VALUE ? '' : value
-              const nextWorkspace = wss.workspaces.find((ws) => ws.id === workspaceId)
-              wss.setActiveWorkspaceId(workspaceId)
-              onWorkspaceSummaryChange?.({
-                workspaceName: nextWorkspace?.name || '默认工作区',
-                documentCount: 0,
-                conversationCount: 0,
-              })
-              onWorkspaceChange?.(workspaceId)
-            }}
+            onValueChange={handleWorkspaceValueChange}
           >
             <SelectTrigger className="flex-1 h-7 text-xs px-2 py-1">
               <SelectValue placeholder="选择工作区" />
@@ -155,7 +141,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
             </SelectContent>
           </Select>
           <button
-            onClick={() => { setCreateName(''); setCreateOpen(true) }}
+            onClick={openCreateDialog}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             title="创建工作区"
           >
@@ -163,7 +149,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
           </button>
           {wss.activeWorkspaceId && (
             <button
-              onClick={() => setDeleteWsOpen(true)}
+              onClick={requestDeleteWorkspace}
               className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
               title="删除工作区"
             >
@@ -213,7 +199,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
               sources={srcs.sources}
               onRefresh={srcs.refresh}
               workspaceId={wss.activeWorkspaceId}
-              workspaceName={wss.workspaces.find((ws) => ws.id === wss.activeWorkspaceId)?.name || '默认工作区'}
+              workspaceName={activeWorkspaceName}
               onSendQuestion={(q) => { onNavigate('chat'); chat.sendMessage(q, false, 'balanced') }}
               onOpenKnowledgeBase={() => onNavigate('browser')}
             />
@@ -228,7 +214,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
           <KBSummary
             key={`kb-summary-${workspaceScopeKey}`}
             workspaceId={wss.activeWorkspaceId}
-            workspaceName={wss.workspaces.find((ws) => ws.id === wss.activeWorkspaceId)?.name || '默认工作区'}
+            workspaceName={activeWorkspaceName}
           />
         ) : activeView === 'dashboard' ? (
           <DashboardSummary key={`dashboard-summary-${workspaceScopeKey}`} />
@@ -280,20 +266,14 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
               onChange={(e) => setCreateName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && createName.trim()) {
-                  wss.create(createName.trim())
-                  setCreateOpen(false)
+                  submitCreateWorkspace()
                 }
               }}
               autoFocus
             />
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
-              <Button onClick={() => {
-                if (createName.trim()) {
-                  wss.create(createName.trim())
-                  setCreateOpen(false)
-                }
-              }}>
+              <Button variant="outline" onClick={closeCreateDialog}>取消</Button>
+              <Button onClick={submitCreateWorkspace}>
                 创建
               </Button>
             </div>
@@ -306,7 +286,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
         open={deleteWsOpen}
         onOpenChange={setDeleteWsOpen}
         title="删除工作区"
-        description={`确定要删除工作区"${wss.workspaces.find(ws => ws.id === wss.activeWorkspaceId)?.name ?? ''}"吗？此操作不可撤销。`}
+        description={`确定要删除工作区"${activeWorkspaceName}"吗？此操作不可撤销。`}
         onConfirm={() => wss.remove(wss.activeWorkspaceId)}
       />
     </div>
