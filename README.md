@@ -126,13 +126,13 @@ GitHub Actions 当前会执行：
 
 ## 契约与类型同步
 
-仓库把 `backend/openapi.json` 视为提交态 API 快照，把 `frontend/src/lib/api-types.openapi.ts` 视为前端生成物。
+仓库把 `backend/openapi.json` 视为提交态 API 快照，把 `frontend/src/shared/api/api-types.openapi.ts` 视为前端生成物。
 
 - 当 FastAPI 路由或 Pydantic schema 改动时，先导出 `backend/openapi.json`
 - 再重新生成前端 OpenAPI 类型
 - CI 会阻止“后端契约已变但快照或前端类型未更新”的提交
 
-手写 SSE 类型位于 `frontend/src/lib/api-types.ts`，并由后端测试校验是否与 Pydantic 模型同步。
+手写 SSE 类型位于 `frontend/src/shared/api/api-types.ts`，并由后端测试校验是否与 Pydantic 模型同步。
 
 ## 结构文档
 
