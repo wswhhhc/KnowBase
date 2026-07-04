@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from src import conversations
+from src.persistence import database
 
 
 class ConversationEdgeCaseTests(unittest.TestCase):
@@ -18,6 +19,7 @@ class ConversationEdgeCaseTests(unittest.TestCase):
 
     def tearDown(self):
         conversations._DB_PATH = self.original_path
+        database.clear_db_path_override()
         try:
             self.temp_dir.cleanup()
         except PermissionError:

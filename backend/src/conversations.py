@@ -17,8 +17,17 @@ _get_conn = database.get_connection
 _run_migrations = database.run_migrations
 
 
+def _sync_db_path_override() -> None:
+    configured_db_path = Path(DATA_DIR) / "conversations.db"
+    if Path(_DB_PATH).resolve() == configured_db_path.resolve():
+        database.clear_db_path_override()
+    else:
+        database.set_db_path_override(_DB_PATH)
+
+
 def init_db():
     """Compatibility wrapper for the extracted database bootstrap."""
+    _sync_db_path_override()
     database.init_db()
 
 

@@ -16,6 +16,7 @@ from langchain_core.documents import Document
 from src.api.deps import get_knowledge_base
 from src.api.main import app
 from src import conversations
+from src.persistence import database
 
 
 class FakeKnowledgeBase:
@@ -156,6 +157,7 @@ class FastAPISmokeTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         conversations._DB_PATH = cls._original_db_path
+        database.clear_db_path_override()
         cls._temp_dir.cleanup()
         app.dependency_overrides.clear()
         cls.patcher_chroma.stop()

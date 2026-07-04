@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-import sys
 from pathlib import Path
 
 from src.config.constants import DATA_DIR
@@ -13,16 +12,23 @@ from src.persistence import workspace_repository
 logger = logging.getLogger(__name__)
 
 _DEFAULT_DB_PATH = Path(DATA_DIR) / "conversations.db"
+_DB_PATH_OVERRIDE: Path | None = None
+
+
+def set_db_path_override(path: str | Path | None) -> None:
+    """Override the active database path for tests or isolated runtimes."""
+    global _DB_PATH_OVERRIDE
+    _DB_PATH_OVERRIDE = None if path is None else Path(path)
+
+
+def clear_db_path_override() -> None:
+    """Reset the database path override back to the configured default."""
+    set_db_path_override(None)
 
 
 def get_db_path() -> Path:
-    """Return the active database path, respecting test-time overrides."""
-    conversations_module = sys.modules.get("src.conversations")
-    if conversations_module is not None:
-        overridden = getattr(conversations_module, "_DB_PATH", None)
-        if overridden is not None:
-            return Path(overridden)
-    return _DEFAULT_DB_PATH
+    """Return the active database path, respecting explicit overrides."""
+    return _DB_PATH_OVERRIDE or _DEFAULT_DB_PATH
 
 
 def get_connection() -> sqlite3.Connection:
