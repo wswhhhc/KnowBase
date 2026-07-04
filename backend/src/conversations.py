@@ -32,10 +32,10 @@ def _run_migrations():
     ini_path = Path(__file__).resolve().parents[1] / "alembic.ini"
     if not ini_path.exists():
         return
-    # Only migrate the primary (non-test) database
-    current_db = str(_DB_PATH.resolve())
-    expected_dir = str(Path(__file__).resolve().parents[1] / "data")
-    if not current_db.startswith(expected_dir):
+    # Only migrate the configured primary database, not patched temp test paths.
+    configured_db = (Path(DATA_DIR) / "conversations.db").resolve()
+    current_db = _DB_PATH.resolve()
+    if current_db != configured_db:
         return
     try:
         from alembic import command
