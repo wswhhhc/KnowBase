@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Guard against structural regressions after the remediation work."""
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def _iter_files(base: Path, pattern: str) -> list[Path]:
+    return sorted(path for path in base.rglob(pattern) if path.is_file())
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def _check_forbidden_imports() -> list[str]:
+    violations: list[str] = []
+
+    backend_patterns = [
+        (re.compile(r"\b(?:from|import)\s+src\.conversations\b"), "禁止在源代码中继续依赖 src.conversations"),
+        (re.compile(r"\b(?:from|import)\s+src\.graph\.nodes\b"), "禁止在源代码中继续把 src.graph.nodes 当主入口"),
+    ]
+    backend_excludes = {
+        ROOT / "backend" / "src" / "conversations.py",
+        ROOT / "backend" / "src" / "graph" / "__init__.py",
+        ROOT / "backend" / "src" / "graph" / "nodes.py",
+    }
+
+    for path in _iter_files(ROOT / "backend" / "src", "*.py"):
+        if path in backend_excludes:
+            continue
+        source = _read(path)
+        for pattern, message in backend_patterns:
+            if pattern.search(source):
+                violations.append(f"{message}: {path.relative_to(ROOT)}")
+
+    frontend_pattern = re.compile(r"(['\"])(?:@/|\.{1,2}/.*)?lib/api-types(?:\.openapi)?\1")
+    frontend_excludes = {
+        ROOT / "frontend" / "src" / "lib" / "api-types.ts",
+        ROOT / "frontend" / "src" / "lib" / "api-types.openapi.ts",
+    }
+    for path in _iter_files(ROOT / "frontend" / "src", "*.ts") + _iter_files(ROOT / "frontend" / "src", "*.tsx"):
+        if path in frontend_excludes:
+            continue
+        if frontend_pattern.search(_read(path)):
+            violations.append(f"禁止继续依赖 frontend/src/lib/api-types*: {path.relative_to(ROOT)}")
+
+    return violations
+
+
+def _check_pages_are_real_containers() -> list[str]:
+    violations: list[str] = []
+    shell_re = re.compile(r"^\s*export\s+(?:\{\s*default\s*\}\s+from|\*\s+from)\s+['\"].+['\"]\s*;?\s*$")
+
+    for path in _iter_files(ROOT / "frontend" / "src" / "pages", "*.tsx"):
+        source = _read(path).strip()
+        if shell_re.fullmatch(source):
+            violations.append(f"pages 层不能继续只是 re-export 壳: {path.relative_to(ROOT)}")
+
+    return violations
+
+
+def main() -> int:
+    violations = [
+        *_check_forbidden_imports(),
+        *_check_pages_are_real_containers(),
+    ]
+    if not violations:
+        print("结构守卫通过。")
+        return 0
+
+    print("发现结构回退：", file=sys.stderr)
+    for violation in violations:
+        print(f"- {violation}", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

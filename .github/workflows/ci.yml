@@ -31,6 +31,9 @@ jobs:
         working-directory: backend
         run: uv run pytest tests --tb=short -q
 
+      - name: Run structure guard
+        run: python scripts/check-structure.py
+
   frontend:
     name: Frontend Tests And Build
     runs-on: ubuntu-latest
