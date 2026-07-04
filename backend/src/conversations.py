@@ -14,7 +14,6 @@ from src.persistence import (
 
 _DB_PATH = Path(DATA_DIR) / "conversations.db"
 _get_conn = database.get_connection
-_run_migrations = database.run_migrations
 
 
 def _sync_db_path_override() -> None:
@@ -23,6 +22,11 @@ def _sync_db_path_override() -> None:
         database.clear_db_path_override()
     else:
         database.set_db_path_override(_DB_PATH)
+
+
+def _run_migrations() -> None:
+    _sync_db_path_override()
+    database.run_migrations()
 
 
 def init_db():

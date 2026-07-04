@@ -70,6 +70,22 @@ class ConversationMigrationTests(unittest.TestCase):
         self.assertFalse(mock_config_cls.called)
         self.assertFalse(mock_upgrade.called)
 
+    def test_conversations_run_migrations_clears_stale_override_for_default_runtime_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_module.set_db_path_override(Path(temp_dir) / "conversations.db")
+            with patch("alembic.command.upgrade") as mock_upgrade:
+                with patch("alembic.config.Config") as mock_config_cls:
+                    mock_config = MagicMock()
+                    mock_config_cls.return_value = mock_config
+
+                    conversations._run_migrations()
+
+        mock_config.set_main_option.assert_called_once_with(
+            "sqlalchemy.url",
+            f"sqlite:///{settings_module.LOCAL_RUNTIME_DIR / 'conversations.db'}",
+        )
+        mock_upgrade.assert_called_once_with(mock_config, "head")
+
     def test_conversations_init_db_syncs_database_override(self):
         original_db_path = conversations._DB_PATH
         try:
