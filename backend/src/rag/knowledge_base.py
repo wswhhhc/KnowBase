@@ -13,7 +13,6 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 
-from src.api.models import HotspotEntry, KBChunk
 from src.config.settings import (
     CHROMA_PERSIST_DIR,
     DATA_DIR,
@@ -30,7 +29,7 @@ from src.rag.kb_ingestion import IngestionService
 from src.rag.kb_retrieval import Retriever, rrf_fuse
 from src.rag.kb_state import KnowledgeBaseState, workspace_matches
 from src.rag.loaders import load_document
-from src.rag.models import RetrievalResult
+from src.rag.models import HotspotEntry, KBChunk, RetrievalResult
 
 
 logger = logging.getLogger(__name__)

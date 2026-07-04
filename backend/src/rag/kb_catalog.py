@@ -7,11 +7,10 @@ from collections import Counter
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
-from src.api.models import HotspotEntry, KBChunk
 from src.rag.kb_hotspots import HotspotTracker
 from src.rag.kb_ingestion import IngestionService
 from src.rag.kb_state import KnowledgeBaseState, parse_versioned_source_label, search_keywords, workspace_matches
-from src.rag.models import normalize_source
+from src.rag.models import HotspotEntry, KBChunk, normalize_source
 
 
 def _doc_matches_source(doc: Document, source_name: str, version: str | None) -> bool:

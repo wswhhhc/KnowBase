@@ -819,10 +819,7 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /**
-         * HotspotEntry
-         * @description Hot chunk entry returned by GET /api/knowledge-base/hotspots.
-         */
+        /** HotspotEntry */
         HotspotEntry: {
             /** Chunk Id */
             chunk_id: string;
