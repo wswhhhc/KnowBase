@@ -1,11 +1,10 @@
-import { toast } from 'sonner'
 import { useEffect, useRef, useState } from 'react'
 
 import { useBrowserHighlight } from '@/features/knowledge-browser/hooks/useBrowserHighlight'
 import { useBrowserCatalogState } from '@/features/knowledge-browser/hooks/useBrowserCatalogState'
 import { useBrowserHotspots } from '@/features/knowledge-browser/hooks/useBrowserHotspots'
 import { useBrowserImport } from '@/features/knowledge-browser/hooks/useBrowserImport'
-import { UPLOAD_TRIGGER_EVENT } from '@/lib/ui-events'
+import { useBrowserWorkspaceLifecycle } from '@/features/knowledge-browser/hooks/useBrowserWorkspaceLifecycle'
 
 interface UseBrowserPageArgs {
   highlightChunkId?: string | null
@@ -96,39 +95,19 @@ export function useBrowserPage({
     getScopeToken,
   })
 
-  useEffect(() => {
-    const scopeToken = nextScopeToken()
-    resetCatalogState()
-    setHotspotMode(false)
-    setHotspots(new Map())
-    resetImportState()
-    setLoading(true)
-    loadInitialCatalogData(scopeToken)
-      .catch((errorValue) => {
-        if (!isScopeCurrent(scopeToken)) return
-        setError(String(errorValue))
-        toast.error('加载失败', { description: String(errorValue) })
-      })
-      .finally(() => {
-        if (!isScopeCurrent(scopeToken)) return
-        if (sessionStorage.getItem('kb_trigger_upload') === 'true') {
-          sessionStorage.removeItem('kb_trigger_upload')
-          requestAnimationFrame(() => fileInputRef.current?.click())
-        }
-        setLoading(false)
-      })
-  }, [browserWsId, isScopeCurrent, loadInitialCatalogData, nextScopeToken, resetCatalogState, resetImportState, setError, setHotspotMode, setHotspots, setLoading])
-
-  useEffect(() => {
-    const handler = () => {
-      if (sessionStorage.getItem('kb_trigger_upload') === 'true') {
-        sessionStorage.removeItem('kb_trigger_upload')
-        requestAnimationFrame(() => fileInputRef.current?.click())
-      }
-    }
-    window.addEventListener(UPLOAD_TRIGGER_EVENT, handler)
-    return () => window.removeEventListener(UPLOAD_TRIGGER_EVENT, handler)
-  }, [])
+  useBrowserWorkspaceLifecycle({
+    browserWsId,
+    fileInputRef,
+    isScopeCurrent,
+    loadInitialCatalogData,
+    nextScopeToken,
+    resetCatalogState,
+    resetImportState,
+    setError,
+    setHotspotMode,
+    setHotspots,
+    setLoading,
+  })
 
   useBrowserHighlight({
     highlightChunkId,
