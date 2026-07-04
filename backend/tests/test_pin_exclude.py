@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 from langchain_core.documents import Document
 
-from src.graph.nodes import retrieve_docs
+from src.graph.retrieval_nodes import retrieve_docs
 from src.graph.state import GraphState
 from src.rag.models import RetrievalResult
 

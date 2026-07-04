@@ -11,13 +11,13 @@ from src.graph.routing import (
     detect_question_type,
     route_after_classifier,
 )
+from src.graph.retrieval_nodes import (
+    route_after_rerank,
+    route_after_retrieval,
+)
 from src.graph.utils import (
     parse_quality_decision,
     parse_rerank_decision,
-)
-from src.graph.nodes import (
-    route_after_rerank,
-    route_after_retrieval,
 )
 from src.rag.knowledge_base import RetrievalResult
 

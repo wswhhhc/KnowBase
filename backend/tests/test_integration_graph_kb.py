@@ -18,10 +18,14 @@ from src.graph.routing import (
     detect_question_type,
     route_after_classifier,
 )
-from src.graph.nodes import (
+from src.graph.finalization_nodes import (
     finalize,
-    route_after_retrieval,
+)
+from src.graph.quality_nodes import (
     should_retry,
+)
+from src.graph.retrieval_nodes import (
+    route_after_retrieval,
 )
 from src.graph.utils import (
     parse_quality_decision,
