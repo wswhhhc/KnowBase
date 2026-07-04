@@ -19,6 +19,7 @@ runtime/local/*
 !runtime/local/.gitkeep
 runtime/quickstart/*
 !runtime/quickstart/.gitkeep
+runtime/archive/*
 .venv/
 __pycache__/
 */__pycache__/
