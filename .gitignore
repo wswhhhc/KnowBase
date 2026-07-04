@@ -30,6 +30,7 @@ __pycache__/
 *.egg-info/
 # Legacy local runtime residue; new code must use repo-root runtime/
 data/
+backend/data/
 backend/.coverage
 backend/.coverage.*
 videos/
