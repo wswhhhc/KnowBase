@@ -11,6 +11,15 @@ cd backend && uv run uvicorn src.api.main:app --reload --port 8000
 # 前端
 cd frontend && npm run dev
 
+# 一键启动（支持 bash / PowerShell）
+bash scripts/dev.sh
+scripts\dev.bat
+
+# Docker
+docker compose up --build
+
+# ---- 测试 ----
+
 # 后端全部测试
 cd backend && uv run python -m unittest discover -v
 
@@ -23,15 +32,27 @@ cd frontend && npm test
 # 前端单文件测试
 cd frontend && npx vitest src/test/__tests__/components/ChatArea.test.tsx
 
-# 包同步
+# 前端测试 watch 模式
+cd frontend && npm run test:watch
+
+# ---- 质量门禁 ----
+bash scripts/run-checks.sh
+# 内部依次执行：后端 pytest → check-structure.py → 前端 vitest → 前端构建 → API 类型漂移检查
+
+# ---- 包同步 ----
 cd backend && uv sync
 cd frontend && npm install
 
-# Alembic（init_db 时自动执行，也可手动）
+# ---- 数据库 ----
 cd backend && uv run alembic upgrade head
 cd backend && uv run alembic downgrade -1
 
-# 离线 RAG 评估
+# ---- 契约同步（后端 schema 变更后） ----
+cd backend && uv run python scripts/export_openapi.py
+cd frontend && npm run gen-api-types
+# CI 会阻止契约/类型未同步的提交：npm run check-api-types
+
+# ---- 离线 RAG 评估 ----
 cd backend && uv run python -m src.evaluate
 ```
 
@@ -51,6 +72,20 @@ cd backend && uv run python -m src.evaluate
   → SSE 流式返回 (ChatStreamService → chat_debug + chat_persistence)
 ```
 
+### 后端分层
+
+```
+api/        HTTP 协议、鉴权、参数校验、响应映射   → 不包含核心逻辑
+graph/      LangGraph 工作流节点                  → 不反向依赖 api.models
+rag/        知识库导入/检索/向量存储               → 不反向依赖 api.models
+persistence/ SQLite repository 细节               → 路由直接依赖
+config/     pydantic-settings + 运行时覆写
+```
+
+`graph/nodes.py` 已拆分为独立节点模块：`history_nodes`、`generation_nodes`、`finalization_nodes`、`retrieval_nodes`、`quality_nodes`、`web_search_nodes`。禁止继续将 `src.graph.nodes` 当主入口使用。
+
+结构守卫脚本 `scripts/check-structure.py` 会在 CI 中校验禁止的导入和文件结构回退。
+
 ### 关键约定
 
 - **包管理**: `uv`（非 pip），`.env` 放 `backend/.env`，启动用 `uv run`
@@ -61,8 +96,18 @@ cd backend && uv run python -m src.evaluate
 - **搜索策略**: `fast`(无 rerank)、`balanced`(条件 rerank)、`high_quality`(必 rerank)、`deep`(扩检索)，偏好存 `localStorage`。移动端收进弹层
 - **SSE 流**: `backend/src/api/chat_stream_service.py`（ChatStreamService），`chat.py` 路由仅 27 行。调试逻辑拆至 `chat_debug.py`，持久化拆至 `chat_persistence.py`
 - **Pin/Exclude**: 独立 `pinned_sources` 表，非 debug_info JSON blob，通过 `/pin-state` 查询
+- **前端 API 客户端**: `frontend/src/shared/api/` 下（非旧 `lib/api.ts`），含 SSEParser 和 createChatStreamAdapter
 - **前端字号**: `text-2xs`(10px) / `text-xs`(12px) / `text-sm`(14px)，禁用 `text-[Xpx]`
 - **图标**: 全项目 lucide-react，禁用 emoji 作为 UI 图标
+
+### 契约与类型同步
+
+`backend/openapi.json` 是提交态 API 快照，`frontend/src/shared/api/api-types.openapi.ts` 是前端生成物。当 FastAPI 路由或 Pydantic schema 改动时：
+1. 导出 `backend/openapi.json`
+2. 重新生成前端类型 `npm run gen-api-types`
+3. CI 通过 `npm run check-api-types` 校验同步
+
+手写 SSE 类型在 `frontend/src/shared/api/api-types.ts`，由后端测试校验与 Pydantic 模型同步。
 
 ### 测试策略
 
@@ -82,7 +127,12 @@ cd backend && uv run python -m src.evaluate
 | `api/chat_persistence.py` | 对话持久化 + debug payload 序列化 |
 | `api/routes/` | 路由层（7 个路由文件，平均 <50 行） |
 | `graph/graph.py` | LangGraph 图定义 |
-| `graph/nodes.py` | 工作流节点函数（rewrite/retrieve/rerank/generate/check） |
+| `graph/history_nodes.py` | 历史记录与重写节点 |
+| `graph/generation_nodes.py` | 回答生成节点 |
+| `graph/finalization_nodes.py` | 最终格式化节点 |
+| `graph/retrieval_nodes.py` | 检索节点 |
+| `graph/quality_nodes.py` | 质量检查节点 |
+| `graph/web_search_nodes.py` | 联网搜索节点 |
 | `graph/routing.py` | 条件路由函数 |
 | `graph/state.py` | GraphState TypedDict + Pydantic 决策模型 |
 | `graph/utils.py` | 图工作流通用工具（LLM/上下文格式化/解析） |
@@ -90,8 +140,7 @@ cd backend && uv run python -m src.evaluate
 | `rag/models.py` | 检索结果数据类 + 来源归一化 |
 | `rag/loaders.py` | 多格式文档加载器（含 SSRF 防护 IP 检测） |
 | `rag/web_search.py` | Tavily 联网搜索 |
-| `conversations.py` | 对话/工作区/书签/pin CRUD（SQLite + Alembic） |
-| `metrics.py` | 查询 JSONL 日志 |
+| `persistence/` | SQLite repository（conversation/bookmark/message/pin/workspace） |
 | `config/settings.py` | pydantic-settings 配置 |
 
 **前端**:
@@ -106,4 +155,13 @@ cd backend && uv run python -m src.evaluate
 | `components/ErrorBoundary.tsx` | 组件级错误边界（支持 fallback prop） |
 | `hooks/useChat.ts` | SSE 流式聊天 hook（逻辑委托至 chat/ 子模块） |
 | `hooks/chat/` | 聊天状态拆分：`types.ts` 类型定义、`useChatMessages.ts` 消息列表管理、`usePinnedSourcesState.ts` 来源固定/排除状态 |
-| `lib/api.ts` | API 客户端（SSEParser 支持 CRLF/CR + createChatStreamAdapter） |
+| `shared/api/api.ts` | API 客户端（SSEParser 支持 CRLF/CR + createChatStreamAdapter） |
+| `shared/api/api-types.ts` | 手写 SSE 类型 |
+| `shared/api/api-types.openapi.ts` | 从 OpenAPI 生成的前端类型 |
+| `app/` | 应用壳、导航、入口装配 |
+| `pages/` | 页面级容器 |
+| `features/` | 功能状态与交互逻辑 |
+
+### 工作区语义
+
+工作区是应用层的作用域组织方式，**不是**安全边界或多租户隔离方案。删除工作区时对话和书签会回落到默认工作区。
