@@ -16,4 +16,4 @@
 
 - `rag` 不再依赖 `api.models`
 - `conversations.py` 不再承载全部 SQL 逻辑
-- `graph/nodes.py` 只保留兼容导出和未拆完的编排节点，稳定职责已拆到独立模块
+- `graph/` 主路径直接使用 `history_nodes.py`、`generation_nodes.py`、`finalization_nodes.py`、`retrieval_nodes.py`、`quality_nodes.py`、`web_search_nodes.py`
