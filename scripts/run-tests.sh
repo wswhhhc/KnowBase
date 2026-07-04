@@ -22,7 +22,7 @@ run_step() {
     echo ""
 }
 
-run_step "后端 pytest" "uv run pytest backend/tests --tb=short -q"
+run_step "后端 pytest" "cd backend && uv run pytest tests --tb=short -q"
 run_step "前端单元测试" "cd frontend && npm test"
 run_step "前端构建" "cd frontend && npm run build"
 run_step "前端 API 类型漂移检查" "cd frontend && npm run check-api-types"

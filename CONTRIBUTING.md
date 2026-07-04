@@ -120,7 +120,8 @@ npm run check-api-types
 如果 FastAPI 路由或 Pydantic schema 发生变化，按这个顺序更新：
 
 ```bash
-uv run python backend/scripts/export_openapi.py
+cd backend
+uv run python scripts/export_openapi.py
 ```
 
 ```bash
@@ -133,6 +134,7 @@ npm run gen-api-types
 - `backend/openapi.json` 是提交态 API 快照
 - `frontend/src/lib/api-types.openapi.ts` 是生成物
 - `frontend/src/lib/api-types.ts` 中的 SSE 手写类型由后端测试校验同步
+- 后端唯一 Python 应用根是 `backend/`；不要在仓库根目录执行 `uv sync` 或把根目录当作 Python 项目根
 
 同时确认这些文件已同步：
 

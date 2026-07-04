@@ -99,7 +99,7 @@ docker compose up --build
 提交前至少建议运行以下命令：
 
 ```bash
-uv run pytest backend/tests --tb=short -q
+cd backend && uv run pytest tests --tb=short -q
 cd frontend && npm test
 cd frontend && npm run build
 ```
@@ -107,7 +107,7 @@ cd frontend && npm run build
 如果后端接口或 schema 有变更，再补这两步：
 
 ```bash
-uv run python backend/scripts/export_openapi.py
+cd backend && uv run python scripts/export_openapi.py
 cd frontend && npm run gen-api-types
 ```
 
@@ -151,6 +151,8 @@ KnowBase/
 ├── docker/                # Docker 构建文件
 └── scripts/               # 本地开发辅助脚本
 ```
+
+后端唯一 Python 应用根是 `backend/`。仓库根目录不再承担 `uv sync` / `uv run` 的 Python 项目职责。
 
 ## 当前范围与已知限制
 
