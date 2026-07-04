@@ -11,9 +11,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Resolve the database path relative to the backend directory
-_db_path = Path(__file__).resolve().parents[1] / "data" / "conversations.db"
-config.set_main_option("sqlalchemy.url", f"sqlite:///{_db_path}")
+if not config.get_main_option("sqlalchemy.url"):
+    repo_root = Path(__file__).resolve().parents[2]
+    default_db_path = repo_root / "runtime" / "local" / "conversations.db"
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{default_db_path}")
 
 target_metadata = None
 
