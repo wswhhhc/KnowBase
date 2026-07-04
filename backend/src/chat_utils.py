@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
-from src.config.constants import LLM_MODEL
-from src.config.runtime_overrides import get_runtime_setting
+from src.config.constants import LLM_MODEL, SILICONFLOW_BASE_URL
+from src.config.runtime_overrides import _is_configured_api_key, get_runtime_setting, require_siliconflow_api_key
 from src.api.models import DebugInfo
 from src.metrics import log_query
 
@@ -73,15 +74,6 @@ def record_query_metrics(
 def generate_title(question: str) -> str:
     """Use LLM to generate a short conversation title from the first question."""
     try:
-        from langchain_openai import ChatOpenAI
-        from src.config.settings import (
-            _is_configured_api_key,
-            require_siliconflow_api_key,
-            SILICONFLOW_BASE_URL,
-            LLM_MODEL,
-            get_runtime_setting,
-        )
-
         if not _is_configured_api_key(get_runtime_setting("siliconflow_api_key", "")):
             return question[:30]
 
@@ -108,15 +100,6 @@ def generate_suggested_questions(docs_text: str, max_questions: int = 5) -> list
     if len(docs_text.strip()) < 50:
         return []
     try:
-        from langchain_openai import ChatOpenAI
-        from src.config.settings import (
-            _is_configured_api_key,
-            require_siliconflow_api_key,
-            SILICONFLOW_BASE_URL,
-            LLM_MODEL,
-            get_runtime_setting,
-        )
-
         if not _is_configured_api_key(get_runtime_setting("siliconflow_api_key", "")):
             return []
 
