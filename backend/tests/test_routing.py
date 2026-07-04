@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from src.graph.nodes import (
+from src.graph.quality_nodes import (
     should_retry,
 )
 from src.graph.routing import (
