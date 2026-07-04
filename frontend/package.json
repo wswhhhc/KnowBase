@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "gen-api-types": "node scripts/generate-api-types.mjs",
-    "check-api-types": "npm run gen-api-types && git diff --exit-code -- src/lib/api-types.openapi.ts"
+    "check-api-types": "npm run gen-api-types && git diff --exit-code -- src/shared/api/api-types.openapi.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.6",
