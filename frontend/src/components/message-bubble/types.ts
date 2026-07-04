@@ -1,4 +1,4 @@
-import type { Source } from '@/lib/api'
+import type { Source } from '@/shared/api'
 import type { ChatMessage, PinnedSource } from '@/hooks/useChat'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
 

@@ -2,7 +2,7 @@ import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import BrowserPage from '@/pages/browser/BrowserPage'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 import { mockKBStats, mockKBChunks, mockHotspotData } from '@/test/mocks/data'
 
 function createChunk(overrides: Partial<typeof mockKBChunks[number]> = {}) {
@@ -30,6 +30,7 @@ vi.mock('framer-motion', () => ({
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('lucide-react', () => {
   const icons: Record<string, string> = {
+    AlertTriangle: 'AlertTriangle',
     BookOpen: 'BookOpen', PanelRightOpen: 'PanelRightOpen', ArrowLeft: 'ArrowLeft',
     Search: 'Search', FileText: 'FileText', Hash: 'Hash', ExternalLink: 'ExternalLink',
     Layers: 'Layers', Sun: 'Sun', Moon: 'Moon', Flame: 'Flame', Upload: 'Upload',
@@ -38,30 +39,34 @@ vi.mock('lucide-react', () => {
   }
   return Object.fromEntries(Object.keys(icons).map((n) => [n, () => <span>{n}</span>]))
 })
-vi.mock('@/lib/api', () => ({
-  getKBChunks: vi.fn(),
-  getKBChunkById: vi.fn(),
-  getKBStats: vi.fn(),
-  getKBSourceNames: vi.fn(),
-  getKBConfig: vi.fn(),
-  getKBHotspots: vi.fn(),
-  checkSource: vi.fn().mockResolvedValue({ exists: false }),
-  createBookmark: vi.fn(),
-  uploadDocumentStream: vi.fn().mockImplementation((_file, _mode, callbacks) => {
-    callbacks.onDone?.({ chunk_count: 1, total_docs: 1, message: 'ok' })
-    return { abort: vi.fn() }
-  }),
-  ingestUrlStream: vi.fn().mockImplementation((_url, _mode, callbacks) => {
-    callbacks.onDone?.({ chunk_count: 1, total_docs: 1, message: 'ok' })
-    return { abort: vi.fn() }
-  }),
-  debugSearch: vi.fn().mockResolvedValue({
-    strategy: 'balanced',
-    vector_results: [],
-    bm25_results: [],
-    fused_results: [],
-  }),
-}))
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
+  return {
+    ...actual,
+    getKBChunks: vi.fn(),
+    getKBChunkById: vi.fn(),
+    getKBStats: vi.fn(),
+    getKBSourceNames: vi.fn(),
+    getKBConfig: vi.fn(),
+    getKBHotspots: vi.fn(),
+    checkSource: vi.fn().mockResolvedValue({ exists: false }),
+    createBookmark: vi.fn(),
+    uploadDocumentStream: vi.fn().mockImplementation((_file, _mode, callbacks) => {
+      callbacks.onDone?.({ chunk_count: 1, total_docs: 1, message: 'ok' })
+      return { abort: vi.fn() }
+    }),
+    ingestUrlStream: vi.fn().mockImplementation((_url, _mode, callbacks) => {
+      callbacks.onDone?.({ chunk_count: 1, total_docs: 1, message: 'ok' })
+      return { abort: vi.fn() }
+    }),
+    debugSearch: vi.fn().mockResolvedValue({
+      strategy: 'balanced',
+      vector_results: [],
+      bm25_results: [],
+      fused_results: [],
+    }),
+  }
+})
 
 const defaultProps = {
   onOpenSidebar: vi.fn(),

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Sidebar from '@/components/Sidebar'
 import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 import { mockConversations, mockMessages, mockSources, mockKBStats } from '@/test/mocks/data'
 
 // Mock framer-motion
@@ -50,26 +50,30 @@ vi.mock('@/hooks/useTheme', () => ({
   useTheme: () => ({ theme: 'dark', toggle: vi.fn() }),
 }))
 
-vi.mock('@/lib/api', () => ({
-  getMessages: vi.fn().mockResolvedValue([]),
-  getConversationPinState: vi.fn().mockResolvedValue({ thread_id: 'thread-1', pinned_chunk_ids: [], excluded_chunk_ids: [] }),
-  uploadDocument: vi.fn(),
-  uploadDocumentStream: vi.fn().mockImplementation((file, versionMode, callbacks) => {
-    callbacks.onDone?.({ chunk_count: 5, existing_version: false })
-    return { abort: vi.fn() }
-  }),
-  checkSource: vi.fn(),
-  ingestUrl: vi.fn(),
-  ingestUrlStream: vi.fn().mockImplementation((url, _mode, callbacks) => {
-    callbacks.onDone?.({ chunk_count: 1, existing_version: false })
-    return { abort: vi.fn() }
-  }),
-  clearKnowledgeBase: vi.fn(),
-  deleteSource: vi.fn(),
-  deleteConversations: vi.fn(),
-  getKBStats: vi.fn(),
-  queryLogs: vi.fn().mockResolvedValue([]),
-}))
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
+  return {
+    ...actual,
+    getMessages: vi.fn().mockResolvedValue([]),
+    getConversationPinState: vi.fn().mockResolvedValue({ thread_id: 'thread-1', pinned_chunk_ids: [], excluded_chunk_ids: [] }),
+    uploadDocument: vi.fn(),
+    uploadDocumentStream: vi.fn().mockImplementation((file, versionMode, callbacks) => {
+      callbacks.onDone?.({ chunk_count: 5, existing_version: false })
+      return { abort: vi.fn() }
+    }),
+    checkSource: vi.fn(),
+    ingestUrl: vi.fn(),
+    ingestUrlStream: vi.fn().mockImplementation((url, _mode, callbacks) => {
+      callbacks.onDone?.({ chunk_count: 1, existing_version: false })
+      return { abort: vi.fn() }
+    }),
+    clearKnowledgeBase: vi.fn(),
+    deleteSource: vi.fn(),
+    deleteConversations: vi.fn(),
+    getKBStats: vi.fn(),
+    queryLogs: vi.fn().mockResolvedValue([]),
+  }
+})
 
 const defaultProps = {
   chat: { messages: [] as any[], loadMessages: vi.fn(), clearMessages: vi.fn(), sendMessage: vi.fn(), threadId: null, workspaceId: '' },

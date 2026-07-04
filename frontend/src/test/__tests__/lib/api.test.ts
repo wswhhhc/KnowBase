@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import * as api from '@/lib/api'
-import type { ChatStreamCallbacks } from '@/lib/api'
+import * as api from '@/shared/api'
+import type { ChatStreamCallbacks } from '@/shared/api'
 
 beforeEach(() => {
   vi.restoreAllMocks()

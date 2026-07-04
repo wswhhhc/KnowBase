@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from 'react'
 import { createContext, useContext } from 'react'
-import type { Source } from '@/lib/api'
+import type { Source } from '@/shared/api'
 import type { PinnedSource } from '@/hooks/useChat'
 
 interface ChatContextValue {

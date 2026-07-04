@@ -1,5 +1,5 @@
 import { FileText, Hash, Layers, ArrowLeft, BookOpen, PanelRightOpen } from 'lucide-react'
-import type { KBStats } from '@/lib/api'
+import type { KBStats } from '@/shared/api'
 
 interface BrowserHeaderProps {
   stats: KBStats | null

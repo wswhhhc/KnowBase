@@ -50,18 +50,22 @@ vi.mock('@/hooks/useTheme', () => ({
 }))
 
 // Mock api
-vi.mock('@/lib/api', () => ({
-  getMessages: vi.fn().mockResolvedValue([]),
-  getConversationPinState: vi.fn().mockResolvedValue({ thread_id: 'thread-1', pinned_chunk_ids: [], excluded_chunk_ids: [] }),
-  uploadDocument: vi.fn(),
-  uploadDocumentStream: vi.fn(),
-  ingestUrl: vi.fn(),
-  ingestUrlStream: vi.fn(),
-  clearKnowledgeBase: vi.fn(),
-  deleteSource: vi.fn(),
-  getKBStats: vi.fn(),
-  queryLogs: vi.fn().mockResolvedValue([]),
-}))
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
+  return {
+    ...actual,
+    getMessages: vi.fn().mockResolvedValue([]),
+    getConversationPinState: vi.fn().mockResolvedValue({ thread_id: 'thread-1', pinned_chunk_ids: [], excluded_chunk_ids: [] }),
+    uploadDocument: vi.fn(),
+    uploadDocumentStream: vi.fn(),
+    ingestUrl: vi.fn(),
+    ingestUrlStream: vi.fn(),
+    clearKnowledgeBase: vi.fn(),
+    deleteSource: vi.fn(),
+    getKBStats: vi.fn(),
+    queryLogs: vi.fn().mockResolvedValue([]),
+  }
+})
 
 const { useConversations, useSources, useWorkspaces } = await import('@/hooks/useData')
 

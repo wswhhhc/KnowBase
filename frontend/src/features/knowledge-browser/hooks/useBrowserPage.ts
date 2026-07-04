@@ -1,8 +1,8 @@
 import { toast } from 'sonner'
 import { useEffect, useState, useRef, useCallback } from 'react'
 
-import * as api from '@/lib/api'
-import type { KBStats, KBChunk, KBConfig, DebugSearchResponse } from '@/lib/api'
+import * as api from '@/shared/api'
+import type { KBStats, KBChunk, KBConfig, DebugSearchResponse } from '@/shared/api'
 import { useBrowserHighlight } from '@/features/knowledge-browser/hooks/useBrowserHighlight'
 import { useBrowserHotspots } from '@/features/knowledge-browser/hooks/useBrowserHotspots'
 import { UPLOAD_TRIGGER_EVENT } from '@/lib/ui-events'

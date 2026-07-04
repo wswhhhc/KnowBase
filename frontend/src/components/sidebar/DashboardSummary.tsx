@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 
 export default function DashboardSummary() {
   const [total, setTotal] = useState<number | null>(null)

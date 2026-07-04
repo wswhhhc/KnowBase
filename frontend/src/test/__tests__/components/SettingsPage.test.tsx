@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SettingsPage from '@/pages/settings/SettingsPage'
-import { MASKED_SECRET_VALUE } from '@/lib/api'
-import * as api from '@/lib/api'
+import { MASKED_SECRET_VALUE } from '@/shared/api'
+import * as api from '@/shared/api'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
@@ -21,11 +21,15 @@ vi.mock('lucide-react', () => {
   )
 })
 
-vi.mock('@/lib/api', () => ({
-  MASKED_SECRET_VALUE: '__KEEP_EXISTING_SECRET__',
-  getSettings: vi.fn(),
-  updateSettings: vi.fn(),
-}))
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
+  return {
+    ...actual,
+    MASKED_SECRET_VALUE: '__KEEP_EXISTING_SECRET__',
+    getSettings: vi.fn(),
+    updateSettings: vi.fn(),
+  }
+})
 
 describe('SettingsPage', () => {
   beforeEach(() => {

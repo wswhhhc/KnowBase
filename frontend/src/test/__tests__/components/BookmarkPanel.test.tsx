@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import BookmarkPanel from '@/components/sidebar/BookmarkPanel'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 
 vi.mock('lucide-react', () => {
   const icons: Record<string, string> = {
@@ -19,11 +19,15 @@ vi.mock('lucide-react', () => {
   )
 })
 
-vi.mock('@/lib/api', () => ({
-  getBookmarks: vi.fn(),
-  updateBookmark: vi.fn(),
-  deleteBookmark: vi.fn(),
-}))
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
+  return {
+    ...actual,
+    getBookmarks: vi.fn(),
+    updateBookmark: vi.fn(),
+    deleteBookmark: vi.fn(),
+  }
+})
 
 const mockBookmarks = [
   {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bug, ChevronDown, ChevronRight, Search, Globe, RotateCcw, Zap } from 'lucide-react'
-import type { DebugInfo } from '@/lib/api'
+import type { DebugInfo } from '@/shared/api'
 
 interface DebugPanelProps {
   debugData: DebugInfo

@@ -3,8 +3,8 @@ import { toast } from 'sonner'
 import { Button, Input, ConfirmDialog, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { formatTime, truncate } from '@/lib/utils'
-import * as api from '@/lib/api'
-import type { Conversation } from '@/lib/api'
+import * as api from '@/shared/api'
+import type { Conversation } from '@/shared/api'
 
 export interface ConversationListProps {
   conversations: Conversation[]

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 
 export function useBrowserHotspots(
   browserWsId: string,

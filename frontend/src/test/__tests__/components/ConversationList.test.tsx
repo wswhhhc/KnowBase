@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ConversationList from '@/components/sidebar/ConversationList'
-import type { Conversation } from '@/lib/api'
+import type { Conversation } from '@/shared/api'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -10,8 +10,8 @@ vi.mock('sonner', () => ({
   },
 }))
 
-vi.mock('@/lib/api', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
   return {
     ...actual,
     deleteConversations: vi.fn(),

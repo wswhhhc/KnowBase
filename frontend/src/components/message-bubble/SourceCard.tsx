@@ -1,5 +1,5 @@
 import { ExternalLink, MessageSquare, Pin, X } from 'lucide-react'
-import type { Source } from '@/lib/api'
+import type { Source } from '@/shared/api'
 import type { PinnedSource } from '@/hooks/useChat'
 import { useChatContext } from './ChatContext'
 

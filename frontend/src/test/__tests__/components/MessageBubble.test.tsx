@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MessageBubble from '@/components/MessageBubble'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 
 vi.mock('framer-motion', () => ({
   motion: {
@@ -18,11 +18,15 @@ vi.mock('@/components/DebugPanel', () => ({
   default: () => <div>DebugPanel</div>,
 }))
 
-vi.mock('@/lib/api', () => ({
-  createBookmark: vi.fn(),
-  updateFeedback: vi.fn(),
-  exportConversation: vi.fn(),
-}))
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
+  return {
+    ...actual,
+    createBookmark: vi.fn(),
+    updateFeedback: vi.fn(),
+    exportConversation: vi.fn(),
+  }
+})
 
 vi.mock('lucide-react', () => {
   const icon = (name: string) => ({ children, ...props }: any) => <span {...props}>{children || name}</span>
