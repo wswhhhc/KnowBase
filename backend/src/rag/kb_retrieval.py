@@ -8,7 +8,7 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from rank_bm25 import BM25Okapi
 
-from src.config.settings import RRF_K, SCORE_THRESHOLD, TOP_K_RETRIEVAL
+from src.config.constants import RRF_K, SCORE_THRESHOLD, TOP_K_RETRIEVAL
 from src.rag.kb_hotspots import HotspotTracker
 from src.rag.kb_ingestion import IngestionService
 from src.rag.kb_state import KnowledgeBaseState, search_keywords, workspace_matches

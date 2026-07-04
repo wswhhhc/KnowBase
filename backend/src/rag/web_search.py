@@ -1,6 +1,8 @@
 """联网搜索模块 — 基于 Tavily API。"""
 
-from src.config.settings import TAVILY_API_KEY, _is_configured_api_key, get_runtime_setting
+from src.config.constants import TAVILY_API_KEY
+from src.config.runtime_overrides import get_runtime_setting
+from src.config.settings import _is_configured_api_key
 
 
 def web_search(query: str, max_results: int = 5) -> tuple[list[dict], str]:

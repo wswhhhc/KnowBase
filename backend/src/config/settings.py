@@ -259,37 +259,10 @@ def _is_configured_api_key(api_key: str) -> bool:
     return bool(api_key) and api_key != "你的 API Key" and len(api_key.strip()) >= 10
 
 
-_MISSING = object()
-
-
-def get_runtime_setting(key: str, default=_MISSING):
-    from src.config.runtime_overrides import get_runtime_setting as _impl
-
-    if default is _MISSING:
-        return _impl(key)
-    return _impl(key, default)
-
-
-def update_runtime_settings(values: dict) -> None:
-    from src.config.runtime_overrides import update_runtime_settings as _impl
-
-    _impl(values)
-
-
-def get_all_settings() -> dict:
-    from src.config.public_settings import get_all_settings as _impl
-
-    return _impl()
-
-
-def get_public_settings() -> dict:
-    from src.config.public_settings import get_public_settings as _impl
-
-    return _impl()
-
-
 def require_siliconflow_api_key() -> str:
     """Return a configured API key or raise a user-actionable error."""
+    from src.config.runtime_overrides import get_runtime_setting
+
     api_key = get_runtime_setting("siliconflow_api_key", settings.llm.api_key)
     if not _is_configured_api_key(api_key):
         raise ValueError(
@@ -297,34 +270,3 @@ def require_siliconflow_api_key() -> str:
             "或设置系统环境变量 SILICONFLOW_API_KEY。"
         )
     return api_key
-
-
-# Backwards-compatible constants for existing imports.
-from src.config import constants as constants_module
-
-SILICONFLOW_API_KEY = constants_module.SILICONFLOW_API_KEY
-SILICONFLOW_BASE_URL = constants_module.SILICONFLOW_BASE_URL
-EMBEDDING_MODEL = constants_module.EMBEDDING_MODEL
-LLM_MODEL = constants_module.LLM_MODEL
-LLM_TEMPERATURE = constants_module.LLM_TEMPERATURE
-LLM_MAX_TOKENS = constants_module.LLM_MAX_TOKENS
-CHROMA_PERSIST_DIR = constants_module.CHROMA_PERSIST_DIR
-DATA_DIR = constants_module.DATA_DIR
-CHUNK_SIZE = constants_module.CHUNK_SIZE
-CHUNK_OVERLAP = constants_module.CHUNK_OVERLAP
-TOP_K_RETRIEVAL = constants_module.TOP_K_RETRIEVAL
-TOP_K_RERANK = constants_module.TOP_K_RERANK
-VECTOR_CANDIDATE_K = constants_module.VECTOR_CANDIDATE_K
-RERANK_SCORE_GAP_THRESHOLD = constants_module.RERANK_SCORE_GAP_THRESHOLD
-RERANK_QUERY_LENGTH = constants_module.RERANK_QUERY_LENGTH
-SCORE_THRESHOLD = constants_module.SCORE_THRESHOLD
-RRF_K = constants_module.RRF_K
-ENABLE_QUALITY_CHECK = constants_module.ENABLE_QUALITY_CHECK
-ENABLE_CONTEXTUAL_RETRIEVAL = constants_module.ENABLE_CONTEXTUAL_RETRIEVAL
-MAX_RETRIES = constants_module.MAX_RETRIES
-MAX_UPLOAD_MB = constants_module.MAX_UPLOAD_MB
-CHECKPOINT_DB_PATH = constants_module.CHECKPOINT_DB_PATH
-TAVILY_API_KEY = constants_module.TAVILY_API_KEY
-LANGSMITH_TRACING = constants_module.LANGSMITH_TRACING
-LANGSMITH_API_KEY = constants_module.LANGSMITH_API_KEY
-LANGSMITH_PROJECT = constants_module.LANGSMITH_PROJECT

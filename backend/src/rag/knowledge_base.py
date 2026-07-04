@@ -13,16 +13,9 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 
-from src.config.settings import (
-    CHROMA_PERSIST_DIR,
-    DATA_DIR,
-    EMBEDDING_MODEL,
-    SCORE_THRESHOLD,
-    SILICONFLOW_BASE_URL,
-    TOP_K_RETRIEVAL,
-    get_runtime_setting,
-    require_siliconflow_api_key,
-)
+from src.config.constants import CHROMA_PERSIST_DIR, DATA_DIR, EMBEDDING_MODEL, SCORE_THRESHOLD, SILICONFLOW_BASE_URL, TOP_K_RETRIEVAL
+from src.config.runtime_overrides import get_runtime_setting
+from src.config.settings import require_siliconflow_api_key
 from src.rag.kb_catalog import CatalogService
 from src.rag.kb_hotspots import HotspotTracker
 from src.rag.kb_ingestion import IngestionService
