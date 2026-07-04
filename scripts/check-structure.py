@@ -80,11 +80,35 @@ def _check_component_page_shells() -> list[str]:
     return violations
 
 
+def _check_active_docs_do_not_reference_legacy_paths() -> list[str]:
+    violations: list[str] = []
+    legacy_patterns = [
+        (re.compile(r"\blib/api\.ts\b"), "文档不应继续把 lib/api.ts 作为当前结构事实来源"),
+        (re.compile(r"\blib/api-types(?:\.openapi)?\.ts\b"), "文档不应继续引用旧的 lib/api-types* 路径"),
+    ]
+    doc_paths = [
+        ROOT / "README.md",
+        ROOT / "CONTRIBUTING.md",
+        *_iter_files(ROOT / "docs" / "testing", "*.md"),
+    ]
+
+    for path in doc_paths:
+        if not path.is_file():
+            continue
+        source = _read(path)
+        for pattern, message in legacy_patterns:
+            if pattern.search(source):
+                violations.append(f"{message}: {path.relative_to(ROOT)}")
+
+    return violations
+
+
 def main() -> int:
     violations = [
         *_check_forbidden_imports(),
         *_check_pages_are_real_containers(),
         *_check_component_page_shells(),
+        *_check_active_docs_do_not_reference_legacy_paths(),
     ]
     if not violations:
         print("结构守卫通过。")

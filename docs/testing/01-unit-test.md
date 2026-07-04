@@ -6,7 +6,7 @@
 
 **测试范围**:
 - 后端: graph/graph.py, rag/knowledge_base.py, persistence/*_repository.py, utils.py, loaders.py, metrics.py, rag/web_search.py, api/models.py, config/settings.py
-- 前端: lib/utils.ts, hooks/useTheme.ts, hooks/useChat.ts, hooks/useData.ts, lib/api.ts
+- 前端: lib/utils.ts, hooks/useTheme.ts, hooks/useChat.ts, hooks/useData.ts, shared/api/*
 
 **Mock 策略**: 
 - LLM 调用 → `FakeLLM` 返回预设响应
@@ -231,14 +231,14 @@
 | UT-FE-27 | rename 后更新 | 新标题 | 列表更新 | P1 |
 | UT-FE-28 | useSources refresh | 无 | 加载来源列表 | P1 |
 
-### 3.5 lib/api.ts
+### 3.5 shared/api/* — API 客户端与 SSE 适配
 
 | 编号 | 测试用例 | 输入 | 预期输出 | 优先级 |
 |------|---------|------|---------|--------|
-| UT-FE-29 | `chatStream` SSE node 事件解析 | SSE 数据流 | onNode 回调触发 | P0 |
-| UT-FE-30 | `chatStream` SSE token 事件 | token 数据 | onToken 回调触发 | P0 |
-| UT-FE-31 | `chatStream` SSE done 事件 | 完成数据 | onDone 回调触发 | P0 |
-| UT-FE-32 | `chatStream` HTTP 错误 | 500 响应 | onError 回调触发 | P1 |
+| UT-FE-29 | `shared/api/chat.ts` 的 `chatStream` SSE node 事件解析 | SSE 数据流 | onNode 回调触发 | P0 |
+| UT-FE-30 | `shared/api/chat.ts` 的 `chatStream` SSE token 事件 | token 数据 | onToken 回调触发 | P0 |
+| UT-FE-31 | `shared/api/chat.ts` 的 SSE done 事件 | 完成数据 | onDone 回调触发 | P0 |
+| UT-FE-32 | `shared/api/client.ts` / `shared/api/sse.ts` 错误处理 | 500 响应 | onError 回调触发 | P1 |
 
 ---
 
