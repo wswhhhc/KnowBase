@@ -11,6 +11,7 @@ from langchain_core.documents import Document
 from src.api.deps import get_knowledge_base
 from src.api.main import app
 from src import conversations
+from src.persistence import database
 
 
 class FakeKnowledgeBase:
@@ -188,6 +189,7 @@ def setup_test_env():
 def teardown_test_env(tmp_dir, orig_db, patchers):
     """Undo setup_test_env changes."""
     conversations._DB_PATH = orig_db
+    database.clear_db_path_override()
     tmp_dir.cleanup()
     app.dependency_overrides.clear()
     for p in patchers:

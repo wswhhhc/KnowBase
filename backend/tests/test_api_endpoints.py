@@ -19,6 +19,7 @@ from src.api.deps import get_knowledge_base
 from src.api.main import app
 from src.api.models import ConversationCreate, IngestResponse, URLIngestRequest
 from src import conversations
+from src.persistence import database
 
 
 def _parse_sse_events(text: str) -> list[dict]:
@@ -216,6 +217,7 @@ class APIEndpointTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         conversations._DB_PATH = cls._original_db_path
+        database.clear_db_path_override()
         cls._temp_dir.cleanup()
         app.dependency_overrides.clear()
         cls.patcher_chroma.stop()

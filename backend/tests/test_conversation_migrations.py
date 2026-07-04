@@ -29,57 +29,61 @@ class _FakeAlembicConfig:
 
 
 class ConversationMigrationTests(unittest.TestCase):
+    def tearDown(self):
+        database_module.clear_db_path_override()
+
     def test_run_migrations_uses_runtime_local_database_by_default(self):
-        original_db_path = conversations._DB_PATH
-        conversations._DB_PATH = settings_module.LOCAL_RUNTIME_DIR / "conversations.db"
-        try:
-            with patch("alembic.command.upgrade") as mock_upgrade:
-                with patch("alembic.config.Config") as mock_config_cls:
-                    mock_config = MagicMock()
-                    mock_config_cls.return_value = mock_config
+        with patch("alembic.command.upgrade") as mock_upgrade:
+            with patch("alembic.config.Config") as mock_config_cls:
+                mock_config = MagicMock()
+                mock_config_cls.return_value = mock_config
 
-                    conversations._run_migrations()
+                conversations._run_migrations()
 
-            mock_config.set_main_option.assert_called_once_with(
-                "sqlalchemy.url",
-                f"sqlite:///{conversations._DB_PATH}",
-            )
-            mock_upgrade.assert_called_once_with(mock_config, "head")
-        finally:
-            conversations._DB_PATH = original_db_path
+        mock_config.set_main_option.assert_called_once_with(
+            "sqlalchemy.url",
+            f"sqlite:///{settings_module.LOCAL_RUNTIME_DIR / 'conversations.db'}",
+        )
+        mock_upgrade.assert_called_once_with(mock_config, "head")
 
     def test_database_run_migrations_uses_runtime_local_database_by_default(self):
-        original_db_path = conversations._DB_PATH
-        conversations._DB_PATH = settings_module.LOCAL_RUNTIME_DIR / "conversations.db"
-        try:
-            with patch("alembic.command.upgrade") as mock_upgrade:
-                with patch("alembic.config.Config") as mock_config_cls:
-                    mock_config = MagicMock()
-                    mock_config_cls.return_value = mock_config
+        with patch("alembic.command.upgrade") as mock_upgrade:
+            with patch("alembic.config.Config") as mock_config_cls:
+                mock_config = MagicMock()
+                mock_config_cls.return_value = mock_config
 
-                    database_module.run_migrations()
+                database_module.run_migrations()
 
-            mock_config.set_main_option.assert_called_once_with(
-                "sqlalchemy.url",
-                f"sqlite:///{conversations._DB_PATH}",
-            )
-            mock_upgrade.assert_called_once_with(mock_config, "head")
-        finally:
-            conversations._DB_PATH = original_db_path
+        mock_config.set_main_option.assert_called_once_with(
+            "sqlalchemy.url",
+            f"sqlite:///{settings_module.LOCAL_RUNTIME_DIR / 'conversations.db'}",
+        )
+        mock_upgrade.assert_called_once_with(mock_config, "head")
 
     def test_database_run_migrations_skips_non_runtime_override_paths(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_module.set_db_path_override(Path(temp_dir) / "conversations.db")
+            with patch("alembic.command.upgrade") as mock_upgrade:
+                with patch("alembic.config.Config") as mock_config_cls:
+                    database_module.run_migrations()
+
+        self.assertFalse(mock_config_cls.called)
+        self.assertFalse(mock_upgrade.called)
+
+    def test_conversations_init_db_syncs_database_override(self):
         original_db_path = conversations._DB_PATH
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
-                conversations._DB_PATH = Path(temp_dir) / "conversations.db"
-                with patch("alembic.command.upgrade") as mock_upgrade:
-                    with patch("alembic.config.Config") as mock_config_cls:
-                        database_module.run_migrations()
+                temp_db_path = Path(temp_dir) / "conversations.db"
+                conversations._DB_PATH = temp_db_path
+                with patch.object(database_module, "init_db") as mock_init_db:
+                    conversations.init_db()
 
-            self.assertFalse(mock_config_cls.called)
-            self.assertFalse(mock_upgrade.called)
+                self.assertEqual(database_module.get_db_path(), temp_db_path)
+                mock_init_db.assert_called_once()
         finally:
             conversations._DB_PATH = original_db_path
+            database_module.clear_db_path_override()
 
     def test_alembic_env_preserves_preconfigured_database_url(self):
         configured_url = "sqlite:///custom-runtime/conversations.db"

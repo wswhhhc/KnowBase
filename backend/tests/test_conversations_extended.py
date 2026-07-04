@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src import conversations
+from src.persistence import database
 
 
 class ConversationExtendedTests(unittest.TestCase):
@@ -21,6 +22,7 @@ class ConversationExtendedTests(unittest.TestCase):
 
     def tearDown(self):
         conversations._DB_PATH = self.original_path
+        database.clear_db_path_override()
         self.temp_dir.cleanup()
 
     # ── list_assistant_debug_pairs ──
