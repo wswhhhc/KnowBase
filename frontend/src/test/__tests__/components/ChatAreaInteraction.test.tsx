@@ -1,7 +1,7 @@
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import ChatArea from '@/components/ChatArea'
+import ChatArea from '@/pages/chat/ChatPage'
 
 // Mock framer-motion
 vi.mock('framer-motion', () => ({

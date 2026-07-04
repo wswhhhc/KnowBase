@@ -66,10 +66,30 @@ def _check_pages_are_real_containers() -> list[str]:
     return violations
 
 
+def _check_component_page_shells() -> list[str]:
+    violations: list[str] = []
+    shell_re = re.compile(r"^\s*export\s+(?:\{\s*default\s*\}\s+from|\*\s+from)\s+['\"]@/pages/.+['\"]\s*;?\s*$")
+
+    candidate_paths = [
+        *_iter_files(ROOT / "frontend" / "src" / "components", "*Page.tsx"),
+        ROOT / "frontend" / "src" / "components" / "ChatArea.tsx",
+    ]
+
+    for path in candidate_paths:
+        if not path.is_file():
+            continue
+        source = _read(path).strip()
+        if shell_re.fullmatch(source):
+            violations.append(f"旧页面组件壳必须退场: {path.relative_to(ROOT)}")
+
+    return violations
+
+
 def main() -> int:
     violations = [
         *_check_forbidden_imports(),
         *_check_pages_are_real_containers(),
+        *_check_component_page_shells(),
     ]
     if not violations:
         print("结构守卫通过。")

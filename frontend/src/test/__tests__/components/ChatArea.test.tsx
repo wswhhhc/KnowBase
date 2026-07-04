@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import ChatArea from '@/components/ChatArea'
+import ChatArea from '@/pages/chat/ChatPage'
 
 // Mock framer-motion to avoid animation issues in tests
 vi.mock('framer-motion', () => ({

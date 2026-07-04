@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import SettingsPage from '@/components/SettingsPage'
+import SettingsPage from '@/pages/settings/SettingsPage'
 import { MASKED_SECRET_VALUE } from '@/lib/api'
 import * as api from '@/lib/api'
 

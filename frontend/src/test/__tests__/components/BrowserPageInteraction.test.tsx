@@ -1,7 +1,7 @@
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import BrowserPage from '@/components/BrowserPage'
+import BrowserPage from '@/pages/browser/BrowserPage'
 import * as api from '@/lib/api'
 import { mockKBStats, mockKBChunks, mockHotspotData } from '@/test/mocks/data'
 
