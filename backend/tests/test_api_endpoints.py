@@ -478,7 +478,7 @@ class APIEndpointTests(unittest.TestCase):
         self.assertNotEqual(calls[0]["k"], calls[1]["k"])
         self.assertNotEqual(calls[0].get("vector_candidate_k"), calls[1].get("vector_candidate_k"))
 
-    @patch("src.api.routes.knowledge_base.gn.rerank_docs")
+    @patch("src.graph.nodes.rerank_docs")
     def test_kb_debug_search_does_not_call_llm_rerank(self, mock_rerank_docs):
         self.fake_kb._ensure_loaded()
         resp = self.client.post(

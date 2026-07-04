@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
@@ -246,71 +245,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-_RUNTIME_SETTINGS_PATH = LOCAL_RUNTIME_DIR / "runtime_settings.json"
-_runtime_overrides: dict[str, str | float | bool | int] = {}
-_MISSING = object()
-MASKED_SECRET_VALUE = "__KEEP_EXISTING_SECRET__"
-
-
-def _load_runtime_settings():
-    global _runtime_overrides
-    try:
-        if _RUNTIME_SETTINGS_PATH.exists():
-            with open(_RUNTIME_SETTINGS_PATH, encoding="utf-8") as f:
-                _runtime_overrides = json.load(f)
-    except Exception:
-        _runtime_overrides = {}
-
-
-def get_runtime_setting(key: str, default=_MISSING):
-    """Return the runtime-overridden value, or fall back to settings."""
-    if key in _runtime_overrides:
-        return _runtime_overrides[key]
-    if default is _MISSING:
-        return getattr(settings, key, None)
-    return getattr(settings, key, default)
-
-
-def update_runtime_settings(values: dict):
-    """Persist runtime config overrides to JSON file."""
-    global _runtime_overrides
-    merged = settings.model_dump()
-    merged.update(_runtime_overrides)
-    merged.update(values)
-    validated = Settings.model_validate(merged)
-    normalized = {key: getattr(validated, key) for key in values}
-    _runtime_overrides.update(normalized)
-    _RUNTIME_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(_RUNTIME_SETTINGS_PATH, "w", encoding="utf-8") as f:
-        json.dump(_runtime_overrides, f, ensure_ascii=False, indent=2)
-
-
-def get_all_settings() -> dict:
-    """Return all user-facing config (env defaults merged with runtime overrides)."""
-    return {k: get_runtime_setting(k) for k in _USER_FACING_SETTINGS}
-
-
-def get_public_settings() -> dict:
-    """Return UI-safe settings, masking secrets instead of exposing raw values."""
-    data = get_all_settings()
-    for key in _SECRET_SETTINGS:
-        value = str(data.get(key, "") or "")
-        data[key] = MASKED_SECRET_VALUE if value else ""
-    return data
-
-
-# Keys exposed in the settings UI
-_USER_FACING_SETTINGS = [
-    "siliconflow_api_key", "siliconflow_base_url",
-    "embedding_model", "llm_model", "llm_temperature",
-    "tavily_api_key", "api_key",
-    "chunk_size", "chunk_overlap", "top_k_retrieval", "top_k_rerank",
-    "enable_quality_check", "enable_contextual_retrieval",
-]
-_SECRET_SETTINGS = {"siliconflow_api_key", "tavily_api_key", "api_key"}
-
-
-_load_runtime_settings()
 
 if settings.langsmith_tracing:
     os.environ.setdefault("LANGSMITH_TRACING", "true")
@@ -325,6 +259,35 @@ def _is_configured_api_key(api_key: str) -> bool:
     return bool(api_key) and api_key != "你的 API Key" and len(api_key.strip()) >= 10
 
 
+_MISSING = object()
+
+
+def get_runtime_setting(key: str, default=_MISSING):
+    from src.config.runtime_overrides import get_runtime_setting as _impl
+
+    if default is _MISSING:
+        return _impl(key)
+    return _impl(key, default)
+
+
+def update_runtime_settings(values: dict) -> None:
+    from src.config.runtime_overrides import update_runtime_settings as _impl
+
+    _impl(values)
+
+
+def get_all_settings() -> dict:
+    from src.config.public_settings import get_all_settings as _impl
+
+    return _impl()
+
+
+def get_public_settings() -> dict:
+    from src.config.public_settings import get_public_settings as _impl
+
+    return _impl()
+
+
 def require_siliconflow_api_key() -> str:
     """Return a configured API key or raise a user-actionable error."""
     api_key = get_runtime_setting("siliconflow_api_key", settings.llm.api_key)
@@ -337,29 +300,31 @@ def require_siliconflow_api_key() -> str:
 
 
 # Backwards-compatible constants for existing imports.
-SILICONFLOW_API_KEY = settings.llm.api_key
-SILICONFLOW_BASE_URL = settings.llm.base_url
-EMBEDDING_MODEL = settings.llm.embedding_model
-LLM_MODEL = settings.llm.model
-LLM_TEMPERATURE = settings.llm.temperature
-LLM_MAX_TOKENS = settings.llm.max_tokens
-CHROMA_PERSIST_DIR = str(settings.storage.chroma_persist_dir)
-DATA_DIR = str(settings.storage.data_dir)
-CHUNK_SIZE = settings.retrieval.chunk_size
-CHUNK_OVERLAP = settings.retrieval.chunk_overlap
-TOP_K_RETRIEVAL = settings.retrieval.top_k
-TOP_K_RERANK = settings.retrieval.rerank_top_k
-VECTOR_CANDIDATE_K = settings.retrieval.vector_candidate_k
-RERANK_SCORE_GAP_THRESHOLD = settings.retrieval.rerank_score_gap_threshold
-RERANK_QUERY_LENGTH = settings.retrieval.rerank_query_length
-SCORE_THRESHOLD = settings.retrieval.score_threshold
-RRF_K = settings.retrieval.rrf_k
-ENABLE_QUALITY_CHECK = settings.quality.enabled
-ENABLE_CONTEXTUAL_RETRIEVAL = settings.retrieval.contextual_retrieval_enabled
-MAX_RETRIES = settings.quality.max_retries
-MAX_UPLOAD_MB = settings.quality.max_upload_mb
-CHECKPOINT_DB_PATH = settings.storage.checkpoint_db_path
-TAVILY_API_KEY = settings.external_services.tavily_api_key
-LANGSMITH_TRACING = settings.observability.tracing_enabled
-LANGSMITH_API_KEY = settings.observability.api_key
-LANGSMITH_PROJECT = settings.observability.project
+from src.config import constants as constants_module
+
+SILICONFLOW_API_KEY = constants_module.SILICONFLOW_API_KEY
+SILICONFLOW_BASE_URL = constants_module.SILICONFLOW_BASE_URL
+EMBEDDING_MODEL = constants_module.EMBEDDING_MODEL
+LLM_MODEL = constants_module.LLM_MODEL
+LLM_TEMPERATURE = constants_module.LLM_TEMPERATURE
+LLM_MAX_TOKENS = constants_module.LLM_MAX_TOKENS
+CHROMA_PERSIST_DIR = constants_module.CHROMA_PERSIST_DIR
+DATA_DIR = constants_module.DATA_DIR
+CHUNK_SIZE = constants_module.CHUNK_SIZE
+CHUNK_OVERLAP = constants_module.CHUNK_OVERLAP
+TOP_K_RETRIEVAL = constants_module.TOP_K_RETRIEVAL
+TOP_K_RERANK = constants_module.TOP_K_RERANK
+VECTOR_CANDIDATE_K = constants_module.VECTOR_CANDIDATE_K
+RERANK_SCORE_GAP_THRESHOLD = constants_module.RERANK_SCORE_GAP_THRESHOLD
+RERANK_QUERY_LENGTH = constants_module.RERANK_QUERY_LENGTH
+SCORE_THRESHOLD = constants_module.SCORE_THRESHOLD
+RRF_K = constants_module.RRF_K
+ENABLE_QUALITY_CHECK = constants_module.ENABLE_QUALITY_CHECK
+ENABLE_CONTEXTUAL_RETRIEVAL = constants_module.ENABLE_CONTEXTUAL_RETRIEVAL
+MAX_RETRIES = constants_module.MAX_RETRIES
+MAX_UPLOAD_MB = constants_module.MAX_UPLOAD_MB
+CHECKPOINT_DB_PATH = constants_module.CHECKPOINT_DB_PATH
+TAVILY_API_KEY = constants_module.TAVILY_API_KEY
+LANGSMITH_TRACING = constants_module.LANGSMITH_TRACING
+LANGSMITH_API_KEY = constants_module.LANGSMITH_API_KEY
+LANGSMITH_PROJECT = constants_module.LANGSMITH_PROJECT

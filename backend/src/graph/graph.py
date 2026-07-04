@@ -16,16 +16,11 @@ from langgraph.graph import END, StateGraph
 
 from src.config.settings import (
     CHECKPOINT_DB_PATH,
-    LLM_MAX_TOKENS,
-    LLM_TEMPERATURE,
-    LLM_MODEL,
     SCORE_THRESHOLD,
-    SILICONFLOW_BASE_URL,
     TOP_K_RETRIEVAL,
     get_runtime_setting,
-    require_siliconflow_api_key,
 )
-from src.graph import nodes as gn
+from src.graph import finalization_nodes, generation_nodes, history_nodes, quality_nodes, retrieval_nodes, web_search_nodes
 from src.graph.routing import (
     handle_clarification,
     route_after_classifier,
@@ -62,17 +57,17 @@ def build_graph(knowledge_base: KnowledgeBase):
     """Build and compile the LangGraph workflow."""
     workflow = StateGraph(GraphState)
     workflow.add_node("route_question", route_question)
-    workflow.add_node("rewrite_query", gn.rewrite_query)
-    workflow.add_node("answer_from_history", gn.answer_from_history)
-    workflow.add_node("summarize_history", gn.summarize_history)
-    workflow.add_node("retrieve_docs", partial(gn.retrieve_docs, kb=knowledge_base))
-    workflow.add_node("handle_missing_context", gn.handle_missing_context)
+    workflow.add_node("rewrite_query", retrieval_nodes.rewrite_query)
+    workflow.add_node("answer_from_history", history_nodes.answer_from_history)
+    workflow.add_node("summarize_history", history_nodes.summarize_history)
+    workflow.add_node("retrieve_docs", partial(retrieval_nodes.retrieve_docs, kb=knowledge_base))
+    workflow.add_node("handle_missing_context", retrieval_nodes.handle_missing_context)
     workflow.add_node("handle_clarification", handle_clarification)
-    workflow.add_node("rerank_docs", gn.rerank_docs)
-    workflow.add_node("web_search", gn._web_search_context)
-    workflow.add_node("generate_answer", gn.generate_answer)
-    workflow.add_node("check_quality", gn.check_quality)
-    workflow.add_node("finalize", gn.finalize)
+    workflow.add_node("rerank_docs", retrieval_nodes.rerank_docs)
+    workflow.add_node("web_search", web_search_nodes.web_search_context)
+    workflow.add_node("generate_answer", generation_nodes.generate_answer)
+    workflow.add_node("check_quality", quality_nodes.check_quality)
+    workflow.add_node("finalize", finalization_nodes.finalize)
 
     workflow.set_entry_point("route_question")
     workflow.add_conditional_edges(
@@ -88,7 +83,7 @@ def build_graph(knowledge_base: KnowledgeBase):
     workflow.add_edge("rewrite_query", "retrieve_docs")
     workflow.add_conditional_edges(
         "retrieve_docs",
-        gn.route_after_retrieval,
+        retrieval_nodes.route_after_retrieval,
         {"rerank_docs": "rerank_docs", "handle_missing_context": "handle_missing_context"},
     )
     workflow.add_edge("rerank_docs", "generate_answer")
@@ -98,13 +93,13 @@ def build_graph(knowledge_base: KnowledgeBase):
     workflow.add_edge("handle_clarification", "finalize")
     workflow.add_conditional_edges(
         "handle_missing_context",
-        lambda s: "web_search" if not s.get("used_web_search") and s.get("web_search_enabled", False) and gn._tavily_configured() else "finalize",
+        lambda s: "web_search" if not s.get("used_web_search") and s.get("web_search_enabled", False) and web_search_nodes.tavily_configured() else "finalize",
         {"web_search": "web_search", "finalize": "finalize"},
     )
     workflow.add_edge("web_search", "generate_answer")
     workflow.add_conditional_edges(
         "check_quality",
-        gn.should_retry,
+        quality_nodes.should_retry,
         {"web_search": "web_search", "rewrite_query": "rewrite_query", "retrieve_docs": "retrieve_docs", "finalize": "finalize"},
     )
     workflow.add_edge("finalize", END)

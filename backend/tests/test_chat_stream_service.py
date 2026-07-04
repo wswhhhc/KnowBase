@@ -174,8 +174,8 @@ class ChatStreamServiceTests(unittest.TestCase):
         self.assertGreaterEqual(kwargs["first_token_ms"], 40)
 
     @patch.object(ChatStreamService, "_persist", return_value=("conv-1", 2))
-    @patch("src.graph.nodes.check_quality", side_effect=_accept_answer)
-    @patch("src.graph.nodes.generate_answer", side_effect=_generate_answer_from_sources)
+    @patch("src.graph.quality_nodes.check_quality", side_effect=_accept_answer)
+    @patch("src.graph.generation_nodes.generate_answer", side_effect=_generate_answer_from_sources)
     @patch("src.graph.graph.route_question", side_effect=_route_kb)
     def test_sse_payloads_only_include_active_workspace_sources(
         self,

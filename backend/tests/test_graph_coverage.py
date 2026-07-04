@@ -78,6 +78,10 @@ def _state(**overrides) -> dict:
     return base
 
 
+def _quality_enabled_setting(key: str, default=None):
+    return True if key == "enable_quality_check" else default
+
+
 class InitialStateTests(unittest.TestCase):
     def test_initial_state_seeds_token_usage_fields_and_defaults(self):
         state = _initial_state("默认问题")
@@ -184,7 +188,7 @@ class RewriteQueryTests(unittest.TestCase):
         self.assertEqual(second["rewritten_question"], "缓存的改写结果")
         self.assertTrue(second["used_rewrite"])
 
-    @patch("src.graph.nodes.extract_context_terms", return_value=["年假", "政策"])
+    @patch("src.graph.retrieval_nodes.extract_context_terms", return_value=["年假", "政策"])
     def test_entity_expansion_for_short_rewrite(self, mock_terms):
         """When LLM returns short answer (< 15 chars), entity expansion kicks in."""
         question = "这个呢"
@@ -428,34 +432,36 @@ class CheckQualityTests(unittest.TestCase):
         self.assertTrue(result["quality_ok"])
 
     def test_skip_when_quality_check_disabled(self):
-        with patch("src.graph.nodes.get_runtime_setting", return_value=False):
+        with patch("src.graph.quality_nodes.get_runtime_setting", return_value=False):
             result = check_quality(_state(question_type="knowledge_base"))
         self.assertTrue(result["quality_ok"])
 
     def test_rule_passed_returns_ok(self):
-        result = check_quality(_state(
-            question_type="knowledge_base",
-            documents=[_doc(0.9)],
-            web_context="web content",
-            answer="A longer answer with enough substance.",
-            sources=[{"source": "test.txt"}],
-            used_web_search=True,
-            retry_count=0,
-        ))
+        with patch("src.graph.quality_nodes.get_runtime_setting", side_effect=_quality_enabled_setting):
+            result = check_quality(_state(
+                question_type="knowledge_base",
+                documents=[_doc(0.9)],
+                web_context="web content",
+                answer="A longer answer with enough substance.",
+                sources=[{"source": "test.txt"}],
+                used_web_search=True,
+                retry_count=0,
+            ))
         self.assertTrue(result["quality_ok"])
 
     def test_rule_insufficient_triggers_web_search(self):
-        with patch("src.graph.nodes._tavily_configured", return_value=True):
-            result = check_quality(_state(
-                question_type="knowledge_base",
-                documents=[],
-                web_context="",
-                answer="",
-                sources=[],
-                web_search_enabled=True,
-                used_web_search=False,
-                retry_count=0,
-            ))
+        with patch("src.graph.quality_nodes.get_runtime_setting", side_effect=_quality_enabled_setting):
+            with patch("src.graph.quality_nodes._tavily_configured", return_value=True):
+                result = check_quality(_state(
+                    question_type="knowledge_base",
+                    documents=[],
+                    web_context="",
+                    answer="",
+                    sources=[],
+                    web_search_enabled=True,
+                    used_web_search=False,
+                    retry_count=0,
+                ))
         # rule says insufficient_context → web_search eligible
         self.assertFalse(result["quality_ok"])
         self.assertEqual(result.get("retry_strategy"), "web_search")
@@ -467,18 +473,18 @@ class CheckQualityTests(unittest.TestCase):
                 usage_metadata={"input_tokens": 9, "output_tokens": 4},
             )
         ])
-        with patch("src.graph.utils._get_llm", return_value=fake_llm):
-            with patch("src.graph.nodes._tavily_configured", return_value=False):
-                with patch("src.graph.nodes.hash") as mock_hash:
-                    mock_hash.return_value = 0  # so hash % 3 == 0 → skip LLM
-                    result = check_quality(_state(
-                        question_type="knowledge_base",
-                        documents=[_doc(0.9)],
-                        context="some context",
-                        answer="A reasonable answer with details.",
-                        search_strategy="high_quality",
-                        retry_count=0,
-                    ))
+        with patch("src.graph.quality_nodes.get_runtime_setting", side_effect=_quality_enabled_setting):
+            with patch("src.graph.utils._get_llm", return_value=fake_llm):
+                with patch("src.graph.quality_nodes._tavily_configured", return_value=False):
+                    with patch("src.graph.quality_nodes.zlib.adler32", return_value=0):
+                        result = check_quality(_state(
+                            question_type="knowledge_base",
+                            documents=[_doc(0.9)],
+                            context="some context",
+                            answer="A reasonable answer with details.",
+                            search_strategy="high_quality",
+                            retry_count=0,
+                        ))
         # With hash=0, the sampling check `hash % 3 != 0` is False → it won't skip
         # Wait: check_quality line 766:
         # if strategy != "high_quality" and not web_search_available and hash(question + answer) % 3 != 0:
@@ -492,35 +498,36 @@ class CheckQualityTests(unittest.TestCase):
 
     def test_llm_quality_fails_triggers_web_search(self):
         fake_llm = FakeLLM(['{"quality_passed":false,"quality_reason":"bad","retry_strategy":"expand_retrieval"}'])
-        with patch("src.graph.utils._get_llm", return_value=fake_llm):
-            with patch("src.graph.nodes._tavily_configured", return_value=True):
-                with patch("src.graph.nodes.hash") as mock_hash:
-                    mock_hash.return_value = 0  # skip the sampling branch
-                    result = check_quality(_state(
-                        question_type="knowledge_base",
-                        documents=[_doc(0.9)],
-                        context="some context",
-                        answer="A reasonable answer.",
-                        search_strategy="balanced",
-                        web_search_enabled=True,
-                        used_web_search=False,
-                        retry_count=0,
-                    ))
+        with patch("src.graph.quality_nodes.get_runtime_setting", side_effect=_quality_enabled_setting):
+            with patch("src.graph.utils._get_llm", return_value=fake_llm):
+                with patch("src.graph.quality_nodes._tavily_configured", return_value=True):
+                    with patch("src.graph.quality_nodes.zlib.adler32", return_value=0):
+                        result = check_quality(_state(
+                            question_type="knowledge_base",
+                            documents=[_doc(0.9)],
+                            context="some context",
+                            answer="A reasonable answer.",
+                            search_strategy="balanced",
+                            web_search_enabled=True,
+                            used_web_search=False,
+                            retry_count=0,
+                        ))
         self.assertFalse(result["quality_ok"])
         self.assertEqual(result.get("retry_strategy"), "web_search")
 
     def test_llm_quality_fails_expand_retrieval(self):
         fake_llm = FakeLLM(['{"quality_passed":false,"quality_reason":"need more","retry_strategy":"expand_retrieval"}'])
-        with patch("src.graph.utils._get_llm", return_value=fake_llm):
-            with patch("src.graph.nodes._tavily_configured", return_value=False):
-                result = check_quality(_state(
-                    question_type="knowledge_base",
-                    documents=[_doc(0.9)],
-                    context="some context",
-                    answer="A reasonable answer.",
-                    search_strategy="high_quality",
-                    retry_count=0,
-                ))
+        with patch("src.graph.quality_nodes.get_runtime_setting", side_effect=_quality_enabled_setting):
+            with patch("src.graph.utils._get_llm", return_value=fake_llm):
+                with patch("src.graph.quality_nodes._tavily_configured", return_value=False):
+                    result = check_quality(_state(
+                        question_type="knowledge_base",
+                        documents=[_doc(0.9)],
+                        context="some context",
+                        answer="A reasonable answer.",
+                        search_strategy="high_quality",
+                        retry_count=0,
+                    ))
         self.assertFalse(result["quality_ok"])
         self.assertIn("retrieval_k", result)
 
