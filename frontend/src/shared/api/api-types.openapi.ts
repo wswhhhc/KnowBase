@@ -1308,7 +1308,9 @@ export interface operations {
     };
     get_api_conversations__conv_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string | null;
+            };
             header?: never;
             path: {
                 conv_id: string;
@@ -1339,7 +1341,9 @@ export interface operations {
     };
     delete_api_conversations__conv_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string | null;
+            };
             header?: never;
             path: {
                 conv_id: string;
@@ -1370,7 +1374,9 @@ export interface operations {
     };
     update_api_conversations__conv_id__patch: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string | null;
+            };
             header?: never;
             path: {
                 conv_id: string;
@@ -1438,7 +1444,9 @@ export interface operations {
     };
     list_messages_api_conversations__conv_id__messages_get: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string | null;
+            };
             header?: never;
             path: {
                 conv_id: string;
@@ -1469,7 +1477,9 @@ export interface operations {
     };
     get_pin_state_api_conversations__conv_id__pin_state_get: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string | null;
+            };
             header?: never;
             path: {
                 conv_id: string;
@@ -1500,7 +1510,9 @@ export interface operations {
     };
     feedback_api_conversations__conv_id__messages__msg_id__feedback_post: {
         parameters: {
-            query?: never;
+            query?: {
+                workspace_id?: string | null;
+            };
             header?: never;
             path: {
                 conv_id: string;
@@ -1540,6 +1552,7 @@ export interface operations {
                 format?: string;
                 include_sources?: boolean;
                 include_debug?: boolean;
+                workspace_id?: string | null;
             };
             header?: never;
             path: {

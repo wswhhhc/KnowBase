@@ -103,7 +103,7 @@ export default function AssistantMessageBubble({
     setActiveDialog(null)
 
     try {
-      const result = await api.exportConversation(convId, exportFormat, exportSources, exportDebug)
+      const result = await api.exportConversation(convId, exportFormat, exportSources, exportDebug, workspaceId)
       const blob = exportFormat === 'json'
         ? new Blob([JSON.stringify(result.json, null, 2)], { type: 'application/json' })
         : new Blob([result.markdown || ''], { type: 'text/markdown' })
@@ -131,7 +131,7 @@ export default function AssistantMessageBubble({
     }
 
     try {
-      await api.updateFeedback(message.convId, message.assistantMsgId, 'helpful')
+      await api.updateFeedback(message.convId, message.assistantMsgId, 'helpful', undefined, undefined, workspaceId)
     } catch (error) {
       console.error('反馈提交失败', error)
     }
@@ -150,6 +150,7 @@ export default function AssistantMessageBubble({
           'unhelpful',
           feedbackCategory,
           feedbackDetail.trim() || undefined,
+          workspaceId,
         )
       } catch (error) {
         console.error('反馈提交失败', error)

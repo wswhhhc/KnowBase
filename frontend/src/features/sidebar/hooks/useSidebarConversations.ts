@@ -71,8 +71,8 @@ export function useSidebarConversations({
 
     try {
       const [messages, pinState] = await Promise.all([
-        api.getMessages(conversation.id),
-        api.getConversationPinState(conversation.id),
+        api.getMessages(conversation.id, activeWorkspaceId),
+        api.getConversationPinState(conversation.id, activeWorkspaceId),
       ])
 
       convs.setActiveId(conversation.id)

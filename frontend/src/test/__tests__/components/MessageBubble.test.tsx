@@ -176,6 +176,7 @@ describe('MessageBubble', () => {
         'unhelpful',
         'off_topic',
         '没有回答时间范围',
+        undefined,
       )
     })
 

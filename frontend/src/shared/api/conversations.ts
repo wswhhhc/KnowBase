@@ -10,8 +10,8 @@ export const createConversation = (title = '新对话', workspaceId?: string) =>
     body: JSON.stringify({ title }),
   })
 
-export const deleteConversation = (id: string) =>
-  req(`/conversations/${id}`, { method: 'DELETE' })
+export const deleteConversation = (id: string, workspaceId?: string) =>
+  req(withWorkspaceScope(`/conversations/${id}`, workspaceId), { method: 'DELETE' })
 
 export const deleteConversations = (ids: string[]) =>
   req('/conversations/batch-delete', {
@@ -19,25 +19,38 @@ export const deleteConversations = (ids: string[]) =>
     body: JSON.stringify(ids),
   })
 
-export const renameConversation = (id: string, title: string) =>
-  req<Conversation>(`/conversations/${id}`, {
+export const renameConversation = (id: string, title: string, workspaceId?: string) =>
+  req<Conversation>(withWorkspaceScope(`/conversations/${id}`, workspaceId), {
     method: 'PATCH',
     body: JSON.stringify({ title }),
   })
 
-export const getMessages = (convId: string) =>
-  req<Message[]>(`/conversations/${convId}/messages`)
+export const getMessages = (convId: string, workspaceId?: string) =>
+  req<Message[]>(withWorkspaceScope(`/conversations/${convId}/messages`, workspaceId))
 
-export const getConversationPinState = (convId: string) =>
-  req<PinStateResponse>(`/conversations/${convId}/pin-state`)
+export const getConversationPinState = (convId: string, workspaceId?: string) =>
+  req<PinStateResponse>(withWorkspaceScope(`/conversations/${convId}/pin-state`, workspaceId))
 
-export const updateFeedback = (convId: string, msgId: number, feedback: string, category?: string, detail?: string) =>
-  req(`/conversations/${convId}/messages/${msgId}/feedback`, {
+export const updateFeedback = (
+  convId: string,
+  msgId: number,
+  feedback: string,
+  category?: string,
+  detail?: string,
+  workspaceId?: string,
+) =>
+  req(withWorkspaceScope(`/conversations/${convId}/messages/${msgId}/feedback`, workspaceId), {
     method: 'POST',
     body: JSON.stringify({ feedback, category, detail }),
   })
 
-export const exportConversation = (convId: string, format = 'markdown', includeSources = true, includeDebug = false) => {
+export const exportConversation = (
+  convId: string,
+  format = 'markdown',
+  includeSources = true,
+  includeDebug = false,
+  workspaceId?: string,
+) => {
   const params = new URLSearchParams({ format, include_sources: String(includeSources), include_debug: String(includeDebug) })
-  return req<{ markdown?: string; json?: any }>(`/conversations/${convId}/export?${params}`)
+  return req<{ markdown?: string; json?: any }>(withWorkspaceScope(`/conversations/${convId}/export`, workspaceId, params))
 }

@@ -257,6 +257,17 @@ class APIEndpointTests(unittest.TestCase):
             self.assertIn("title", data[0])
             self.assertIn("thread_id", data[0])
 
+    def test_list_conversations_default_workspace_does_not_include_other_workspaces(self):
+        self.client.post("/api/conversations?workspace_id=", json={"title": "默认工作区对话"})
+        self.client.post("/api/conversations?workspace_id=ws-alpha", json={"title": "Alpha 工作区对话"})
+
+        resp = self.client.get("/api/conversations?workspace_id=")
+
+        self.assertEqual(resp.status_code, 200)
+        titles = [conversation["title"] for conversation in resp.json()]
+        self.assertIn("默认工作区对话", titles)
+        self.assertNotIn("Alpha 工作区对话", titles)
+
     def test_get_conversation_happy_path(self):
         create_resp = self.client.post("/api/conversations", json={"title": "获取测试"})
         conv_id = create_resp.json()["id"]
@@ -312,6 +323,14 @@ class APIEndpointTests(unittest.TestCase):
         resp = self.client.get(f"/api/conversations/{conv_id}/messages")
         self.assertEqual(resp.status_code, 200)
         self.assertIsInstance(resp.json(), list)
+
+    def test_get_messages_returns_404_when_workspace_scope_mismatches(self):
+        create_resp = self.client.post("/api/conversations?workspace_id=ws-alpha", json={"title": "作用域消息测试"})
+        conv_id = create_resp.json()["id"]
+
+        resp = self.client.get(f"/api/conversations/{conv_id}/messages?workspace_id=")
+
+        self.assertEqual(resp.status_code, 404)
 
     def test_get_pin_state_happy_path(self):
         create_resp = self.client.post("/api/conversations", json={"title": "PinState 测试"})

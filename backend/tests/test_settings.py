@@ -28,6 +28,7 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(runtime_overrides_module._is_configured_api_key(""))
         self.assertFalse(runtime_overrides_module._is_configured_api_key("你的 API Key"))
         self.assertFalse(runtime_overrides_module._is_configured_api_key("abc123"))
+        self.assertFalse(runtime_overrides_module._is_configured_api_key("sk-runtime-1234567890"))
         self.assertTrue(runtime_overrides_module._is_configured_api_key("sk-1234567890"))
 
     def test_settings_reads_typed_env_values(self):
@@ -99,17 +100,41 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(runtime_overrides_module.get_runtime_setting("enable_quality_check"))
 
     def test_require_siliconflow_api_key_prefers_runtime_override(self):
-        runtime_overrides_module.update_runtime_settings({"siliconflow_api_key": "sk-runtime-1234567890"})
+        runtime_overrides_module.update_runtime_settings({"siliconflow_api_key": "sk-live-1234567890"})
 
         self.assertEqual(
             runtime_overrides_module.require_siliconflow_api_key(),
-            "sk-runtime-1234567890",
+            "sk-live-1234567890",
         )
+
+    def test_require_siliconflow_api_key_ignores_invalid_runtime_override(self):
+        runtime_overrides_module._runtime_overrides = {"siliconflow_api_key": "sk-runtime-1234567890"}
+        fallback_settings = Settings(SILICONFLOW_API_KEY="sk-env-1234567890")
+
+        with patch.object(runtime_overrides_module, "settings", fallback_settings):
+            self.assertEqual(
+                runtime_overrides_module.require_siliconflow_api_key(),
+                "sk-env-1234567890",
+            )
+
+    def test_update_runtime_settings_rejects_invalid_siliconflow_override(self):
+        with self.assertRaisesRegex(ValueError, "SILICONFLOW_API_KEY 看起来无效"):
+            runtime_overrides_module.update_runtime_settings({
+                "siliconflow_api_key": "sk-runtime-1234567890",
+            })
+
+    def test_update_runtime_settings_blank_siliconflow_override_falls_back_to_env(self):
+        runtime_overrides_module._runtime_overrides = {"siliconflow_api_key": "sk-live-1234567890"}
+        runtime_overrides_module.update_runtime_settings({"siliconflow_api_key": ""})
+
+        self.assertNotIn("siliconflow_api_key", runtime_overrides_module._runtime_overrides)
+        with open(self.runtime_path, encoding="utf-8") as file:
+            self.assertNotIn("siliconflow_api_key", file.read())
 
     def test_lifespan_uses_runtime_api_key_override_for_preset_loading(self):
         fake_kb = MagicMock()
 
-        with patch.object(api_main, "get_runtime_setting", return_value="sk-runtime-1234567890"):
+        with patch.object(api_main, "get_runtime_setting", return_value="sk-live-1234567890"):
             with patch.object(api_main, "_is_configured_api_key", return_value=True):
                 with patch.object(api_main, "get_knowledge_base", return_value=fake_kb):
                     async def _run():
