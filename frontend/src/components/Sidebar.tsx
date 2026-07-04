@@ -16,7 +16,7 @@ import DashboardSummary from '@/components/sidebar/DashboardSummary'
 import type { ChatMessage } from '@/hooks/useChat'
 import type { Conversation, DebugInfo, PinStateResponse } from '@/lib/api'
 import { OPEN_DOCUMENTS_PANEL_EVENT } from '@/lib/ui-events'
-import type { ViewType } from '@/App'
+import { APP_NAV_ITEMS, type ViewType } from '@/app/navigation'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
 
 interface SidebarProps {
@@ -38,13 +38,6 @@ interface SidebarProps {
   onWorkspaceSummaryChange?: (summary: WorkspaceSummary) => void
   isMobile?: boolean
 }
-
-const NAV_ITEMS: { view: ViewType; icon: React.ComponentType<{ className?: string }>; label: string }[] = [
-  { view: 'chat', icon: MessageSquare, label: '对话' },
-  { view: 'browser', icon: BookOpen, label: '知识库' },
-  { view: 'dashboard', icon: BarChart3, label: '指标' },
-  { view: 'settings', icon: Settings, label: '设置' },
-]
 
 const DEFAULT_WORKSPACE_SELECT_VALUE = '__default_workspace__'
 
@@ -268,7 +261,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
 
       {/* Nav */}
       <div className="flex gap-0.5 border-b border-border p-1.5">
-        {NAV_ITEMS.map((item) => (
+        {APP_NAV_ITEMS.map((item) => (
           <button
             key={item.view}
             onClick={() => onNavigate(item.view)}
