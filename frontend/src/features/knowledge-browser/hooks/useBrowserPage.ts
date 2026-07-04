@@ -5,6 +5,7 @@ import * as api from '@/shared/api'
 import type { KBStats, KBChunk, KBConfig, DebugSearchResponse } from '@/shared/api'
 import { useBrowserHighlight } from '@/features/knowledge-browser/hooks/useBrowserHighlight'
 import { useBrowserHotspots } from '@/features/knowledge-browser/hooks/useBrowserHotspots'
+import { useBrowserImport } from '@/features/knowledge-browser/hooks/useBrowserImport'
 import { UPLOAD_TRIGGER_EVENT } from '@/lib/ui-events'
 
 const PAGE_SIZE = 50
@@ -31,7 +32,6 @@ export function useBrowserPage({
 }: UseBrowserPageArgs) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const guideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const allChunksRef = useRef<KBChunk[]>([])
@@ -49,18 +49,6 @@ export function useBrowserPage({
   const [selectedChunk, setSelectedChunk] = useState<KBChunk | null>(null)
   const [chunkView, setChunkView] = useState<'grid' | 'slice'>('grid')
   const [kbConfig, setKbConfig] = useState<KBConfig | null>(null)
-  const [urlInput, setUrlInput] = useState('')
-  const [ingesting, setIngesting] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [uploadPhase, setUploadPhase] = useState('')
-  const [uploadPercent, setUploadPercent] = useState(0)
-  const [versionPrompted, setVersionPrompted] = useState<
-    { kind: 'file'; file: File; sourceName: string } |
-    { kind: 'url'; url: string; sourceName: string } |
-    null
-  >(null)
-  const [showPostUploadGuide, setShowPostUploadGuide] = useState(false)
-  const [lastImportedSource, setLastImportedSource] = useState<string | null>(null)
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [bookmarkedChunks, setBookmarkedChunks] = useState<Set<string>>(new Set())
@@ -212,134 +200,29 @@ export function useBrowserPage({
     setSelectedSource((prev) => (prev === src ? '' : src))
   }, [])
 
-  const resetProgress = useCallback(() => {
-    setUploading(false)
-    setIngesting(false)
-    setUploadPhase('')
-    setUploadPercent(0)
-  }, [])
-
-  const startUpload = useCallback(async (file: File, versionMode?: 'replace' | 'append') => {
-    const scopeToken = scopeTokenRef.current
-    setUploading(true)
-    setUploadPhase('loading')
-    setUploadPercent(0)
-    setVersionPrompted(null)
-    try {
-      const probe = await api.checkSource(file.name, browserWsId)
-      if (!isScopeCurrent(scopeToken)) return
-      if (probe.exists && !versionMode) {
-        setVersionPrompted({ kind: 'file', file, sourceName: file.name })
-        resetProgress()
-        return
-      }
-    } catch {
-      if (isScopeCurrent(scopeToken)) {
-        toast.error('上传前检查失败')
-        resetProgress()
-      }
-      return
-    }
-    api.uploadDocumentStream(file, versionMode, {
-      onProgress: (phase, pct) => {
-        if (!isScopeCurrent(scopeToken)) return
-        setUploadPhase(phase)
-        setUploadPercent(pct)
-      },
-      onDone: async (result) => {
-        if (!isScopeCurrent(scopeToken)) return
-        if (result.existing_version && !versionMode) {
-          setVersionPrompted({ kind: 'file', file, sourceName: file.name })
-          resetProgress()
-          return
-        }
-        await refreshData()
-        if (!isScopeCurrent(scopeToken)) return
-        setLastImportedSource(file.name)
-        await focusSource(file.name)
-        if (!isScopeCurrent(scopeToken)) return
-        setShowPostUploadGuide(true)
-        if (guideTimerRef.current) clearTimeout(guideTimerRef.current)
-        guideTimerRef.current = setTimeout(() => setShowPostUploadGuide(false), 8000)
-        toast.success(
-          versionMode === 'replace'
-            ? '文档已替换为新版本'
-            : versionMode === 'append'
-              ? '文档已追加新版本'
-              : '文档已上传',
-          { description: file.name },
-        )
-        resetProgress()
-        if (fileInputRef.current) fileInputRef.current.value = ''
-      },
-      onError: (msg) => {
-        if (!isScopeCurrent(scopeToken)) return
-        toast.error('上传失败', { description: msg })
-        resetProgress()
-        if (fileInputRef.current) fileInputRef.current.value = ''
-      },
-    }, browserWsId)
-  }, [browserWsId, focusSource, refreshData, resetProgress])
-
-  const startUrlIngest = useCallback(async (url: string, versionMode?: 'replace' | 'append') => {
-    const scopeToken = scopeTokenRef.current
-    setIngesting(true)
-    setUploadPhase('loading')
-    setUploadPercent(0)
-    setVersionPrompted(null)
-    try {
-      const probe = await api.checkSource(url, browserWsId)
-      if (!isScopeCurrent(scopeToken)) return
-      if (probe.exists && !versionMode) {
-        setVersionPrompted({ kind: 'url', url, sourceName: url })
-        resetProgress()
-        return
-      }
-    } catch {
-      if (isScopeCurrent(scopeToken)) {
-        toast.error('导入前检查失败')
-        resetProgress()
-      }
-      return
-    }
-    api.ingestUrlStream(url, versionMode, {
-      onProgress: (phase, pct) => {
-        if (!isScopeCurrent(scopeToken)) return
-        setUploadPhase(phase)
-        setUploadPercent(pct)
-      },
-      onDone: async (result) => {
-        if (!isScopeCurrent(scopeToken)) return
-        if (result.existing_version && !versionMode) {
-          setVersionPrompted({ kind: 'url', url, sourceName: url })
-          resetProgress()
-          return
-        }
-        setUrlInput('')
-        await refreshData()
-        if (!isScopeCurrent(scopeToken)) return
-        setLastImportedSource(url)
-        await focusSource(url)
-        if (!isScopeCurrent(scopeToken)) return
-        setShowPostUploadGuide(true)
-        if (guideTimerRef.current) clearTimeout(guideTimerRef.current)
-        guideTimerRef.current = setTimeout(() => setShowPostUploadGuide(false), 8000)
-        toast.success(
-          versionMode === 'replace'
-            ? '网页已替换为新版本'
-            : versionMode === 'append'
-              ? '网页已追加新版本'
-              : '网页已导入',
-        )
-        resetProgress()
-      },
-      onError: (msg) => {
-        if (!isScopeCurrent(scopeToken)) return
-        toast.error('导入失败', { description: msg })
-        resetProgress()
-      },
-    }, browserWsId)
-  }, [browserWsId, focusSource, refreshData, resetProgress])
+  const {
+    urlInput,
+    setUrlInput,
+    ingesting,
+    uploading,
+    uploadPhase,
+    uploadPercent,
+    versionPrompted,
+    setVersionPrompted,
+    showPostUploadGuide,
+    setShowPostUploadGuide,
+    lastImportedSource,
+    resetImportState,
+    startUpload,
+    startUrlIngest,
+  } = useBrowserImport({
+    browserWsId,
+    fileInputRef,
+    refreshData,
+    focusSource,
+    isScopeCurrent,
+    getScopeToken: () => scopeTokenRef.current,
+  })
 
   const findOverlap = useCallback((prev: string, curr: string) => {
     const maxOverlap = kbConfig?.chunk_overlap || 200
@@ -391,16 +274,11 @@ export function useBrowserPage({
     setHotspotMode(false)
     setHotspots(new Map())
     setKbConfig(null)
-    setUrlInput('')
-    setVersionPrompted(null)
-    setShowPostUploadGuide(false)
-    setLastImportedSource(null)
     setPage(0)
     setTotal(0)
     setHasMore(true)
     setBookmarkedChunks(new Set())
-    resetProgress()
-    if (fileInputRef.current) fileInputRef.current.value = ''
+    resetImportState()
     setError(null)
     setLoading(true)
     Promise.all([
@@ -428,7 +306,7 @@ export function useBrowserPage({
         }
         setLoading(false)
       })
-  }, [browserWsId, resetProgress])
+  }, [browserWsId, resetImportState])
 
   useEffect(() => {
     const handler = () => {
@@ -475,10 +353,6 @@ export function useBrowserPage({
     observerRef.current.observe(sentinelRef.current)
     return () => observerRef.current?.disconnect()
   }, [handlePageChange, hasMore, loading, page])
-
-  useEffect(() => () => {
-    if (guideTimerRef.current) clearTimeout(guideTimerRef.current)
-  }, [])
 
   const displayChunks = hotspotMode
     ? [...chunks].sort((a, b) => (hotspots.get(b.chunk_id) || 0) - (hotspots.get(a.chunk_id) || 0))
