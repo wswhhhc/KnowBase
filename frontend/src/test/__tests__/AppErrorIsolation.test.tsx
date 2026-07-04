@@ -6,22 +6,22 @@ import App from '@/App'
 vi.mock('@/components/Sidebar', () => ({
   default: () => <div data-testid="sidebar">Sidebar Mock</div>,
 }))
-vi.mock('@/components/ChatArea', () => ({
+vi.mock('@/pages/chat/ChatPage', () => ({
   default: () => {
     throw new Error('chat exploded')
   },
 }))
-vi.mock('@/components/BrowserPage', async () => {
+vi.mock('@/pages/browser/BrowserPage', async () => {
   return {
     default: () => <div data-testid="browserpage">BrowserPage Mock</div>,
   }
 })
-vi.mock('@/components/DashboardPage', async () => {
+vi.mock('@/pages/dashboard/DashboardPage', async () => {
   return {
     default: () => <div data-testid="dashboardpage">DashboardPage Mock</div>,
   }
 })
-vi.mock('@/components/SettingsPage', async () => {
+vi.mock('@/pages/settings/SettingsPage', async () => {
   return {
     default: () => <div data-testid="settingspage">SettingsPage Mock</div>,
   }
