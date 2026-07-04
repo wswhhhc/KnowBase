@@ -44,6 +44,16 @@ def list_workspaces(get_conn: ConnectionFactory) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def get_workspace(get_conn: ConnectionFactory, ws_id: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT id, name, description, created_at, updated_at FROM workspaces WHERE id = ?",
+        (ws_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def update_workspace(get_conn: ConnectionFactory, ws_id: str, name: str | None = None, description: str | None = None) -> bool:
     conn = get_conn()
     now = datetime.now(UTC).isoformat()
