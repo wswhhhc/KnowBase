@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from src import conversations
+from tests import conversation_store as conversations
 from src.persistence import database
 
 

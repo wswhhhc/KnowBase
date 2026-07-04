@@ -6,7 +6,7 @@ KnowBase 当前仓库的默认依赖方向如下：
 
 - `api/` 只处理 HTTP 协议、鉴权、参数校验和响应映射
 - `graph/` 与 `rag/` 负责核心问答与知识库逻辑，不反向依赖 `api.models`
-- `persistence/` 负责 SQLite 细节，`src.conversations` 只保留兼容 facade
+- `persistence/` 负责 SQLite 细节，路由与服务直接依赖 repository / persistence helpers
 - `config/` 下按职责分为 typed settings、runtime overrides、public settings 和 constants 访问入口
 
 允许：

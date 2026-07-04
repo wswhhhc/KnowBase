@@ -26,9 +26,7 @@ def _check_forbidden_imports() -> list[str]:
         (re.compile(r"\b(?:from|import)\s+src\.conversations\b"), "禁止在源代码中继续依赖 src.conversations"),
         (re.compile(r"\b(?:from|import)\s+src\.graph\.nodes\b"), "禁止在源代码中继续把 src.graph.nodes 当主入口"),
     ]
-    backend_excludes = {
-        ROOT / "backend" / "src" / "conversations.py",
-    }
+    backend_excludes: set[Path] = set()
 
     for path in _iter_files(ROOT / "backend" / "src", "*.py"):
         if path in backend_excludes:

@@ -121,7 +121,7 @@
 | src/graph/graph.py | **~92%** (+13%) | _should_rerank/rewrite_query/rerank_docs/_rule_check_quality/_compute_evidence/check_quality/generate_answer/route_question/_route_search_scope/build_graph 分支全覆盖 |
 | src/metrics.py | 94% | — |
 | src/loaders.py | 93% | — |
-| src/conversations.py | 93% | — |
+| src/persistence/*_repository.py | 90%+ | conversation/bookmark/message/pin/workspace 路径已覆盖 |
 | src/utils.py | 89% | — |
 | config/settings.py | 86% | — |
 | src/rag/knowledge_base.py | 85% | — |

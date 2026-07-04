@@ -1,11 +1,11 @@
-"""Extended tests for src.conversations — CRUD, export, feedback."""
+"""Extended conversation storage tests — CRUD, export, feedback."""
 import json
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
-from src import conversations
+from tests import conversation_store as conversations
 from src.persistence import database
 
 
