@@ -409,17 +409,15 @@ frontend/src/
 - 页面切换状态抽成 `useAppNavigation`
 - workspace 会话同步抽成 `useWorkspaceSession`
 
-#### `frontend/src/lib/api.ts`
+#### `frontend/src/shared/api/index.ts`
 
-现状问题：
+当前收口结果：
 
-- 所有 API
-- SSE parser
-- chat stream adapter
-- 错误类
-- 类型 re-export
+- 业务代码已经统一从 `shared/api` 入口消费客户端与类型
+- `chat.ts`、`documents.ts`、`knowledge-base.ts` 等模块承接了原先巨石 API 文件的拆分结果
+- 兼容壳文件应该删除，避免旧入口重新成为主路径
 
-是典型 API 巨石文件。
+目标维持：
 
 目标拆分：
 
@@ -707,7 +705,7 @@ CI 必须明确：
 - `backend/src/conversations.py`
 - `backend/src/graph/nodes.py`
 - `backend/src/config/settings.py`
-- `frontend/src/lib/api.ts`
+- `frontend/src/shared/api/index.ts`
 - `frontend/src/hooks/useBrowserPage.ts`
 - `frontend/src/components/Sidebar.tsx`
 - `frontend/src/App.tsx`
@@ -757,6 +755,6 @@ CI 必须明确：
 - 后端包根：`backend/src/knowbase/`
 - 前端源码根：`frontend/src/{app,pages,features,entities,shared}`
 - API 契约快照：`backend/openapi.json`
-- 前端生成类型：`frontend/src/shared/api/openapi-types.ts`
+- 前端生成类型：`frontend/src/shared/api/api-types.openapi.ts`
 
 这套定案是目前最适合你这个项目的，不花哨，但纪律性最强。
