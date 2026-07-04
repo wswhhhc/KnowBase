@@ -1,34 +1,20 @@
-"""对话历史管理 — SQLite 持久化存储。"""
+"""Conversation facade with SQLite-backed persistence repositories."""
 
-import json
 import logging
 import sqlite3
-from datetime import UTC, datetime
 from pathlib import Path
-from uuid import uuid4
 
-from src.config.settings import ROOT_DIR
+from src.config.settings import DATA_DIR
+from src.persistence import (
+    bookmark_repository,
+    conversation_repository,
+    message_repository,
+    pin_state_repository,
+    workspace_repository,
+)
 
-_DB_PATH = ROOT_DIR / "data" / "conversations.db"
+_DB_PATH = Path(DATA_DIR) / "conversations.db"
 logger = logging.getLogger(__name__)
-
-
-def _normalize_preview_text(content: str | None) -> str:
-    """Return a single-line preview suitable for sidebar summaries."""
-    if not content:
-        return ""
-    return " ".join(content.split())
-
-
-def _conversation_select_sql(where_clause: str = "") -> str:
-    return (
-        "SELECT c.id, c.thread_id, c.title, c.workspace_id, c.created_at, c.updated_at, "
-        "COALESCE(("
-        "SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1"
-        "), '') AS last_message_preview "
-        "FROM conversations c "
-        f"{where_clause}"
-    )
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -66,7 +52,7 @@ def _run_migrations():
 
 
 def init_db():
-    """Create tables if they don't exist."""
+    """Create tables if they don't exist, then ensure default workspace."""
     _run_migrations()
     conn = _get_conn()
     conn.executescript("""
@@ -121,318 +107,64 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_pinned_sources_thread ON pinned_sources(thread_id, chunk_id);
     """)
-    _ensure_default_workspace()
     conn.commit()
     conn.close()
-
-
-def _ensure_default_workspace():
-    """Create the default workspace if it doesn't exist."""
-    conn = _get_conn()
-    row = conn.execute("SELECT id FROM workspaces WHERE id = ''").fetchone()
-    if not row:
-        now = datetime.now(UTC).isoformat()
-        conn.execute(
-            "INSERT INTO workspaces (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-            ("", "默认工作区", "所有未归类的对话", now, now),
-        )
-        conn.commit()
-    conn.close()
+    workspace_repository.ensure_default_workspace(_get_conn)
 
 
 def create_conversation(title: str = "新对话", thread_id: str | None = None, workspace_id: str = "") -> dict:
-    """Create a new conversation, return its dict."""
-    conn = _get_conn()
-    conv_id = str(uuid4())
-    actual_thread_id = thread_id or conv_id
-    now = datetime.now(UTC).isoformat()
-    conn.execute(
-        "INSERT INTO conversations (id, thread_id, title, workspace_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (conv_id, actual_thread_id, title, workspace_id, now, now),
-    )
-    conn.commit()
-    conn.close()
-    return {"id": conv_id, "thread_id": actual_thread_id, "title": title, "workspace_id": workspace_id, "created_at": now, "updated_at": now}
+    return conversation_repository.create_conversation(_get_conn, title, thread_id, workspace_id)
 
 
 def get_conversation_by_thread(thread_id: str) -> dict | None:
-    """Return the conversation that owns this thread_id, or None."""
-    conn = _get_conn()
-    row = conn.execute(
-        _conversation_select_sql("WHERE c.thread_id = ?"),
-        (thread_id,),
-    ).fetchone()
-    conn.close()
-    if not row:
-        return None
-    conversation = dict(row)
-    conversation["last_message_preview"] = _normalize_preview_text(conversation.get("last_message_preview"))
-    return conversation
+    return conversation_repository.get_conversation_by_thread(_get_conn, thread_id)
 
 
 def list_conversations(workspace_id: str | None = None) -> list[dict]:
-    """Return conversations ordered by update time desc, optionally filtered by workspace.
-
-    Pass ``workspace_id=''`` to filter for the default workspace.
-    Pass ``workspace_id=None`` to return all conversations (no filter).
-    """
-    conn = _get_conn()
-    if workspace_id is not None:
-        rows = conn.execute(
-            _conversation_select_sql("WHERE c.workspace_id = ? ORDER BY c.updated_at DESC"),
-            (workspace_id,),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            _conversation_select_sql("ORDER BY c.updated_at DESC")
-        ).fetchall()
-    conn.close()
-    conversations = [dict(r) for r in rows]
-    for conversation in conversations:
-        conversation["last_message_preview"] = _normalize_preview_text(conversation.get("last_message_preview"))
-    return conversations
+    return conversation_repository.list_conversations(_get_conn, workspace_id)
 
 
 def get_conversation(conv_id: str) -> dict | None:
-    """Get a single conversation by id."""
-    conn = _get_conn()
-    row = conn.execute(
-        _conversation_select_sql("WHERE c.id = ?"), (conv_id,)
-    ).fetchone()
-    conn.close()
-    if not row:
-        return None
-    conversation = dict(row)
-    conversation["last_message_preview"] = _normalize_preview_text(conversation.get("last_message_preview"))
-    return conversation
+    return conversation_repository.get_conversation(_get_conn, conv_id)
 
 
 def update_title(conv_id: str, title: str) -> bool:
-    """Update conversation title and return whether a row was changed."""
-    conn = _get_conn()
-    cursor = conn.execute(
-        "UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?",
-        (title, datetime.now(UTC).isoformat(), conv_id),
-    )
-    conn.commit()
-    conn.close()
-    return cursor.rowcount > 0
+    return conversation_repository.update_title(_get_conn, conv_id, title)
 
 
 def delete_conversations(conv_ids: list[str]):
-    """批量删除多个对话及其消息。"""
-    if not conv_ids:
-        return
-    conn = _get_conn()
-    placeholders = ",".join("?" for _ in conv_ids)
-    thread_rows = conn.execute(
-        f"SELECT thread_id FROM conversations WHERE id IN ({placeholders})",
-        conv_ids,
-    ).fetchall()
-    thread_ids = [row["thread_id"] for row in thread_rows]
-    conn.execute(f"DELETE FROM messages WHERE conversation_id IN ({placeholders})", conv_ids)
-    conn.execute(f"DELETE FROM conversations WHERE id IN ({placeholders})", conv_ids)
-    if thread_ids:
-        thread_placeholders = ",".join("?" for _ in thread_ids)
-        conn.execute(
-            f"DELETE FROM pinned_sources WHERE thread_id IN ({thread_placeholders})",
-            thread_ids,
-        )
-    conn.commit()
-    conn.close()
+    conversation_repository.delete_conversations(_get_conn, conv_ids)
 
 
 def delete_conversation(conv_id: str) -> bool:
-    """Delete a conversation and its messages."""
-    conn = _get_conn()
-    conv = conn.execute("SELECT thread_id FROM conversations WHERE id = ?", (conv_id,)).fetchone()
-    conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conv_id,))
-    cursor = conn.execute("DELETE FROM conversations WHERE id = ?", (conv_id,))
-    if conv:
-        conn.execute("DELETE FROM pinned_sources WHERE thread_id = ?", (conv["thread_id"],))
-    conn.commit()
-    conn.close()
-    return cursor.rowcount > 0
+    return conversation_repository.delete_conversation(_get_conn, conv_id)
 
 
 def add_message(conv_id: str, role: str, content: str, sources: list | None = None, quality_reason: str = "", debug_info: str = "{}") -> int:
-    """Add a message to a conversation. Returns the message row id."""
-    conn = _get_conn()
-    now = datetime.now(UTC).isoformat()
-    cursor = conn.execute(
-        "INSERT INTO messages (conversation_id, role, content, sources, quality_reason, debug_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (conv_id, role, content, json.dumps(sources or [], ensure_ascii=False), quality_reason, debug_info, now),
-    )
-    msg_id = cursor.lastrowid
-    conn.execute(
-        "UPDATE conversations SET updated_at = ? WHERE id = ?",
-        (now, conv_id),
-    )
-    conn.commit()
-    conn.close()
-    return msg_id
+    return message_repository.add_message(_get_conn, conv_id, role, content, sources, quality_reason, debug_info)
 
 
 def get_messages(conv_id: str) -> list[dict]:
-    """Return all messages for a conversation, ordered by id."""
-    conn = _get_conn()
-    rows = conn.execute(
-        "SELECT id, role, content, sources, quality_reason, debug_info, feedback, created_at "
-        "FROM messages WHERE conversation_id = ? ORDER BY id",
-        (conv_id,),
-    ).fetchall()
-    conn.close()
-    result = []
-    for r in rows:
-        msg = dict(r)
-        try:
-            raw = json.loads(msg["sources"]) if msg["sources"] else []
-            # Pydantic 要求 int 字段不能是空字符串，清洗一下
-            for s in raw:
-                for key in ("chunk_index", "page", "score"):
-                    if key in s and s[key] == "":
-                        s[key] = None
-            msg["sources"] = raw
-        except (json.JSONDecodeError, TypeError):
-            msg["sources"] = []
-        # 确保 debug_info 是 dict
-        try:
-            msg["debug_info"] = json.loads(msg.get("debug_info", "{}"))
-        except (json.JSONDecodeError, TypeError):
-            msg["debug_info"] = {}
-        result.append(msg)
-    return result
+    return message_repository.get_messages(_get_conn, conv_id)
 
 
 def list_assistant_debug_pairs() -> list[dict]:
-    """Return assistant debug info paired with the preceding user question."""
-    conn = _get_conn()
-    rows = conn.execute(
-        "SELECT c.thread_id, m.role, m.content, m.debug_info, m.created_at "
-        "FROM messages m "
-        "JOIN conversations c ON c.id = m.conversation_id "
-        "ORDER BY c.thread_id, m.id"
-    ).fetchall()
-    conn.close()
-
-    pairs: list[dict] = []
-    pending_user_by_thread: dict[str, str | None] = {}
-    for row in rows:
-        thread_id = row["thread_id"]
-        role = row["role"]
-        if role == "user":
-            pending_user_by_thread[thread_id] = row["content"]
-            continue
-        if role != "assistant":
-            continue
-
-        question = pending_user_by_thread.get(thread_id)
-        if question is None:
-            continue
-
-        try:
-            debug_info = json.loads(row["debug_info"] or "{}")
-        except (json.JSONDecodeError, TypeError):
-            debug_info = {}
-
-        pairs.append({
-            "thread_id": thread_id,
-            "question": question[:100],
-            "debug_info": debug_info,
-            "created_at": row["created_at"],
-        })
-        pending_user_by_thread[thread_id] = None
-
-    return pairs
+    return message_repository.list_assistant_debug_pairs(_get_conn)
 
 
 def update_feedback(msg_row_id: int, feedback: str, conv_id: str | None = None, category: str | None = None, detail: str | None = None) -> bool:
-    """Update feedback for a message. Optionally verify it belongs to the given conversation."""
-    conn = _get_conn()
-    if conv_id:
-        row = conn.execute(
-            "SELECT id FROM messages WHERE id = ? AND conversation_id = ?", (msg_row_id, conv_id)
-        ).fetchone()
-        if not row:
-            conn.close()
-            return False
-    cursor = conn.execute(
-        "UPDATE messages SET feedback = ?, feedback_category = ?, feedback_detail = ? WHERE id = ?",
-        (feedback, category, detail, msg_row_id),
-    )
-    conn.commit()
-    conn.close()
-    return cursor.rowcount > 0
+    return message_repository.update_feedback(_get_conn, msg_row_id, feedback, conv_id, category, detail)
 
 
 def export_conversation(conv_id: str, fmt: str = "markdown", include_sources: bool = True, include_debug: bool = False):
-    """Export conversation as Markdown or JSON.
-
-    Returns a Markdown string when fmt='markdown', or a dict when fmt='json'.
-    """
-    conv = get_conversation(conv_id)
-    if not conv:
-        return "" if fmt == "markdown" else {}
-
-    messages = get_messages(conv_id)
-
-    if fmt == "json":
-        export_msgs = []
-        for msg in messages:
-            entry = {
-                "role": "用户" if msg["role"] == "user" else "助手",
-                "content": msg["content"],
-            }
-            if include_sources and msg.get("sources"):
-                entry["sources"] = msg["sources"]
-            if include_debug and msg.get("debug_info"):
-                entry["debug_info"] = msg["debug_info"]
-            export_msgs.append(entry)
-        return {
-            "title": conv["title"],
-            "created_at": conv["created_at"],
-            "messages": export_msgs,
-        }
-
-    # Markdown export (default)
-    parts = [f"# {conv['title']}\n\n"]
-    for msg in messages:
-        role_label = "[用户]" if msg["role"] == "user" else "[助手]"
-        parts.append(f"### {role_label}\n{msg['content']}\n")
-        if include_sources and msg["sources"]:
-            parts.append(f"**来源：** {', '.join(s.get('source', '?') for s in msg['sources'])}\n")
-        if include_debug:
-            di = msg.get("debug_info", {})
-            if isinstance(di, str):
-                try:
-                    import json
-                    di = json.loads(di)
-                except (json.JSONDecodeError, TypeError):
-                    di = {}
-            if di:
-                debug_lines = []
-                if di.get("evidence_level"):
-                    debug_lines.append(f"证据等级：{di['evidence_level']}")
-                if di.get("evidence_summary"):
-                    debug_lines.append(f"证据摘要：{di['evidence_summary']}")
-                if di.get("outcome_category"):
-                    debug_lines.append(f"结果分类：{di['outcome_category']}")
-                if di.get("rewritten_question"):
-                    debug_lines.append(f"改写后查询：{di['rewritten_question']}")
-                if di.get("retry_count", 0) > 0:
-                    debug_lines.append(f"重试次数：{di['retry_count']}")
-                if di.get("used_rerank"):
-                    debug_lines.append(f"使用重排：是")
-                if di.get("used_web_search"):
-                    debug_lines.append(f"联网搜索：是（{di.get('web_results_count', 0)} 条）")
-                if di.get("nodes"):
-                    debug_lines.append(f"节点数：{len(di['nodes'])}")
-                if debug_lines:
-                    parts.append("*调试信息：*  " + "  \n".join(debug_lines) + "\n")
-            elif msg.get("quality_reason"):
-                parts.append(f"*质量检查：{msg['quality_reason']}*\n")
-        parts.append("\n---\n\n")
-    return "".join(parts)
+    return message_repository.export_conversation(
+        conv_id,
+        fmt=fmt,
+        include_sources=include_sources,
+        include_debug=include_debug,
+        get_conversation=get_conversation,
+        get_messages_for_conversation=get_messages,
+    )
 
 
 # ── Bookmarks ──
@@ -441,90 +173,26 @@ def export_conversation(conv_id: str, fmt: str = "markdown", include_sources: bo
 def create_bookmark(workspace_id: str = "", conversation_id: str = "", message_id: int = 0,
                     chunk_id: str = "", note: str = "", content: str = "", source: str = "",
                     tags: str = "") -> dict:
-    """Create a bookmark."""
-    conn = _get_conn()
-    if chunk_id:
-        existing = conn.execute(
-            "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, created_at "
-            "FROM bookmarks WHERE workspace_id = ? AND chunk_id = ? ORDER BY id LIMIT 1",
-            (workspace_id, chunk_id),
-        ).fetchone()
-        if existing:
-            conn.close()
-            return dict(existing)
-
-    now = datetime.now(UTC).isoformat()
-    cursor = conn.execute(
-        "INSERT INTO bookmarks (workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, now),
-    )
-    conn.commit()
-    bm_id = cursor.lastrowid
-    conn.close()
-    return {"id": bm_id, "workspace_id": workspace_id, "conversation_id": conversation_id,
-            "message_id": message_id, "chunk_id": chunk_id, "note": note, "content": content,
-            "source": source, "tags": tags, "created_at": now}
+    return bookmark_repository.create_bookmark(_get_conn, workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags)
 
 
 def list_bookmarks(workspace_id: str | None = None, search: str | None = None) -> list[dict]:
-    """Return bookmarks, optionally filtered by workspace or search query."""
-    conn = _get_conn()
-    clauses: list[str] = []
-    params: list[str] = []
-    if workspace_id is not None:
-        clauses.append("workspace_id = ?")
-        params.append(workspace_id)
-    if search:
-        like = f"%{search}%"
-        clauses.append("(content LIKE ? OR note LIKE ? OR tags LIKE ?)")
-        params.extend([like, like, like])
-
-    query = "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, created_at FROM bookmarks"
-    if clauses:
-        query += " WHERE " + " AND ".join(clauses)
-    query += " ORDER BY created_at DESC"
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    return bookmark_repository.list_bookmarks(_get_conn, workspace_id, search)
 
 
 def update_bookmark(bm_id: int, **kwargs) -> dict | None:
-    """Update bookmark fields (note, tags). Returns updated bookmark or None."""
-    allowed = {"note", "tags"}
-    updates = {k: v for k, v in kwargs.items() if k in allowed}
-    if not updates:
-        return None
-    set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [bm_id]
-    conn = _get_conn()
-    conn.execute(f"UPDATE bookmarks SET {set_clause} WHERE id = ?", values)
-    conn.commit()
-    row = conn.execute(
-        "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, created_at FROM bookmarks WHERE id = ?",
-        (bm_id,),
-    ).fetchone()
-    conn.close()
-    return dict(row) if row else None
+    return bookmark_repository.update_bookmark(_get_conn, bm_id, **kwargs)
 
 
 def delete_bookmark(bm_id: int) -> bool:
-    """Delete a bookmark by id."""
-    conn = _get_conn()
-    cursor = conn.execute("DELETE FROM bookmarks WHERE id = ?", (bm_id,))
-    conn.commit()
-    conn.close()
-    return cursor.rowcount > 0
+    return bookmark_repository.delete_bookmark(_get_conn, bm_id)
 
 
 # ── Pinned Sources ──
 
 
 def clear_pin_state(thread_id: str) -> None:
-    """Remove all persisted pin/exclude state for a thread."""
-    conn = _get_conn()
-    conn.execute("DELETE FROM pinned_sources WHERE thread_id = ?", (thread_id,))
-    conn.commit()
-    conn.close()
+    pin_state_repository.clear_pin_state(_get_conn, thread_id)
 
 
 def replace_pin_state(
@@ -532,103 +200,31 @@ def replace_pin_state(
     pinned_chunk_ids: list[str] | None = None,
     excluded_chunk_ids: list[str] | None = None,
 ) -> None:
-    """Replace the persisted pin/exclude state for a thread."""
-    pinned_chunk_ids = list(dict.fromkeys(pinned_chunk_ids or []))
-    excluded_chunk_ids = [
-        chunk_id for chunk_id in dict.fromkeys(excluded_chunk_ids or [])
-        if chunk_id not in pinned_chunk_ids
-    ]
-
-    conn = _get_conn()
-    now = datetime.now(UTC).isoformat()
-    conn.execute("DELETE FROM pinned_sources WHERE thread_id = ?", (thread_id,))
-    rows = [(thread_id, chunk_id, "pin", now) for chunk_id in pinned_chunk_ids]
-    rows.extend((thread_id, chunk_id, "exclude", now) for chunk_id in excluded_chunk_ids)
-    if rows:
-        conn.executemany(
-            "INSERT INTO pinned_sources (thread_id, chunk_id, action, created_at) VALUES (?, ?, ?, ?)",
-            rows,
-        )
-    conn.commit()
-    conn.close()
+    pin_state_repository.replace_pin_state(_get_conn, thread_id, pinned_chunk_ids, excluded_chunk_ids)
 
 
 def load_pin_state(thread_id: str) -> list[dict]:
-    """Return all pinned/excluded sources for a thread as list of {chunk_id, action}."""
-    conn = _get_conn()
-    rows = conn.execute(
-        "SELECT chunk_id, action FROM pinned_sources WHERE thread_id = ? ORDER BY id",
-        (thread_id,),
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    return pin_state_repository.load_pin_state(_get_conn, thread_id)
 
 
 def load_pin_state_summary(thread_id: str) -> dict:
-    """Return compact pin/exclude state for a thread."""
-    entries = load_pin_state(thread_id)
-    return {
-        "thread_id": thread_id,
-        "pinned_chunk_ids": [entry["chunk_id"] for entry in entries if entry["action"] == "pin"],
-        "excluded_chunk_ids": [entry["chunk_id"] for entry in entries if entry["action"] == "exclude"],
-    }
+    return pin_state_repository.load_pin_state_summary(_get_conn, thread_id)
 
 
 # ── Workspaces ──
 
 
 def create_workspace(name: str = "新工作区", description: str = "") -> dict:
-    """Create a new workspace."""
-    conn = _get_conn()
-    ws_id = str(uuid4())
-    now = datetime.now(UTC).isoformat()
-    conn.execute(
-        "INSERT INTO workspaces (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (ws_id, name, description, now, now),
-    )
-    conn.commit()
-    conn.close()
-    return {"id": ws_id, "name": name, "description": description, "created_at": now, "updated_at": now}
+    return workspace_repository.create_workspace(_get_conn, name, description)
 
 
 def list_workspaces() -> list[dict]:
-    """Return all workspaces, including the default one."""
-    conn = _get_conn()
-    rows = conn.execute("SELECT id, name, description, created_at, updated_at FROM workspaces ORDER BY id = '' DESC, created_at").fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    return workspace_repository.list_workspaces(_get_conn)
 
 
 def update_workspace(ws_id: str, name: str | None = None, description: str | None = None) -> bool:
-    """Update a workspace name and/or description."""
-    conn = _get_conn()
-    now = datetime.now(UTC).isoformat()
-    updates = []
-    params = []
-    if name is not None:
-        updates.append("name = ?")
-        params.append(name)
-    if description is not None:
-        updates.append("description = ?")
-        params.append(description)
-    if not updates:
-        conn.close()
-        return False
-    updates.append("updated_at = ?")
-    params.append(now)
-    params.append(ws_id)
-    cursor = conn.execute(f"UPDATE workspaces SET {', '.join(updates)} WHERE id = ?", params)
-    conn.commit()
-    conn.close()
-    return cursor.rowcount > 0
+    return workspace_repository.update_workspace(_get_conn, ws_id, name, description)
 
 
 def delete_workspace(ws_id: str) -> bool:
-    """Delete a workspace and reassign its conversations to the default workspace."""
-    conn = _get_conn()
-    conn.execute("UPDATE conversations SET workspace_id = '' WHERE workspace_id = ?", (ws_id,))
-    conn.execute("UPDATE bookmarks SET workspace_id = '' WHERE workspace_id = ?", (ws_id,))
-    cursor = conn.execute("DELETE FROM workspaces WHERE id = ?", (ws_id,))
-    conn.commit()
-    conn.close()
-    return cursor.rowcount > 0
+    return workspace_repository.delete_workspace(_get_conn, ws_id)

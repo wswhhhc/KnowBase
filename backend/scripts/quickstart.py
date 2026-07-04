@@ -17,8 +17,8 @@ from uuid import uuid4
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
-DEMO_SOURCE_DIR = REPO_ROOT / "data" / "samples" / "demo"
-DEMO_RUNTIME_DIR = BACKEND_ROOT / "data" / "quickstart"
+DEMO_SOURCE_DIR = REPO_ROOT / "examples" / "demo-documents"
+DEMO_RUNTIME_DIR = REPO_ROOT / "runtime" / "quickstart"
 DEMO_CHROMA_DIR = DEMO_RUNTIME_DIR / "chroma_db"
 DEMO_CHECKPOINT_DB = DEMO_RUNTIME_DIR / "checkpoints.db"
 

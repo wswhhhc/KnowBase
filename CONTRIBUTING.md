@@ -90,6 +90,12 @@ npm test
 ### 构建检查
 
 ```bash
+bash scripts/run-checks.sh
+```
+
+或按分步方式执行：
+
+```bash
 cd frontend
 npm run build
 ```
@@ -108,7 +114,7 @@ npm run check-api-types
 ## 协作规则
 
 - 后端接口变化后，要先导出 `backend/openapi.json`，再同步更新前端生成的 API 类型。
-- 启动方式、配置项、产品行为、工作区语义或架构假设变化后，要同步更新 `README.md`、`CLAUDE.md`、`docs/requirements.md` 或相关文档。
+- 启动方式、配置项、产品行为、工作区语义或架构假设变化后，要同步更新 `README.md`、`CLAUDE.md`、`docs/requirements/product-boundaries.md` 或相关文档。
 - 新增配置项已经体现在 `backend/.env.example`。
 - 不要提交密钥、本地数据库、覆盖率产物（如 `backend/.coverage`）或运行期生成文件。
 - 尽量保持 PR 小而明确，一个 PR 解决一个清晰问题。
@@ -120,7 +126,8 @@ npm run check-api-types
 如果 FastAPI 路由或 Pydantic schema 发生变化，按这个顺序更新：
 
 ```bash
-uv run python backend/scripts/export_openapi.py
+cd backend
+uv run python scripts/export_openapi.py
 ```
 
 ```bash
@@ -133,6 +140,7 @@ npm run gen-api-types
 - `backend/openapi.json` 是提交态 API 快照
 - `frontend/src/lib/api-types.openapi.ts` 是生成物
 - `frontend/src/lib/api-types.ts` 中的 SSE 手写类型由后端测试校验同步
+- 后端唯一 Python 应用根是 `backend/`；不要在仓库根目录执行 `uv sync` 或把根目录当作 Python 项目根
 
 同时确认这些文件已同步：
 
@@ -147,6 +155,11 @@ npm run gen-api-types
 - **后端** — 当 `chat_stream_service.py` 中的辅助逻辑（调试累加、持久化）膨胀到可独立测试的规模时，拆至 `chat_debug.py` 和 `chat_persistence.py`，保持主类 ~200 行
 - **前端** — 当 hook 的多个状态维度（消息列表 + 来源固定 + 类型定义）耦合在一起时，拆至 `hooks/chat/` 子目录下的独立文件
 - **组件** — 单体组件超过 200 行时考虑拆为多个子组件（参考 `components/browser/` 和 `components/sidebar/`）
+
+结构边界和 reviewer checklist 见：
+
+- `docs/architecture/dependency-rules.md`
+- `docs/architecture/reviewer-checklist.md`
 
 ## 提交前检查
 

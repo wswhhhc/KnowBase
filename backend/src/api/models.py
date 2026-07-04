@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from src.rag.models import HotspotEntry, KBChunk
 
 
 class ChatRequest(BaseModel):
@@ -101,16 +102,6 @@ class KBStats(BaseModel):
     chunk_count: int
     source_count: int
     total_chars: int
-
-
-class KBChunk(BaseModel):
-    source: str
-    chunk_index: int
-    chunk_id: str
-    page: int | None = None
-    content: str
-    original_content: str | None = None
-    section: str | None = None
 
 
 class QueryLogEntry(BaseModel):
@@ -225,15 +216,6 @@ class SourceOut(BaseModel):
 
     source: str
     count: int
-
-
-class HotspotEntry(BaseModel):
-    """Hot chunk entry returned by GET /api/knowledge-base/hotspots."""
-
-    chunk_id: str
-    source: str
-    hits: int
-    content_preview: str
 
 
 class KBConfig(BaseModel):

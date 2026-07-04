@@ -5,16 +5,17 @@ from __future__ import annotations
 import json
 from collections import defaultdict, deque
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
 
-from src.config.settings import ROOT_DIR
 from src.api.deps import verify_api_key
 from src.api.models import QueryLogEntry, QueryLogsResponse
 from src.conversations import list_assistant_debug_pairs
+from src.config.settings import DATA_DIR
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
-_LOG_DIR = ROOT_DIR / "data" / "rag_logs"
+_LOG_DIR = Path(DATA_DIR) / "rag_logs"
 
 _MODEL_PRICING_PER_MILLION: dict[str, tuple[float, float]] = {
     "deepseek": (0.5, 2.0),

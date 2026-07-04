@@ -3,6 +3,8 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 
 import * as api from '@/lib/api'
 import type { KBStats, KBChunk, KBConfig, DebugSearchResponse } from '@/lib/api'
+import { useBrowserHighlight } from '@/features/knowledge-browser/hooks/useBrowserHighlight'
+import { useBrowserHotspots } from '@/features/knowledge-browser/hooks/useBrowserHotspots'
 import { UPLOAD_TRIGGER_EVENT } from '@/lib/ui-events'
 
 const PAGE_SIZE = 50
@@ -46,8 +48,6 @@ export function useBrowserPage({
   const [selectedSource, setSelectedSource] = useState('')
   const [selectedChunk, setSelectedChunk] = useState<KBChunk | null>(null)
   const [chunkView, setChunkView] = useState<'grid' | 'slice'>('grid')
-  const [hotspotMode, setHotspotMode] = useState(false)
-  const [hotspots, setHotspots] = useState<Map<string, number>>(new Map())
   const [kbConfig, setKbConfig] = useState<KBConfig | null>(null)
   const [urlInput, setUrlInput] = useState('')
   const [ingesting, setIngesting] = useState(false)
@@ -72,6 +72,14 @@ export function useBrowserPage({
     return scopeTokenRef.current
   }
   const isScopeCurrent = (token: number) => scopeTokenRef.current === token
+  const {
+    hotspotMode,
+    setHotspotMode,
+    hotspots,
+    setHotspots,
+    toggleHotspotMode,
+    hotspotCount,
+  } = useBrowserHotspots(browserWsId, isScopeCurrent, () => scopeTokenRef.current)
 
   const setChunksAccumulate = (items: KBChunk[], append: boolean) => {
     allChunksRef.current = dedupeChunksById(append ? [...allChunksRef.current, ...items] : items)
@@ -333,29 +341,6 @@ export function useBrowserPage({
     }, browserWsId)
   }, [browserWsId, focusSource, refreshData, resetProgress])
 
-  const toggleHotspotMode = useCallback(async () => {
-    const scopeToken = scopeTokenRef.current
-    const next = !hotspotMode
-    setHotspotMode(next)
-    if (!next) {
-      setHotspots(new Map())
-      return
-    }
-    if (next) {
-      try {
-        const data = await api.getKBHotspots(browserWsId)
-        if (!isScopeCurrent(scopeToken)) return
-        setHotspots(new Map(data.map((h) => [h.chunk_id, h.hits] as [string, number])))
-      } catch (e) {
-        if (isScopeCurrent(scopeToken)) {
-          toast.error('热点数据加载失败', { description: String(e) })
-        }
-      }
-    }
-  }, [browserWsId, hotspotMode])
-
-  const hotspotCount = useCallback((chunkId: string) => hotspots.get(chunkId) || 0, [hotspots])
-
   const findOverlap = useCallback((prev: string, curr: string) => {
     const maxOverlap = kbConfig?.chunk_overlap || 200
     for (let i = Math.min(maxOverlap, prev.length, curr.length); i > 10; i -= 1) {
@@ -456,31 +441,15 @@ export function useBrowserPage({
     return () => window.removeEventListener(UPLOAD_TRIGGER_EVENT, handler)
   }, [])
 
-  useEffect(() => {
-    if (!highlightChunkId) return
-    const existing = allChunksRef.current.find((c) => c.chunk_id === highlightChunkId)
-    if (existing) {
-      setSelectedChunk(existing)
-      onHighlightConsumed?.()
-      return
-    }
-
-    let cancelled = false
-    ;(async () => {
-      try {
-        const chunk = await api.getKBChunkById(highlightChunkId, browserWsId)
-        if (cancelled) return
-        allChunksRef.current = dedupeChunksById([chunk, ...allChunksRef.current])
-        setChunks([...allChunksRef.current])
-        setSelectedChunk(chunk)
-        onHighlightConsumed?.()
-      } catch (e) {
-        toast.error('无法在当前工作区定位该引用', { description: String(e) })
-        onHighlightConsumed?.()
-      }
-    })()
-    return () => { cancelled = true }
-  }, [browserWsId, highlightChunkId, onHighlightConsumed])
+  useBrowserHighlight({
+    highlightChunkId,
+    onHighlightConsumed,
+    browserWsId,
+    allChunksRef,
+    setChunks,
+    setSelectedChunk,
+    dedupeChunksById,
+  })
 
   useEffect(() => {
     if (!didInitSourceFilter.current) {

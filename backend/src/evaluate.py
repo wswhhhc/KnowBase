@@ -7,7 +7,7 @@
 用法：
     uv run python -m src.evaluate
 
-每次评估输出报告到 data/eval_reports/ 目录，同时打印摘要。
+每次评估输出报告到 runtime/local/eval_reports/ 目录，同时打印摘要。
 """
 
 import sys
@@ -27,7 +27,7 @@ from src.metrics import log_query
 from src.utils import json_from_text
 
 _EVAL_DATASET = ROOT_DIR / "docs" / "rag_eval_dataset.jsonl"
-_REPORT_DIR = ROOT_DIR / "data" / "eval_reports"
+_REPORT_DIR = ROOT_DIR / "runtime" / "local" / "eval_reports"
 
 
 class FaithfulnessScore(BaseModel):
@@ -55,7 +55,7 @@ def _get_eval_llm():
 
 
 _EVAL_DATASET = ROOT_DIR / "docs" / "rag_eval_dataset.jsonl"
-_REPORT_DIR = ROOT_DIR / "data" / "eval_reports"
+_REPORT_DIR = ROOT_DIR / "runtime" / "local" / "eval_reports"
 
 
 def load_eval_dataset() -> list[dict]:

@@ -93,13 +93,13 @@ CI 至少要覆盖以下门禁：
 ## 6. 数据与版本控制策略
 
 - 运行期数据库、向量库、日志和缓存不得提交到版本库
-- `data/samples/` 这类演示样例可纳入版本控制，但必须与运行期数据目录清晰区分
+- `examples/` 下的演示样例与预置文档可纳入版本控制，但必须与运行期数据目录清晰区分
 - `.gitignore` 需要准确表达“哪些是运行产物，哪些是版本化样例”
 
 当前运行期持久化数据主要位于：
 
-- `backend/data/`
-- 根目录 `data/` 下的运行时数据库、日志和缓存文件
+- `runtime/local/`
+- `runtime/quickstart/`
 
 ## 7. 文档要求
 
@@ -107,8 +107,8 @@ CI 至少要覆盖以下门禁：
 
 - `README.md` 只描述当前真实能力，不保留假截图
 - `CONTRIBUTING.md` 包含本地验证、OpenAPI 导出和前端类型生成流程
-- `docs/requirements.md` 记录当前产品与工程边界
-- `docs/tests/12-ci-test.md` 与实际 GitHub Actions 一致
+- `docs/requirements/product-boundaries.md` 记录当前产品与工程边界
+- `docs/testing/12-ci-test.md` 与实际 GitHub Actions 一致
 
 ## 8. 当前不纳入范围
 

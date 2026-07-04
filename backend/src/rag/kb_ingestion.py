@@ -17,8 +17,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from src.config.settings import (
     CHUNK_OVERLAP,
     CHUNK_SIZE,
-    DATA_DIR,
+    DEMO_DOCUMENTS_DIR,
     ENABLE_CONTEXTUAL_RETRIEVAL,
+    PRESET_DOCUMENTS_DIR,
     get_runtime_setting,
 )
 from src.rag.kb_state import KnowledgeBaseState, workspace_matches
@@ -376,7 +377,7 @@ class IngestionService:
 
     def load_preset_documents(self, workspace_id: str = "") -> int:
         total = 0
-        for file_path in sorted(Path(DATA_DIR).glob("sample_*.txt")):
+        for file_path in sorted(PRESET_DOCUMENTS_DIR.glob("sample_*.txt")):
             total += self.ingest_file(
                 str(file_path),
                 source_name=file_path.name,
@@ -385,7 +386,7 @@ class IngestionService:
         return total
 
     def import_demo_documents(self, workspace_id: str = "") -> tuple[int, list[str]]:
-        demo_dir = Path(DATA_DIR) / "samples" / "demo"
+        demo_dir = DEMO_DOCUMENTS_DIR
         if not demo_dir.exists():
             raise ValueError(f"示例资料目录不存在：{demo_dir}")
 

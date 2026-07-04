@@ -24,10 +24,12 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
+        working-directory: backend
         run: uv sync
 
       - name: Run backend pytest suite
-        run: uv run pytest backend/tests --tb=short -q
+        working-directory: backend
+        run: uv run pytest tests --tb=short -q
 
   frontend:
     name: Frontend Tests And Build

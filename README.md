@@ -52,7 +52,7 @@ cp .env.example .env
 uv run python scripts/quickstart.py --reset
 ```
 
-这个脚本会把 `data/samples/demo/` 中的示例文档导入到隔离的 quickstart 运行目录，再跑几条预置问题。只想先确认资源结构时可以运行：
+这个脚本会把 `examples/demo-documents/` 中的示例文档导入到隔离的 `runtime/quickstart/` 运行目录，再跑几条预置问题。只想先确认资源结构时可以运行：
 
 ```bash
 cd backend
@@ -99,7 +99,13 @@ docker compose up --build
 提交前至少建议运行以下命令：
 
 ```bash
-uv run pytest backend/tests --tb=short -q
+bash scripts/run-checks.sh
+```
+
+或按分步方式执行：
+
+```bash
+cd backend && uv run pytest tests --tb=short -q
 cd frontend && npm test
 cd frontend && npm run build
 ```
@@ -107,7 +113,7 @@ cd frontend && npm run build
 如果后端接口或 schema 有变更，再补这两步：
 
 ```bash
-uv run python backend/scripts/export_openapi.py
+cd backend && uv run python scripts/export_openapi.py
 cd frontend && npm run gen-api-types
 ```
 
@@ -128,6 +134,15 @@ GitHub Actions 当前会执行：
 
 手写 SSE 类型位于 `frontend/src/lib/api-types.ts`，并由后端测试校验是否与 Pydantic 模型同步。
 
+## 结构文档
+
+- 架构边界与依赖方向：[`docs/architecture/dependency-rules.md`](docs/architecture/dependency-rules.md)
+- 后端结构说明：[`docs/architecture/backend-structure.md`](docs/architecture/backend-structure.md)
+- 前端结构说明：[`docs/architecture/frontend-structure.md`](docs/architecture/frontend-structure.md)
+- 产品边界与当前范围：[`docs/requirements/product-boundaries.md`](docs/requirements/product-boundaries.md)
+- 运行数据策略：[`docs/operations/runtime-data-policy.md`](docs/operations/runtime-data-policy.md)
+- CI 与测试矩阵：[`docs/testing/12-ci-test.md`](docs/testing/12-ci-test.md)
+
 ## 架构概览
 
 ```mermaid
@@ -146,11 +161,14 @@ flowchart LR
 KnowBase/
 ├── backend/               # FastAPI、LangGraph、OpenAPI、测试
 ├── frontend/              # React、Vite、Vitest、生成类型
-├── docs/                  # 需求基线、测试与展示资源说明
-├── data/samples/demo/     # 版本控制下的 quickstart 示例文档
+├── docs/                  # architecture / requirements / testing / operations / screenshots
+├── examples/              # 版本控制下的演示与预置样例
+├── runtime/               # 本地运行数据（忽略提交）
 ├── docker/                # Docker 构建文件
 └── scripts/               # 本地开发辅助脚本
 ```
+
+后端唯一 Python 应用根是 `backend/`。仓库根目录不再承担 `uv sync` / `uv run` 的 Python 项目职责。
 
 ## 当前范围与已知限制
 

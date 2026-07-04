@@ -1,7 +1,7 @@
 import { Button, ScrollArea, SkeletonGrid } from '@/components/ui'
 import { BookOpen, AlertTriangle, Sparkles, X, Upload } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { ViewType } from '@/App'
+import type { ViewType } from '@/app/navigation'
 import { useBrowserPage } from '@/hooks/useBrowserPage'
 import BrowserHeader from './browser/BrowserHeader'
 import DocumentActions from './browser/DocumentActions'

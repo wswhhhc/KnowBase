@@ -19,7 +19,8 @@ class QuickstartScriptTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(str(Path("data") / "samples" / "demo"), result.stdout)
+        self.assertIn(str(Path("examples") / "demo-documents"), result.stdout)
+        self.assertIn(str(Path("runtime") / "quickstart"), result.stdout)
         self.assertIn("contract_notice.md", result.stdout)
         self.assertIn("meeting_notes.md", result.stdout)
         self.assertIn("tech_manual.md", result.stdout)

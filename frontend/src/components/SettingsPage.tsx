@@ -5,7 +5,7 @@ import { PanelRightOpen, Save, AlertTriangle, Check, Loader2 } from 'lucide-reac
 import * as api from '@/lib/api'
 import { MASKED_SECRET_VALUE } from '@/lib/api'
 import type { RuntimeSettings } from '@/lib/api'
-import type { ViewType } from '@/App'
+import type { ViewType } from '@/app/navigation'
 
 interface SettingsPageProps {
   onOpenSidebar: () => void

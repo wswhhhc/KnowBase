@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from langchain_core.documents import Document
+from pydantic import BaseModel
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,23 @@ class FusionScore:
     score: float
     vector_score: float | None = None
     bm25_score: float | None = None
+
+
+class KBChunk(BaseModel):
+    source: str
+    chunk_index: int
+    chunk_id: str
+    page: int | None = None
+    content: str
+    original_content: str | None = None
+    section: str | None = None
+
+
+class HotspotEntry(BaseModel):
+    chunk_id: str
+    source: str
+    hits: int
+    content_preview: str
 
 
 def content_hash(content: str) -> str:

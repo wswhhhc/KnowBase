@@ -4,7 +4,7 @@ import { BarChart3, PanelRightOpen, ArrowLeft, TrendingUp, Clock, CheckCircle2, 
 import * as api from '@/lib/api'
 import type { QueryLogEntry, QueryLogsResponse } from '@/lib/api'
 import { motion } from 'framer-motion'
-import type { ViewType } from '@/App'
+import type { ViewType } from '@/app/navigation'
 import { Progress, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Separator } from '@/components/ui'
 
 interface DashboardPageProps {

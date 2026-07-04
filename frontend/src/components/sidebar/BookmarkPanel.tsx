@@ -3,7 +3,7 @@ import { Input, ScrollArea } from '@/components/ui'
 import { BookmarkCheck, Search, Tag, X, Trash2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import type { Bookmark as BookmarkType } from '@/lib/api'
-import type { ViewType } from '@/App'
+import type { ViewType } from '@/app/navigation'
 
 interface BookmarkPanelProps {
   workspaceId?: string

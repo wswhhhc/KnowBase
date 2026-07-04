@@ -31,7 +31,11 @@ from src.config.settings import (
     require_siliconflow_api_key,
 )
 from src.graph import utils as gu
+from src.graph.finalization_nodes import compute_evidence as _compute_evidence, finalize
+from src.graph.generation_nodes import generate_answer
+from src.graph.history_nodes import answer_from_history, summarize_history
 from src.graph.state import GraphSource, GraphState, GraphStateUpdate, QualityDecision, RerankDecision
+from src.graph.web_search_nodes import tavily_configured as _tavily_configured, web_search_context as _web_search_context
 from src.rag.models import RetrievalResult, metadata_workspace_id, normalize_source, normalize_workspace_id
 from src.utils import extract_context_terms, json_from_text
 
@@ -112,51 +116,6 @@ def rewrite_query(state: GraphState) -> GraphStateUpdate:
     return {
         "rewritten_question": rewritten,
         "used_rewrite": used_rewrite,
-        **gu.extract_token_usage(result),
-    }
-
-
-# ── History-based answers ────────────────────────────────────────────
-
-
-def answer_from_history(state: GraphState) -> GraphStateUpdate:
-    history = gu._messages_to_turns(state.get("messages", []))
-    if not history:
-        answer = "当前会话里还没有可参考的历史消息，所以我无法回答这个问题。"
-        return {"answer": answer, "sources": [], "messages": [AIMessage(content=answer)]}
-
-    llm = gu._get_llm()
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是对话记忆助手。只能依据给定会话历史回答；如果历史不足，明确说明。用中文回答。"),
-        ("human", "会话历史：\n{history}\n\n当前问题：{question}"),
-    ])
-    result = llm.invoke(prompt.format(history=gu._format_chat_history(history), question=state["question"]))
-    answer = str(result.content).strip()
-    return {
-        "answer": answer,
-        "sources": [],
-        "messages": [AIMessage(content=answer)],
-        **gu.extract_token_usage(result),
-    }
-
-
-def summarize_history(state: GraphState) -> GraphStateUpdate:
-    history = gu._messages_to_turns(state.get("messages", []))
-    if not history:
-        answer = "当前会话还没有足够内容可供总结。"
-        return {"answer": answer, "sources": [], "messages": [AIMessage(content=answer)]}
-
-    llm = gu._get_llm()
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "你是对话总结助手。基于会话历史总结关键信息、结论和未解决问题，不要编造。"),
-        ("human", "会话历史：\n{history}\n\n用户要求：{question}"),
-    ])
-    result = llm.invoke(prompt.format(history=gu._format_chat_history(history), question=state["question"]))
-    answer = str(result.content).strip()
-    return {
-        "answer": answer,
-        "sources": [],
-        "messages": [AIMessage(content=answer)],
         **gu.extract_token_usage(result),
     }
 
@@ -355,32 +314,6 @@ def handle_missing_context(state: GraphState) -> GraphStateUpdate:
     return update
 
 
-# ── Web search ───────────────────────────────────────────────────────
-
-
-def _web_search_context(state: GraphState) -> GraphStateUpdate:
-    from src.rag.web_search import format_search_results, web_search as _web_search
-
-    query = state.get("rewritten_question") or state["question"]
-    results, error = _web_search(query, max_results=5)
-    web_context = format_search_results(results)
-    return {
-        "web_search_results": results,
-        "web_context": web_context,
-        "web_search_error": error,
-        "used_web_search": True,
-        "quality_reason": (
-            f"联网搜索完成：找到 {len(results)} 条结果。"
-            if results
-            else (error or "联网搜索未返回结果。")
-        ),
-    }
-
-
-def _tavily_configured() -> bool:
-    return _is_configured_api_key(get_runtime_setting("tavily_api_key", TAVILY_API_KEY))
-
-
 # ── Rerank ───────────────────────────────────────────────────────────
 
 
@@ -466,79 +399,6 @@ def rerank_docs(state: GraphState) -> GraphStateUpdate:
         "sources": sources,
         "used_rerank": True,
         **token_usage,
-    }
-
-
-# ── Answer generation ────────────────────────────────────────────────
-
-
-def generate_answer(state: GraphState) -> GraphStateUpdate:
-    context = state.get("context", "")
-    web_context = state.get("web_context", "")
-    web_search_error = state.get("web_search_error", "")
-    question = state.get("rewritten_question") or state["question"]
-    used_web_search = state.get("used_web_search", False)
-    history = gu._messages_to_turns(state.get("messages", []))
-    strategy = state.get("search_strategy", "balanced")
-
-    if web_context:
-        context = f"{context}\n\n{web_context}" if context else web_context
-    elif used_web_search and web_search_error and not context:
-        answer = (
-            "工作区里没有找到足够相关的内容，联网搜索也没有可用结果。"
-            f"\n\n联网搜索状态：{web_search_error}"
-        )
-        return {
-            "answer": answer,
-            "sources": [],
-            "quality_ok": False,
-            "quality_reason": web_search_error,
-        }
-
-    system_msg = "你是工作区问答助手。"
-    if strategy == "deep" and not (used_web_search and web_context):
-        system_msg += "参考文档涵盖了全文多个部分，请综合回答。"
-    if used_web_search and web_context:
-        system_msg += "可以基于工作区和网络搜索结果回答。在回答中引用来源时，使用 [1]、[2] 等编号标注，编号对应参考文档列表中的顺序。多个引用用逗号分隔如 [1,2]。用中文回答。保持与对话历史中已给出信息的一致性，如果同一实体已有过描述，不要自相矛盾。"
-    else:
-        system_msg += "只能基于参考文档回答；证据不足就说不知道。在回答中引用参考文档时，使用 [1]、[2] 等编号标注来源，编号对应上方参考文档列表中的编号。例如：根据文档说明，该值为 42[1]。多个引用用逗号分隔如 [1,2]。每个关键事实都应标注来源。用中文回答。保持与对话历史中已给出信息的一致性，如果同一实体已有过描述，不要自相矛盾。"
-
-    llm = gu._get_llm()
-    if history:
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_msg),
-            ("human", "对话历史：\n{history}\n\n参考文档：\n{context}\n\n用户问题：{question}"),
-        ])
-        result = llm.invoke(prompt.format(history=gu._format_chat_history(history, limit=3), context=context, question=question))
-    else:
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_msg),
-            ("human", "参考文档：\n{context}\n\n用户问题：{question}"),
-        ])
-        result = llm.invoke(prompt.format(context=context, question=question))
-    answer = str(result.content).strip()
-
-    sources = state.get("sources", [])
-    if web_context:
-        sources = sources + [
-            {
-                "index": len(sources) + i,
-                "chunk_id": item.get("url", ""),
-                "source": item.get("title") or item.get("url") or "网络来源",
-                "chunk_index": None,
-                "page": None,
-                "content": item.get("content", "")[:300],
-                "score": item.get("score"),
-                "vector_score": None,
-                "bm25_score": None,
-                "url": item.get("url", ""),
-            }
-            for i, item in enumerate(state.get("web_search_results", []), 1)
-        ]
-    return {
-        "answer": answer,
-        "sources": sources,
-        **gu.extract_token_usage(result),
     }
 
 
@@ -686,51 +546,3 @@ def should_retry(state: GraphState) -> Literal["web_search", "rewrite_query", "r
     return "finalize"
 
 
-# ── Finalize ─────────────────────────────────────────────────────────
-
-
-def _compute_evidence(state: GraphState) -> tuple[str, str, str]:
-    sources = state.get("sources", [])
-    used_web = state.get("used_web_search", False)
-    quality_ok = state.get("quality_ok", True)
-    quality_reason = state.get("quality_reason", "")
-    qtype = state.get("question_type", "knowledge_base")
-
-    local_count = sum(1 for s in sources if not s.get("url"))
-    web_count = sum(1 for s in sources if s.get("url"))
-
-    if qtype == "clarification":
-        return "none", "vague_question", "问题描述比较模糊，建议补充具体信息"
-    if qtype in ("chat_memory", "conversation_summary"):
-        return "strong", "success", "基于对话历史回答"
-
-    if not local_count and not used_web:
-        return "none", "no_docs", "工作区中没有找到相关内容"
-    if not local_count and used_web and not web_count:
-        return "none", "web_empty", "工作区和联网搜索都没有找到相关内容"
-
-    if quality_ok and local_count >= 2:
-        parts = [f"基于 {local_count} 个本地文档片段"]
-        if web_count:
-            parts.append(f"联网补充 {web_count} 条")
-        return "strong", "success", "，".join(parts)
-    if quality_ok and local_count == 1:
-        parts = [f"基于 {local_count} 个本地文档片段"]
-        if web_count:
-            parts.append(f"联网补充 {web_count} 条")
-        return "moderate", "success", "，".join(parts)
-
-    if quality_reason and "未检索" in quality_reason:
-        return "none", "no_docs", "工作区中没有找到相关内容"
-    if used_web and not web_count:
-        return "none", "web_empty", "工作区和联网搜索都没有找到足够相关的内容"
-    return "weak", "weak_evidence", f"检索到 {local_count} 个相关片段，但证据不够充分"
-
-
-def finalize(state: GraphState) -> GraphStateUpdate:
-    evidence_level, outcome_category, evidence_summary = _compute_evidence(state)
-    return {
-        "evidence_level": evidence_level,
-        "outcome_category": outcome_category,
-        "evidence_summary": evidence_summary,
-    }

@@ -11,6 +11,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+BACKEND_DIR = ROOT_DIR / "backend"
+EXAMPLES_DIR = ROOT_DIR / "examples"
+PRESET_DOCUMENTS_DIR = EXAMPLES_DIR / "preset-documents"
+DEMO_DOCUMENTS_DIR = EXAMPLES_DIR / "demo-documents"
+RUNTIME_DIR = ROOT_DIR / "runtime"
+LOCAL_RUNTIME_DIR = RUNTIME_DIR / "local"
+QUICKSTART_RUNTIME_DIR = RUNTIME_DIR / "quickstart"
 
 
 class LLMSettings(BaseModel):
@@ -79,7 +86,7 @@ class Settings(BaseSettings):
     """Runtime settings loaded from environment variables and .env."""
 
     model_config = SettingsConfigDict(
-        env_file=ROOT_DIR / ".env",
+        env_file=BACKEND_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
         populate_by_name=True,
@@ -99,10 +106,10 @@ class Settings(BaseSettings):
     llm_max_tokens: int = Field(default=4096, validation_alias="LLM_MAX_TOKENS")
 
     chroma_persist_dir: Path = Field(
-        default=ROOT_DIR / "data" / "chroma_db",
+        default=LOCAL_RUNTIME_DIR / "chroma_db",
         validation_alias="CHROMA_PERSIST_DIR",
     )
-    data_dir: Path = Field(default=ROOT_DIR / "data", validation_alias="DATA_DIR")
+    data_dir: Path = Field(default=LOCAL_RUNTIME_DIR, validation_alias="DATA_DIR")
 
     enable_contextual_retrieval: bool = Field(default=True, validation_alias="ENABLE_CONTEXTUAL_RETRIEVAL")
     chunk_size: int = Field(default=1500, validation_alias="CHUNK_SIZE")
@@ -140,7 +147,7 @@ class Settings(BaseSettings):
     )
 
     checkpoint_db_path: str = Field(
-        default=str(ROOT_DIR / "data" / "checkpoints.db"),
+        default=str(LOCAL_RUNTIME_DIR / "checkpoints.db"),
         validation_alias="CHECKPOINT_DB_PATH",
     )
 
@@ -232,7 +239,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-_RUNTIME_SETTINGS_PATH = ROOT_DIR / "data" / "runtime_settings.json"
+_RUNTIME_SETTINGS_PATH = LOCAL_RUNTIME_DIR / "runtime_settings.json"
 _runtime_overrides: dict[str, str | float | bool | int] = {}
 _MISSING = object()
 MASKED_SECRET_VALUE = "__KEEP_EXISTING_SECRET__"
