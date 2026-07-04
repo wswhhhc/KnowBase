@@ -10,8 +10,7 @@ from langchain_core.documents import Document
 
 from src.api.deps import get_knowledge_base
 from src.api.main import app
-from src import conversations
-from src.persistence import database
+from src.persistence import database, message_repository, pin_state_repository
 
 
 class FakeKnowledgeBase:
@@ -154,6 +153,50 @@ class FakeKnowledgeBase:
         self.doc_by_id.clear()
 
 
+def init_temp_database(db_path: str | Path) -> None:
+    """Point persistence helpers at an isolated SQLite file for a test run."""
+    database.set_db_path_override(db_path)
+    database.init_db()
+
+
+def teardown_temp_database() -> None:
+    """Reset persistence helpers back to the configured default database path."""
+    database.clear_db_path_override()
+
+
+def add_message(
+    conv_id: str,
+    role: str,
+    content: str,
+    *,
+    sources: list | None = None,
+    quality_reason: str = "",
+    debug_info: str = "{}",
+) -> int:
+    return message_repository.add_message(
+        database.get_connection,
+        conv_id,
+        role,
+        content,
+        sources=sources,
+        quality_reason=quality_reason,
+        debug_info=debug_info,
+    )
+
+
+def replace_pin_state(
+    thread_id: str,
+    pinned_chunk_ids: list[str] | None = None,
+    excluded_chunk_ids: list[str] | None = None,
+) -> None:
+    pin_state_repository.replace_pin_state(
+        database.get_connection,
+        thread_id,
+        pinned_chunk_ids=pinned_chunk_ids,
+        excluded_chunk_ids=excluded_chunk_ids,
+    )
+
+
 def setup_test_env():
     """Patch Chroma / Embeddings / API key and return a FakeKnowledgeBase + configured TestClient.
 
@@ -176,9 +219,8 @@ def setup_test_env():
     app.dependency_overrides[get_knowledge_base] = lambda: fake_kb
 
     tmp_dir = tempfile.TemporaryDirectory()
-    orig_db = conversations._DB_PATH
-    conversations._DB_PATH = Path(tmp_dir.name) / "conv.db"
-    conversations.init_db()
+    orig_db = database.get_db_path()
+    init_temp_database(Path(tmp_dir.name) / "conv.db")
 
     from fastapi.testclient import TestClient
     client = TestClient(app)
@@ -188,8 +230,7 @@ def setup_test_env():
 
 def teardown_test_env(tmp_dir, orig_db, patchers):
     """Undo setup_test_env changes."""
-    conversations._DB_PATH = orig_db
-    database.clear_db_path_override()
+    teardown_temp_database()
     tmp_dir.cleanup()
     app.dependency_overrides.clear()
     for p in patchers:
