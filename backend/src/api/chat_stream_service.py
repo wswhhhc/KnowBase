@@ -13,11 +13,17 @@ from src.api.chat_debug import DebugState, accumulate_node_debug
 from src.api.models import ChatRequest, ChatSource, DebugInfo, NodeDebug
 from src.api.chat_persistence import build_debug_payload, persist_conversation_turn
 from src.chat_utils import NODE_LABELS, record_query_metrics
-from src.conversations import get_conversation_by_thread
 from src.graph import run_query
+from src.persistence import conversation_repository
+from src.persistence.database import get_connection
 from src.rag.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
+
+
+def get_conversation_by_thread(thread_id: str) -> dict | None:
+    return conversation_repository.get_conversation_by_thread(get_connection, thread_id)
+
 
 class ChatStreamService:
     """Orchestrates the LangGraph query stream and translates it into SSE events.

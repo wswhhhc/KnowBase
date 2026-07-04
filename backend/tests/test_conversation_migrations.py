@@ -1,5 +1,6 @@
 import runpy
 import sys
+import tempfile
 import types
 import unittest
 from contextlib import nullcontext
@@ -8,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from src import conversations
 from src.config import settings as settings_module
+from src.persistence import database as database_module
 
 
 class _FakeAlembicConfig:
@@ -43,6 +45,39 @@ class ConversationMigrationTests(unittest.TestCase):
                 f"sqlite:///{conversations._DB_PATH}",
             )
             mock_upgrade.assert_called_once_with(mock_config, "head")
+        finally:
+            conversations._DB_PATH = original_db_path
+
+    def test_database_run_migrations_uses_runtime_local_database_by_default(self):
+        original_db_path = conversations._DB_PATH
+        conversations._DB_PATH = settings_module.LOCAL_RUNTIME_DIR / "conversations.db"
+        try:
+            with patch("alembic.command.upgrade") as mock_upgrade:
+                with patch("alembic.config.Config") as mock_config_cls:
+                    mock_config = MagicMock()
+                    mock_config_cls.return_value = mock_config
+
+                    database_module.run_migrations()
+
+            mock_config.set_main_option.assert_called_once_with(
+                "sqlalchemy.url",
+                f"sqlite:///{conversations._DB_PATH}",
+            )
+            mock_upgrade.assert_called_once_with(mock_config, "head")
+        finally:
+            conversations._DB_PATH = original_db_path
+
+    def test_database_run_migrations_skips_non_runtime_override_paths(self):
+        original_db_path = conversations._DB_PATH
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                conversations._DB_PATH = Path(temp_dir) / "conversations.db"
+                with patch("alembic.command.upgrade") as mock_upgrade:
+                    with patch("alembic.config.Config") as mock_config_cls:
+                        database_module.run_migrations()
+
+            self.assertFalse(mock_config_cls.called)
+            self.assertFalse(mock_upgrade.called)
         finally:
             conversations._DB_PATH = original_db_path
 

@@ -5,22 +5,23 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import src.config.settings as settings_module
+import src.config.runtime_overrides as runtime_overrides_module
 from src.config.settings import Settings, _is_configured_api_key
 from src.api import main as api_main
 
 
 class SettingsTests(unittest.TestCase):
     def setUp(self):
-        self.original_runtime_overrides = dict(settings_module._runtime_overrides)
+        self.original_runtime_overrides = dict(runtime_overrides_module._runtime_overrides)
         self.temp_dir = tempfile.TemporaryDirectory()
         self.runtime_path = Path(self.temp_dir.name) / "runtime_settings.json"
-        self.path_patcher = patch.object(settings_module, "_RUNTIME_SETTINGS_PATH", self.runtime_path)
+        self.path_patcher = patch.object(runtime_overrides_module, "_RUNTIME_SETTINGS_PATH", self.runtime_path)
         self.path_patcher.start()
-        settings_module._runtime_overrides = {}
+        runtime_overrides_module._runtime_overrides = {}
 
     def tearDown(self):
         self.path_patcher.stop()
-        settings_module._runtime_overrides = self.original_runtime_overrides
+        runtime_overrides_module._runtime_overrides = self.original_runtime_overrides
         self.temp_dir.cleanup()
 
     def test_is_configured_api_key_rejects_placeholders_and_short_values(self):

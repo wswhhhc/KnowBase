@@ -7,8 +7,6 @@ from pydantic import BaseModel
 
 from src.api.deps import get_knowledge_base, verify_api_key
 from src.api.models import KBChunk, KBStats, HotspotEntry, KBConfig
-from src.graph import nodes as gn
-from src.rag.models import normalize_source
 from src.rag.models import RetrievalResult
 from src.rag.knowledge_base import KnowledgeBase
 from src.config.settings import CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_RETRIEVAL, get_runtime_setting

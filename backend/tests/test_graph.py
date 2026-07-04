@@ -158,19 +158,22 @@ class GraphRoutingTests(unittest.TestCase):
         # 3: second generate_answer
         # 4: second check_quality (pass)
         fake_llm = FakeLLM([
+            '{"question_type":"knowledge_base","reason":"factual"}',
             "LangGraph 可以持久化会话状态。【来源：langgraph.txt】",
             '{"quality_passed":false,"quality_reason":"need more","retry_strategy":"expand_retrieval"}',
             "LangGraph 可以通过 checkpoint 持久化会话状态。【来源：langgraph.txt】",
             '{"quality_passed":true,"quality_reason":"PASS","retry_strategy":"none"}',
         ])
 
-        with patch("src.graph.utils._get_llm", return_value=fake_llm):
-            result = run_query(
-                question="LangGraph 如何记忆对话？",
-                thread_id=str(uuid4()),
-                knowledge_base=kb,
-                search_strategy="high_quality",
-            )
+        with patch("src.graph.graph.route_question", return_value={"question_type": "knowledge_base", "search_filter": {}}):
+            with patch("src.graph.quality_nodes.get_runtime_setting", side_effect=lambda key, default=None: True if key == "enable_quality_check" else default):
+                with patch("src.graph.utils._get_llm", return_value=fake_llm):
+                    result = run_query(
+                        question="LangGraph 如何记忆对话？",
+                        thread_id=str(uuid4()),
+                        knowledge_base=kb,
+                        search_strategy="high_quality",
+                    )
 
         self.assertEqual(kb.calls, 2)
 
@@ -188,16 +191,17 @@ class GraphRoutingTests(unittest.TestCase):
             }
         ]
 
-        with patch("src.graph.routing.route_question", return_value={"question_type": "knowledge_base"}):
+        with patch("src.graph.graph.route_question", return_value={"question_type": "knowledge_base"}):
             with patch("src.graph.utils._get_llm", return_value=fake_llm):
-                with patch("src.graph.nodes._tavily_configured", return_value=True):
-                    with patch("src.rag.web_search.web_search", return_value=(web_results, "")):
-                        result = run_query(
-                            question="李白简介",
-                            thread_id=str(uuid4()),
-                            knowledge_base=EmptyKnowledgeBase(),
-                            web_search_enabled=True,
-                        )
+                with patch("src.graph.web_search_nodes.tavily_configured", return_value=True):
+                    with patch("src.graph.quality_nodes.get_runtime_setting", side_effect=lambda key, default=None: True if key == "enable_quality_check" else default):
+                        with patch("src.rag.web_search.web_search", return_value=(web_results, "")):
+                            result = run_query(
+                                question="李白简介",
+                                thread_id=str(uuid4()),
+                                knowledge_base=EmptyKnowledgeBase(),
+                                web_search_enabled=True,
+                            )
 
         self.assertTrue(result["used_web_search"])
         self.assertEqual(result["web_search_results"], web_results)
