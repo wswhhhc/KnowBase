@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import React from 'react'
 import { Button, ScrollArea, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Input, ConfirmDialog } from '@/components/ui'
 import {
   MessageSquare, FileText, Bookmark,
   PanelRightClose, BookOpen, BarChart3, Settings, Plus, Trash2, Sun, Moon,
 } from 'lucide-react'
-import * as api from '@/shared/api'
 import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
 import { useTheme } from '@/hooks/useTheme'
 import ConversationList from '@/components/sidebar/ConversationList'
@@ -14,7 +13,8 @@ import BookmarkPanel from '@/components/sidebar/BookmarkPanel'
 import KBSummary from '@/components/sidebar/KBSummary'
 import DashboardSummary from '@/components/sidebar/DashboardSummary'
 import type { ChatMessage } from '@/hooks/useChat'
-import type { Conversation, DebugInfo, PinStateResponse } from '@/shared/api'
+import type { PinStateResponse } from '@/shared/api'
+import { useSidebarConversations } from '@/features/sidebar/hooks/useSidebarConversations'
 import { OPEN_DOCUMENTS_PANEL_EVENT } from '@/lib/ui-events'
 import { APP_NAV_ITEMS, type ViewType } from '@/app/navigation'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
@@ -50,23 +50,8 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
   const [createOpen, setCreateOpen] = useState(false)
   const [createName, setCreateName] = useState('')
   const [deleteWsOpen, setDeleteWsOpen] = useState(false)
-  const prevKey = useRef(convRefreshKey)
-  const autoLoadedConversationKeyRef = useRef<string | null>(null)
   const workspaceSelectValue = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
   const workspaceScopeKey = wss.activeWorkspaceId || DEFAULT_WORKSPACE_SELECT_VALUE
-
-  // Refresh conversation list when workspace changes or new conv created
-  useEffect(() => {
-    if (convRefreshKey !== prevKey.current) {
-      prevKey.current = convRefreshKey
-      convs.refresh().then((list) => {
-        const matched = list.find((conv) => conv.thread_id === activeThreadId)
-        if (matched) {
-          convs.setActiveId(matched.id)
-        }
-      })
-    }
-  }, [activeThreadId, convRefreshKey])
 
   useEffect(() => {
     const activeWorkspace = wss.workspaces.find((ws) => ws.id === wss.activeWorkspaceId)
@@ -95,89 +80,18 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     window.addEventListener(OPEN_DOCUMENTS_PANEL_EVENT, openDocumentsPanel)
     return () => window.removeEventListener(OPEN_DOCUMENTS_PANEL_EVENT, openDocumentsPanel)
   }, [onNavigate])
-
-  const loadConversation = async (conversation: Conversation, closeOnMobile = true) => {
-    onNavigate('chat')
-    onLoadingMessages?.(true)
-    try {
-      const [msgs, pinState] = await Promise.all([
-        api.getMessages(conversation.id),
-        api.getConversationPinState(conversation.id),
-      ])
-      convs.setActiveId(conversation.id)
-      chat.loadMessages(
-        msgs.map((m) => {
-          const debugInfo = m.debug_info as DebugInfo | undefined
-          const debugRecord = m.debug_info as Record<string, unknown> | undefined
-          return {
-            id: `${m.role}-${m.id}`,
-            role: m.role,
-            content: m.content,
-            searchStrategy: typeof debugRecord?.search_strategy === 'string' ? debugRecord.search_strategy : undefined,
-            webSearchEnabled: typeof debugRecord?.used_web_search === 'boolean' ? debugRecord.used_web_search : undefined,
-            sources: m.sources,
-            quality_reason: m.quality_reason,
-            debugData: debugInfo,
-            evidence_level: typeof debugRecord?.evidence_level === 'string' ? debugRecord.evidence_level : undefined,
-            evidence_summary: typeof debugRecord?.evidence_summary === 'string' ? debugRecord.evidence_summary : undefined,
-            outcome_category: typeof debugRecord?.outcome_category === 'string' ? debugRecord.outcome_category : undefined,
-            usedRerank: typeof debugRecord?.used_rerank === 'boolean' ? debugRecord.used_rerank : undefined,
-            convId: conversation.id,
-            assistantMsgId: m.role === 'assistant' ? m.id : undefined,
-          }
-        }),
-        conversation.thread_id,
-        pinState,
-      )
-      if (closeOnMobile && isMobile) onClose()
-    } catch (e) {
-      console.error('切换对话失败:', e)
-    }
-    onLoadingMessages?.(false)
-  }
-
-  useEffect(() => {
-    if (convs.loading || chat.workspaceId !== wss.activeWorkspaceId || !convs.activeId) return
-    const activeConversation = convs.conversations.find((conversation) => conversation.id === convs.activeId)
-    if (!activeConversation) return
-
-    const conversationScopeKey = `${workspaceScopeKey}:${activeConversation.id}`
-    if (chat.threadId === activeConversation.thread_id) {
-      autoLoadedConversationKeyRef.current = conversationScopeKey
-      return
-    }
-    if (autoLoadedConversationKeyRef.current === conversationScopeKey) return
-
-    autoLoadedConversationKeyRef.current = conversationScopeKey
-    void loadConversation(activeConversation, false)
-  }, [
-    chat.threadId,
-    chat.workspaceId,
-    convs.activeId,
-    convs.conversations,
-    convs.loading,
+  const { handleDelete, handleNewConversation, switchConversation } = useSidebarConversations({
+    chat,
+    convs,
+    activeThreadId,
+    convRefreshKey,
+    activeWorkspaceId: wss.activeWorkspaceId,
     workspaceScopeKey,
-    wss.activeWorkspaceId,
-  ])
-
-  const switchConversation = async (conversation: Conversation) => {
-    await loadConversation(conversation)
-  }
-
-  const handleNewConversation = () => {
-    onNavigate('chat')
-    chat.clearMessages()
-    convs.setActiveId(null)
-    if (isMobile) onClose()
-  }
-
-  const handleDelete = async (id: string) => {
-    const isActive = convs.activeId === id
-    await convs.remove(id)
-    if (isActive) {
-      chat.clearMessages()
-    }
-  }
+    onNavigate,
+    onClose,
+    onLoadingMessages,
+    isMobile,
+  })
 
   return (
     <div className="flex h-full flex-col bg-surface">
