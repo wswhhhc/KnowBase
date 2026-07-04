@@ -252,21 +252,3 @@ if settings.langsmith_tracing:
     os.environ.setdefault("LANGSMITH_PROJECT", settings.observability.project)
     if settings.observability.api_key:
         os.environ.setdefault("LANGSMITH_API_KEY", settings.observability.api_key)
-
-
-def _is_configured_api_key(api_key: str) -> bool:
-    """Return whether the key looks like a real configured secret."""
-    return bool(api_key) and api_key != "你的 API Key" and len(api_key.strip()) >= 10
-
-
-def require_siliconflow_api_key() -> str:
-    """Return a configured API key or raise a user-actionable error."""
-    from src.config.runtime_overrides import get_runtime_setting
-
-    api_key = get_runtime_setting("siliconflow_api_key", settings.llm.api_key)
-    if not _is_configured_api_key(api_key):
-        raise ValueError(
-            "缺少硅基流动 API Key。请在 .env 中配置 SILICONFLOW_API_KEY=你的密钥，"
-            "或设置系统环境变量 SILICONFLOW_API_KEY。"
-        )
-    return api_key

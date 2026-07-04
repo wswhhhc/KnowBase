@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import src.config.settings as settings_module
 import src.config.runtime_overrides as runtime_overrides_module
-from src.config.settings import Settings, _is_configured_api_key
+from src.config.settings import Settings
 from src.api import main as api_main
 
 
@@ -25,10 +25,10 @@ class SettingsTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_is_configured_api_key_rejects_placeholders_and_short_values(self):
-        self.assertFalse(_is_configured_api_key(""))
-        self.assertFalse(_is_configured_api_key("你的 API Key"))
-        self.assertFalse(_is_configured_api_key("abc123"))
-        self.assertTrue(_is_configured_api_key("sk-1234567890"))
+        self.assertFalse(runtime_overrides_module._is_configured_api_key(""))
+        self.assertFalse(runtime_overrides_module._is_configured_api_key("你的 API Key"))
+        self.assertFalse(runtime_overrides_module._is_configured_api_key("abc123"))
+        self.assertTrue(runtime_overrides_module._is_configured_api_key("sk-1234567890"))
 
     def test_settings_reads_typed_env_values(self):
         settings = Settings(
@@ -102,7 +102,7 @@ class SettingsTests(unittest.TestCase):
         runtime_overrides_module.update_runtime_settings({"siliconflow_api_key": "sk-runtime-1234567890"})
 
         self.assertEqual(
-            settings_module.require_siliconflow_api_key(),
+            runtime_overrides_module.require_siliconflow_api_key(),
             "sk-runtime-1234567890",
         )
 
