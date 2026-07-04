@@ -3,8 +3,8 @@ import type {
   ChatStreamSourcesPayload,
   DebugInfo,
   DebugNodeInfo,
-} from '@/lib/api-types'
-import type { components } from '@/lib/api-types.openapi'
+} from '@/shared/api/api-types'
+import type { components } from '@/shared/api/api-types.openapi'
 
 type Schemas = components['schemas']
 
