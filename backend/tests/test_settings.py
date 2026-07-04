@@ -62,10 +62,29 @@ class SettingsTests(unittest.TestCase):
 
     def test_settings_defaults_runtime_paths_to_runtime_local(self):
         settings = Settings(SILICONFLOW_API_KEY="sk-1234567890")
+        repo_root = Path(__file__).resolve().parents[2]
 
-        self.assertEqual(settings.chroma_persist_dir, settings_module.LOCAL_RUNTIME_DIR / "chroma_db")
-        self.assertEqual(settings.data_dir, settings_module.LOCAL_RUNTIME_DIR)
-        self.assertEqual(settings.checkpoint_db_path, str(settings_module.LOCAL_RUNTIME_DIR / "checkpoints.db"))
+        self.assertEqual(settings_module.ROOT_DIR, repo_root)
+        self.assertEqual(settings_module.BACKEND_DIR, repo_root / "backend")
+        self.assertEqual(settings_module.EXAMPLES_DIR, repo_root / "examples")
+        self.assertEqual(settings_module.LOCAL_RUNTIME_DIR, repo_root / "runtime" / "local")
+        self.assertEqual(settings_module.QUICKSTART_RUNTIME_DIR, repo_root / "runtime" / "quickstart")
+        self.assertEqual(settings.chroma_persist_dir, repo_root / "runtime" / "local" / "chroma_db")
+        self.assertEqual(settings.data_dir, repo_root / "runtime" / "local")
+        self.assertEqual(settings.checkpoint_db_path, str(repo_root / "runtime" / "local" / "checkpoints.db"))
+
+    def test_settings_resolve_relative_storage_paths_from_repository_root(self):
+        repo_root = Path(__file__).resolve().parents[2]
+        settings = Settings(
+            SILICONFLOW_API_KEY="sk-1234567890",
+            CHROMA_PERSIST_DIR="runtime/custom/chroma",
+            DATA_DIR="runtime/custom/data",
+            CHECKPOINT_DB_PATH="runtime/custom/checkpoints.db",
+        )
+
+        self.assertEqual(settings.chroma_persist_dir, repo_root / "runtime" / "custom" / "chroma")
+        self.assertEqual(settings.data_dir, repo_root / "runtime" / "custom" / "data")
+        self.assertEqual(settings.checkpoint_db_path, str(repo_root / "runtime" / "custom" / "checkpoints.db"))
 
     def test_update_runtime_settings_coerces_types(self):
         settings_module.update_runtime_settings({

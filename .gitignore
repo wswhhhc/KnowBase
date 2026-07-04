@@ -27,6 +27,7 @@ __pycache__/
 .gitconfig
 .DS_Store
 *.egg-info/
+# Legacy local runtime residue; new code must use repo-root runtime/
 data/
 backend/.coverage
 backend/.coverage.*

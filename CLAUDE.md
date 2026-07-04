@@ -55,7 +55,7 @@ cd backend && uv run python -m src.evaluate
 
 - **包管理**: `uv`（非 pip），`.env` 放 `backend/.env`，启动用 `uv run`
 - **容器化**: `docker compose up --build`，Dockerfile 在 `docker/`
-- **持久化**: Chroma → `data/chroma_db/`，对话 → `data/conversations.db`（Alembic），checkpoints → `data/checkpoints.db`
+- **持久化**: Chroma → `runtime/local/chroma_db/`，对话 → `runtime/local/conversations.db`（Alembic），checkpoints → `runtime/local/checkpoints.db`
 - **配置**: `backend/src/config/settings.py`（pydantic-settings），`CHROMA_API_KEY` 回退为 `SILICONFLOW_API_KEY`
 - **鉴权**: `deps.py:verify_api_key`，`API_KEY` 为空时本地开发跳过
 - **搜索策略**: `fast`(无 rerank)、`balanced`(条件 rerank)、`high_quality`(必 rerank)、`deep`(扩检索)，偏好存 `localStorage`。移动端收进弹层

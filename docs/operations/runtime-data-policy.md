@@ -24,6 +24,8 @@ KnowBase 把“样例”和“运行数据”明确分离：
 
 它们默认忽略提交，提交前不要把本地产物强行纳入版本库。
 
+历史上遗留的根目录 `data/` 或误写入的 `backend/runtime/` 只视为本地残留，不再是受支持的运行数据根。新代码和新文档必须统一指向仓库根 `runtime/`。
+
 ## quickstart 约定
 
 - `scripts/quickstart.py` 只读取 `examples/demo-documents/`
