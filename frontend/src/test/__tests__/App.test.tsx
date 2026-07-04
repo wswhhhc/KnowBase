@@ -29,14 +29,14 @@ vi.mock('@/components/Sidebar', () => ({
     </div>
   ),
 }))
-vi.mock('@/components/ChatArea', () => ({
+vi.mock('@/pages/chat/ChatPage', () => ({
   default: (props: any) => (
     <div data-testid="chatarea">
       ChatArea Mock {props.workspaceSummary.workspaceName}:{props.workspaceSummary.documentCount}:{props.workspaceSummary.conversationCount}
     </div>
   ),
 }))
-vi.mock('@/components/BrowserPage', async () => {
+vi.mock('@/pages/browser/BrowserPage', async () => {
   const React = await import('react')
   return {
     default: (props: any) => {
@@ -50,10 +50,10 @@ vi.mock('@/components/BrowserPage', async () => {
     },
   }
 })
-vi.mock('@/components/DashboardPage', () => ({
+vi.mock('@/pages/dashboard/DashboardPage', () => ({
   default: (props: any) => <div data-testid="dashboardpage">DashboardPage Mock</div>,
 }))
-vi.mock('@/components/SettingsPage', () => ({
+vi.mock('@/pages/settings/SettingsPage', () => ({
   default: (props: any) => <div data-testid="settingspage">SettingsPage Mock</div>,
 }))
 
