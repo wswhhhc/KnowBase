@@ -12,12 +12,11 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from langchain_core.documents import Document
 
-from src import conversations
 from src.api.deps import get_knowledge_base
 from src.api.main import app
 from src.api.models import KBChunk
-from src.persistence import database
 from src.rag.models import RetrievalResult
+from tests.helpers import init_temp_database, teardown_temp_database
 
 
 class WorkspaceScopedFakeKnowledgeBase:
@@ -241,16 +240,14 @@ class WorkspaceScopedKnowledgeBaseApiTests(unittest.TestCase):
         app.dependency_overrides[get_knowledge_base] = lambda: cls.fake_kb
 
         cls._temp_dir = tempfile.TemporaryDirectory()
-        cls._original_db_path = conversations._DB_PATH
-        conversations._DB_PATH = Path(cls._temp_dir.name) / "conversations.db"
-        conversations.init_db()
+        cls._original_db_path = Path(cls._temp_dir.name) / "conversations.db"
+        init_temp_database(cls._original_db_path)
 
         cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls):
-        conversations._DB_PATH = cls._original_db_path
-        database.clear_db_path_override()
+        teardown_temp_database()
         cls._temp_dir.cleanup()
         app.dependency_overrides.clear()
         cls.patcher_chroma.stop()

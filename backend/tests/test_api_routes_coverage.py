@@ -14,8 +14,7 @@ from src.rag.models import RetrievalResult
 from src.api.deps import get_knowledge_base
 from src.api.main import app
 from src.api.rate_limit import enforce_document_import_rate_limit
-from src import conversations
-from src.persistence import database
+from tests.helpers import init_temp_database, teardown_temp_database
 
 
 class FakeKnowledgeBase:
@@ -157,16 +156,14 @@ class APIRoutesCoverageTests(unittest.TestCase):
 
         # Use a temp database for all test data
         cls._temp_dir = tempfile.TemporaryDirectory()
-        cls._original_db_path = conversations._DB_PATH
-        conversations._DB_PATH = Path(cls._temp_dir.name) / "conversations.db"
-        conversations.init_db()
+        cls._original_db_path = Path(cls._temp_dir.name) / "conversations.db"
+        init_temp_database(cls._original_db_path)
 
         cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls):
-        conversations._DB_PATH = cls._original_db_path
-        database.clear_db_path_override()
+        teardown_temp_database()
         cls._temp_dir.cleanup()
         app.dependency_overrides.clear()
 

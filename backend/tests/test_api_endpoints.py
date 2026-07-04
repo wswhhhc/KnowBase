@@ -18,8 +18,7 @@ from src.rag.models import RetrievalResult
 from src.api.deps import get_knowledge_base
 from src.api.main import app
 from src.api.models import ConversationCreate, IngestResponse, URLIngestRequest
-from src import conversations
-from src.persistence import database
+from tests.helpers import add_message, init_temp_database, replace_pin_state, teardown_temp_database
 
 
 def _parse_sse_events(text: str) -> list[dict]:
@@ -208,16 +207,14 @@ class APIEndpointTests(unittest.TestCase):
 
         # Use a temp database for all test data
         cls._temp_dir = tempfile.TemporaryDirectory()
-        cls._original_db_path = conversations._DB_PATH
-        conversations._DB_PATH = Path(cls._temp_dir.name) / "conversations.db"
-        conversations.init_db()
+        cls._original_db_path = Path(cls._temp_dir.name) / "conversations.db"
+        init_temp_database(cls._original_db_path)
 
         cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls):
-        conversations._DB_PATH = cls._original_db_path
-        database.clear_db_path_override()
+        teardown_temp_database()
         cls._temp_dir.cleanup()
         app.dependency_overrides.clear()
         cls.patcher_chroma.stop()
@@ -319,7 +316,7 @@ class APIEndpointTests(unittest.TestCase):
     def test_get_pin_state_happy_path(self):
         create_resp = self.client.post("/api/conversations", json={"title": "PinState 测试"})
         conv = create_resp.json()
-        conversations.replace_pin_state(conv["thread_id"], ["doc:1"], ["doc:2"])
+        replace_pin_state(conv["thread_id"], ["doc:1"], ["doc:2"])
 
         resp = self.client.get(f"/api/conversations/{conv['id']}/pin-state")
 
@@ -341,7 +338,6 @@ class APIEndpointTests(unittest.TestCase):
         create_resp = self.client.post("/api/conversations", json={"title": "反馈测试"})
         conv_id = create_resp.json()["id"]
         # Create a real message first so feedback has a target
-        from src.conversations import add_message
         msg_id = add_message(conv_id, "user", "test question")
         resp = self.client.post(
             f"/api/conversations/{conv_id}/messages/{msg_id}/feedback",
