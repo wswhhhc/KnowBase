@@ -395,7 +395,7 @@ describe('Sidebar interactions', () => {
     render(<Sidebar {...defaultProps} chat={{ ...defaultProps.chat, loadMessages, threadId: null }} />)
 
     await waitFor(() => {
-      expect(api.getMessages).toHaveBeenCalledWith('conv-1')
+      expect(api.getMessages).toHaveBeenCalledWith('conv-1', '')
     })
     expect(loadMessages).toHaveBeenCalled()
   })
