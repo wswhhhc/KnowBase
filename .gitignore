@@ -3,7 +3,6 @@
 
 # Backend
 backend/.env
-backend/data/
 backend/__pycache__/
 backend/**/__pycache__/
 
@@ -14,13 +13,12 @@ frontend/.env
 frontend/.generated/
 frontend/tsconfig.tsbuildinfo
 
-# Runtime data in repo root (keep versioned demo fixtures under data/samples/)
+# Runtime data
 chroma_demo.py
-data/chroma_db/
-data/chroma_db_backup_*/
-data/checkpoints.db*
-data/.thread_id
-data/rag_logs/
+runtime/local/*
+!runtime/local/.gitkeep
+runtime/quickstart/*
+!runtime/quickstart/.gitkeep
 .venv/
 __pycache__/
 */__pycache__/
@@ -29,7 +27,7 @@ __pycache__/
 .gitconfig
 .DS_Store
 *.egg-info/
-data/conversations.db
+data/
 backend/.coverage
 backend/.coverage.*
 videos/
@@ -39,7 +37,6 @@ output/
 # Local test and evaluation artifacts
 .playwright-cli/
 frontend/coverage/
-data/eval_reports/
 
 # Keep generated API contract snapshots under version control
 !backend/openapi.json

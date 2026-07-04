@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from src.config.settings import ROOT_DIR
+from src.config.settings import DATA_DIR
 
-_DB_PATH = ROOT_DIR / "data" / "conversations.db"
+_DB_PATH = Path(DATA_DIR) / "conversations.db"
 logger = logging.getLogger(__name__)
 
 

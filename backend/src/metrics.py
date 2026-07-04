@@ -1,7 +1,7 @@
 """Simple local logging and metrics for KnowBase RAG observability.
 
 Records per-query timing, retrieval stats, and quality decisions
-into a JSONL log file under ``data/rag_logs/`` for offline analysis.
+into a JSONL log file under ``runtime/local/rag_logs/`` for offline analysis.
 """
 
 from __future__ import annotations
@@ -11,10 +11,9 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from src.config.settings import ROOT_DIR
+from src.config.settings import DATA_DIR
 
-
-_LOG_DIR = ROOT_DIR / "data" / "rag_logs"
+_LOG_DIR = Path(DATA_DIR) / "rag_logs"
 
 
 def _ensure_log_dir():

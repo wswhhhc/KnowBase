@@ -52,7 +52,7 @@ cp .env.example .env
 uv run python scripts/quickstart.py --reset
 ```
 
-这个脚本会把 `data/samples/demo/` 中的示例文档导入到隔离的 quickstart 运行目录，再跑几条预置问题。只想先确认资源结构时可以运行：
+这个脚本会把 `examples/demo-documents/` 中的示例文档导入到隔离的 `runtime/quickstart/` 运行目录，再跑几条预置问题。只想先确认资源结构时可以运行：
 
 ```bash
 cd backend
@@ -147,7 +147,8 @@ KnowBase/
 ├── backend/               # FastAPI、LangGraph、OpenAPI、测试
 ├── frontend/              # React、Vite、Vitest、生成类型
 ├── docs/                  # 需求基线、测试与展示资源说明
-├── data/samples/demo/     # 版本控制下的 quickstart 示例文档
+├── examples/              # 版本控制下的演示与预置样例
+├── runtime/               # 本地运行数据（忽略提交）
 ├── docker/                # Docker 构建文件
 └── scripts/               # 本地开发辅助脚本
 ```

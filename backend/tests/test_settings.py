@@ -60,6 +60,13 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(settings.quality.enabled)
         self.assertEqual(settings.auth.api_key, "local-key")
 
+    def test_settings_defaults_runtime_paths_to_runtime_local(self):
+        settings = Settings(SILICONFLOW_API_KEY="sk-1234567890")
+
+        self.assertEqual(settings.chroma_persist_dir, settings_module.LOCAL_RUNTIME_DIR / "chroma_db")
+        self.assertEqual(settings.data_dir, settings_module.LOCAL_RUNTIME_DIR)
+        self.assertEqual(settings.checkpoint_db_path, str(settings_module.LOCAL_RUNTIME_DIR / "checkpoints.db"))
+
     def test_update_runtime_settings_coerces_types(self):
         settings_module.update_runtime_settings({
             "llm_temperature": "0.7",
