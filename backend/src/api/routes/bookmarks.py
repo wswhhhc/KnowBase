@@ -5,9 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.api.deps import verify_api_key
-from src.conversations import (
-    create_bookmark, list_bookmarks, delete_bookmark, update_bookmark,
-)
+from src.persistence import bookmark_repository
+from src.persistence.database import get_connection
 from pydantic import BaseModel, Field
 
 
@@ -45,17 +44,23 @@ router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 @router.get("")
 async def list_all(workspace_id: str | None = Query(None), search: str | None = Query(None)) -> list[BookmarkOut]:
-    return [BookmarkOut(**b) for b in list_bookmarks(workspace_id=workspace_id, search=search)]
+    bookmarks = bookmark_repository.list_bookmarks(get_connection, workspace_id=workspace_id, search=search)
+    return [BookmarkOut(**bookmark) for bookmark in bookmarks]
 
 
 @router.post("")
 async def create(body: BookmarkCreate) -> BookmarkOut:
-    return BookmarkOut(**create_bookmark(**body.model_dump()))
+    bookmark = bookmark_repository.create_bookmark(get_connection, **body.model_dump())
+    return BookmarkOut(**bookmark)
 
 
 @router.patch("/{bookmark_id}")
 async def update(bookmark_id: int, body: BookmarkUpdate) -> BookmarkOut:
-    updated = update_bookmark(bookmark_id, **{k: v for k, v in body.model_dump().items() if v is not None})
+    updated = bookmark_repository.update_bookmark(
+        get_connection,
+        bookmark_id,
+        **{key: value for key, value in body.model_dump().items() if value is not None},
+    )
     if not updated:
         raise HTTPException(404, "书签不存在")
     return BookmarkOut(**updated)
@@ -63,5 +68,5 @@ async def update(bookmark_id: int, body: BookmarkUpdate) -> BookmarkOut:
 
 @router.delete("/{bookmark_id}")
 async def delete(bookmark_id: int):
-    delete_bookmark(bookmark_id)
+    bookmark_repository.delete_bookmark(get_connection, bookmark_id)
     return {"ok": True}

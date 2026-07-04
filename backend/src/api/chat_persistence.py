@@ -6,7 +6,55 @@ import json
 
 from src.api.models import DebugInfo
 from src.chat_utils import generate_title
-from src.conversations import add_message, create_conversation, get_conversation_by_thread, replace_pin_state
+from src.persistence import conversation_repository, message_repository, pin_state_repository
+from src.persistence.database import get_connection
+
+
+def get_conversation_by_thread(thread_id: str) -> dict | None:
+    return conversation_repository.get_conversation_by_thread(get_connection, thread_id)
+
+
+def create_conversation(title: str, *, thread_id: str | None = None, workspace_id: str = "") -> dict:
+    return conversation_repository.create_conversation(
+        get_connection,
+        title,
+        thread_id=thread_id,
+        workspace_id=workspace_id,
+    )
+
+
+def replace_pin_state(
+    thread_id: str,
+    *,
+    pinned_chunk_ids: list[str] | None = None,
+    excluded_chunk_ids: list[str] | None = None,
+) -> None:
+    pin_state_repository.replace_pin_state(
+        get_connection,
+        thread_id,
+        pinned_chunk_ids=pinned_chunk_ids,
+        excluded_chunk_ids=excluded_chunk_ids,
+    )
+
+
+def add_message(
+    conv_id: str,
+    role: str,
+    content: str,
+    *,
+    sources: list | None = None,
+    quality_reason: str = "",
+    debug_info: str = "{}",
+) -> int:
+    return message_repository.add_message(
+        get_connection,
+        conv_id,
+        role,
+        content,
+        sources=sources,
+        quality_reason=quality_reason,
+        debug_info=debug_info,
+    )
 
 
 def build_debug_payload(
