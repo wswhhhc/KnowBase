@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import App from '@/App'
+import App from '@/app/App'
 
 vi.mock('@/components/Sidebar', () => ({
   default: () => <div data-testid="sidebar">Sidebar Mock</div>,
