@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bookmark, BookmarkCheck, Flame } from 'lucide-react'
-import type { KBChunk } from '@/lib/api'
+import type { KBChunk } from '@/shared/api'
 
 interface GridViewProps {
   chunks: KBChunk[]

@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import DocumentPanel from '@/components/sidebar/DocumentPanel'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -12,28 +12,32 @@ vi.mock('sonner', () => ({
   },
 }))
 
-vi.mock('@/lib/api', () => ({
-  checkSource: vi.fn().mockResolvedValue({ exists: false }),
-  uploadDocumentStream: vi.fn().mockImplementation((_file, _mode, callbacks) => {
-    callbacks.onDone?.({
-      chunk_count: 1,
-      existing_version: false,
-      suggested_questions: ['这份资料的核心结论是什么？'],
-      imported_sources: ['demo.md'],
-    })
-    return { abort: vi.fn() }
-  }),
-  ingestUrlStream: vi.fn(),
-  importDemoDocuments: vi.fn().mockResolvedValue({
-    chunk_count: 3,
-    total_docs: 9,
-    message: '已导入 3 份示例资料',
-    imported_sources: ['contract_notice.md', 'meeting_notes.md', 'tech_manual.md'],
-    suggested_questions: ['这组示例资料分别覆盖了什么主题？'],
-  }),
-  deleteSource: vi.fn(),
-  clearKnowledgeBase: vi.fn(),
-}))
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
+  return {
+    ...actual,
+    checkSource: vi.fn().mockResolvedValue({ exists: false }),
+    uploadDocumentStream: vi.fn().mockImplementation((_file, _mode, callbacks) => {
+      callbacks.onDone?.({
+        chunk_count: 1,
+        existing_version: false,
+        suggested_questions: ['这份资料的核心结论是什么？'],
+        imported_sources: ['demo.md'],
+      })
+      return { abort: vi.fn() }
+    }),
+    ingestUrlStream: vi.fn(),
+    importDemoDocuments: vi.fn().mockResolvedValue({
+      chunk_count: 3,
+      total_docs: 9,
+      message: '已导入 3 份示例资料',
+      imported_sources: ['contract_notice.md', 'meeting_notes.md', 'tech_manual.md'],
+      suggested_questions: ['这组示例资料分别覆盖了什么主题？'],
+    }),
+    deleteSource: vi.fn(),
+    clearKnowledgeBase: vi.fn(),
+  }
+})
 
 describe('DocumentPanel', () => {
   const onRefresh = vi.fn().mockResolvedValue(true)

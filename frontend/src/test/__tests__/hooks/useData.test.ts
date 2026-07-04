@@ -1,19 +1,23 @@
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 import { mockConversations, mockSources } from '@/test/mocks/data'
 
-vi.mock('@/lib/api', () => ({
-  getConversations: vi.fn(),
-  createConversation: vi.fn(),
-  deleteConversation: vi.fn(),
-  renameConversation: vi.fn(),
-  getSources: vi.fn(),
-  getWorkspaces: vi.fn(),
-  createWorkspace: vi.fn(),
-  deleteWorkspace: vi.fn(),
-  renameWorkspace: vi.fn(),
-}))
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
+  return {
+    ...actual,
+    getConversations: vi.fn(),
+    createConversation: vi.fn(),
+    deleteConversation: vi.fn(),
+    renameConversation: vi.fn(),
+    getSources: vi.fn(),
+    getWorkspaces: vi.fn(),
+    createWorkspace: vi.fn(),
+    deleteWorkspace: vi.fn(),
+    renameWorkspace: vi.fn(),
+  }
+})
 
 beforeEach(() => {
   vi.clearAllMocks()

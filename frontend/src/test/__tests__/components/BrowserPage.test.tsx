@@ -2,7 +2,7 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import BrowserPage from '@/pages/browser/BrowserPage'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 import { mockKBStats, mockKBChunks } from '@/test/mocks/data'
 
 // Mock framer-motion
@@ -24,6 +24,7 @@ vi.mock('sonner', () => ({
 // Mock lucide-react icons used by BrowserPage
 vi.mock('lucide-react', () => {
   const icons: Record<string, string> = {
+    AlertTriangle: 'AlertTriangle',
     BookOpen: 'BookOpen',
     PanelRightOpen: 'PanelRightOpen',
     ArrowLeft: 'ArrowLeft',
@@ -53,17 +54,21 @@ vi.mock('lucide-react', () => {
 })
 
 // Mock api
-vi.mock('@/lib/api', () => ({
-  getKBChunks: vi.fn(),
-  getKBStats: vi.fn(),
-  getKBSourceNames: vi.fn(),
-  getKBConfig: vi.fn(),
-  getKBHotspots: vi.fn(),
-  getKBChunkById: vi.fn(),
-  uploadDocument: vi.fn(),
-  ingestUrl: vi.fn(),
-  debugSearch: vi.fn(),
-}))
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
+  return {
+    ...actual,
+    getKBChunks: vi.fn(),
+    getKBStats: vi.fn(),
+    getKBSourceNames: vi.fn(),
+    getKBConfig: vi.fn(),
+    getKBHotspots: vi.fn(),
+    getKBChunkById: vi.fn(),
+    uploadDocument: vi.fn(),
+    ingestUrl: vi.fn(),
+    debugSearch: vi.fn(),
+  }
+})
 
 const defaultProps = {
   onOpenSidebar: vi.fn(),

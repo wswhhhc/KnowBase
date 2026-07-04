@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Input, ScrollArea } from '@/components/ui'
 import { BookmarkCheck, Search, Tag, X, Trash2 } from 'lucide-react'
-import * as api from '@/lib/api'
-import type { Bookmark as BookmarkType } from '@/lib/api'
+import * as api from '@/shared/api'
+import type { Bookmark as BookmarkType } from '@/shared/api'
 import type { ViewType } from '@/app/navigation'
 
 interface BookmarkPanelProps {

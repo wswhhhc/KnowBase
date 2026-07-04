@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { ScrollArea, Separator } from '@/components/ui'
 import { PanelRightOpen, Save, AlertTriangle, Check, Loader2 } from 'lucide-react'
-import * as api from '@/lib/api'
-import { MASKED_SECRET_VALUE } from '@/lib/api'
-import type { RuntimeSettings } from '@/lib/api'
+import * as api from '@/shared/api'
+import { MASKED_SECRET_VALUE } from '@/shared/api'
+import type { RuntimeSettings } from '@/shared/api'
 import type { ViewType } from '@/app/navigation'
 
 interface SettingsPageProps {

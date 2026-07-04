@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { chatStream, type ChatStreamCallbacks, type DebugInfo, type PinStateResponse } from '@/lib/api'
+import { chatStream, type ChatStreamCallbacks, type DebugInfo, type PinStateResponse } from '@/shared/api'
 import { useChatMessages } from '@/hooks/chat/useChatMessages'
 import { usePinnedSourcesState } from '@/hooks/chat/usePinnedSourcesState'
 import type { ChatMessage, PinnedSource } from '@/hooks/chat/types'

@@ -1,5 +1,5 @@
-import type { DebugInfo, PinStateResponse } from '@/lib/api'
-import type { Source } from '@/lib/api'
+import type { DebugInfo, PinStateResponse } from '@/shared/api'
+import type { Source } from '@/shared/api'
 
 export interface ChatMessage {
   id: string

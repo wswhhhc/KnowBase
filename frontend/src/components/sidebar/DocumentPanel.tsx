@@ -2,8 +2,8 @@ import { useState, useRef } from 'react'
 import { toast } from 'sonner'
 import { Button, Input, Separator, ConfirmDialog } from '@/components/ui'
 import { Globe, Trash2, Upload, Loader2 } from 'lucide-react'
-import * as api from '@/lib/api'
-import type { DocSource } from '@/lib/api'
+import * as api from '@/shared/api'
+import type { DocSource } from '@/shared/api'
 
 interface DocumentPanelProps {
   sources: DocSource[]

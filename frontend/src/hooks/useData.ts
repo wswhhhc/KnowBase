@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import * as api from '@/lib/api'
-import type { Conversation, DocSource, Workspace } from '@/lib/api'
+import * as api from '@/shared/api'
+import type { Conversation, DocSource, Workspace } from '@/shared/api'
 
 const ACTIVE_WORKSPACE_STORAGE_KEY = 'knowbase-active-workspace'
 const ACTIVE_CONVERSATION_STORAGE_PREFIX = 'knowbase-active-conversation:'

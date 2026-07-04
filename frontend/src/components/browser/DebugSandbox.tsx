@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Button, Input } from '@/components/ui'
 import { Bug, Loader2 } from 'lucide-react'
-import type { DebugSearchResponse, DebugSearchHit } from '@/lib/api'
-import * as api from '@/lib/api'
+import type { DebugSearchResponse, DebugSearchHit } from '@/shared/api'
+import * as api from '@/shared/api'
 
 interface DebugSandboxProps {
   onRunSearch: (query: string, strategy: string) => Promise<DebugSearchResponse | null>

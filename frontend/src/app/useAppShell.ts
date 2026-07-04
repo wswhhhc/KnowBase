@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { ViewType } from '@/app/navigation'
 import { useChat } from '@/hooks/useChat'
-import type { Source } from '@/lib/api'
+import type { Source } from '@/shared/api'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
 
 export function useMediaQuery(query: string) {

@@ -5,7 +5,7 @@ import {
   MessageSquare, FileText, Bookmark,
   PanelRightClose, BookOpen, BarChart3, Settings, Plus, Trash2, Sun, Moon,
 } from 'lucide-react'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
 import { useTheme } from '@/hooks/useTheme'
 import ConversationList from '@/components/sidebar/ConversationList'
@@ -14,7 +14,7 @@ import BookmarkPanel from '@/components/sidebar/BookmarkPanel'
 import KBSummary from '@/components/sidebar/KBSummary'
 import DashboardSummary from '@/components/sidebar/DashboardSummary'
 import type { ChatMessage } from '@/hooks/useChat'
-import type { Conversation, DebugInfo, PinStateResponse } from '@/lib/api'
+import type { Conversation, DebugInfo, PinStateResponse } from '@/shared/api'
 import { OPEN_DOCUMENTS_PANEL_EVENT } from '@/lib/ui-events'
 import { APP_NAV_ITEMS, type ViewType } from '@/app/navigation'
 import type { WorkspaceSummary } from '@/types/workspace-summary'

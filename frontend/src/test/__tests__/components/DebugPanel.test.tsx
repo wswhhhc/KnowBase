@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DebugPanel from '@/components/DebugPanel'
 import { mockDebugInfo } from '@/test/mocks/data'
-import type { DebugInfo } from '@/lib/api'
+import type { DebugInfo } from '@/shared/api'
 
 // Mock framer-motion
 vi.mock('framer-motion', () => ({

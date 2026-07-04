@@ -1,4 +1,4 @@
-import type { Source } from '@/lib/api'
+import type { Source } from '@/shared/api'
 import { useChatContext } from './ChatContext'
 
 interface CitationTextProps {

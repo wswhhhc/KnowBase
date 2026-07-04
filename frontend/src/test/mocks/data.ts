@@ -1,4 +1,4 @@
-import type { Conversation, Message, DocSource, KBChunk, KBStats, QueryLogEntry, DebugInfo } from '@/lib/api'
+import type { Conversation, Message, DocSource, KBChunk, KBStats, QueryLogEntry, DebugInfo } from '@/shared/api'
 
 export const mockConversations: Conversation[] = [
   { id: 'conv-1', thread_id: 'thread-1', title: '测试对话', created_at: '2026-06-16T08:00:00Z', updated_at: '2026-06-16T08:30:00Z', last_message_preview: '标准上班时间为 09:00 - 18:00。' },

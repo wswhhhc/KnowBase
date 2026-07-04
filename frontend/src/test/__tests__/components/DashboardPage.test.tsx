@@ -2,7 +2,7 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 import { mockQueryLogs } from '@/test/mocks/data'
 
 // Mock framer-motion
@@ -42,9 +42,13 @@ vi.mock('lucide-react', () => {
 })
 
 // Mock api
-vi.mock('@/lib/api', () => ({
-  queryLogs: vi.fn(),
-}))
+vi.mock('@/shared/api', async () => {
+  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api')
+  return {
+    ...actual,
+    queryLogs: vi.fn(),
+  }
+})
 
 const defaultProps = {
   onOpenSidebar: vi.fn(),

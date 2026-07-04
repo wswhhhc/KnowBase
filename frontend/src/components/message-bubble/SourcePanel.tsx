@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import type { Source } from '@/lib/api'
+import type { Source } from '@/shared/api'
 import SourceCard from './SourceCard'
 import { useChatContext } from './ChatContext'
 

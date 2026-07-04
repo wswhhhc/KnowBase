@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { DebugInfo } from '@/lib/api'
-import type { Source } from '@/lib/api'
+import type { DebugInfo } from '@/shared/api'
+import type { Source } from '@/shared/api'
 import type { ChatMessage } from './types'
 
 interface AssistantCompletion {

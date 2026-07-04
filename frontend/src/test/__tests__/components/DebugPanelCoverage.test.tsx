@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
 import DebugPanel from '@/components/DebugPanel'
 import { mockSSEDebugEvent, mockDebugInfo } from '@/test/mocks/data'
-import type { DebugInfo } from '@/lib/api'
+import type { DebugInfo } from '@/shared/api'
 
 vi.mock('framer-motion', () => ({
   motion: {

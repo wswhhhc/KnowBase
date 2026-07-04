@@ -51,6 +51,16 @@ def _check_forbidden_imports() -> list[str]:
         if frontend_pattern.search(_read(path)):
             violations.append(f"禁止继续依赖 frontend/src/lib/api-types*: {path.relative_to(ROOT)}")
 
+    frontend_api_pattern = re.compile(r"(['\"])(?:@/|\.{1,2}/.*)?lib/api\1")
+    frontend_api_excludes = {
+        ROOT / "frontend" / "src" / "lib" / "api.ts",
+    }
+    for path in _iter_files(ROOT / "frontend" / "src", "*.ts") + _iter_files(ROOT / "frontend" / "src", "*.tsx"):
+        if path in frontend_api_excludes:
+            continue
+        if frontend_api_pattern.search(_read(path)):
+            violations.append(f"禁止继续依赖 frontend/src/lib/api: {path.relative_to(ROOT)}")
+
     return violations
 
 

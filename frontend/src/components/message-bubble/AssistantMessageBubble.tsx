@@ -11,7 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui'
-import * as api from '@/lib/api'
+import * as api from '@/shared/api'
 import DebugPanel from '../DebugPanel'
 import CitationText from './CitationText'
 import CopyButton from './CopyButton'
