@@ -94,7 +94,7 @@
 |------|------|------|
 | `src.graph.utils._get_llm` | `patch` 替换为 `FakeLLM` | 预设 LLM 响应，控制分支走向 |
 | `src.rag.web_search.web_search` | `patch` 返回预设结果/空 | 验证 web_search 启用/禁用 |
-| `src.graph.nodes._tavily_configured` | `patch` 返回 `True`/`False` | 控制联网搜索开关 |
+| `src.graph.web_search_nodes.tavily_configured` | `patch` 返回 `True`/`False` | 控制联网搜索开关 |
 | Chroma | 使用 `tempfile.TemporaryDirectory` 真实实例 | 验证完整的 vectordb 生命周期 |
 | SQLite | 临时文件（`tempfile.NamedTemporaryFile`） | 独立测试数据库 |
 | `requests.get` | `patch` 返回 MockResponse | 避免真实 HTTP 请求 |

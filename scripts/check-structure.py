@@ -28,8 +28,6 @@ def _check_forbidden_imports() -> list[str]:
     ]
     backend_excludes = {
         ROOT / "backend" / "src" / "conversations.py",
-        ROOT / "backend" / "src" / "graph" / "__init__.py",
-        ROOT / "backend" / "src" / "graph" / "nodes.py",
     }
 
     for path in _iter_files(ROOT / "backend" / "src", "*.py"):
