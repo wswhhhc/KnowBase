@@ -10,7 +10,7 @@ from pydantic import AliasChoices, BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+ROOT_DIR = Path(__file__).resolve().parents[3]
 BACKEND_DIR = ROOT_DIR / "backend"
 EXAMPLES_DIR = ROOT_DIR / "examples"
 PRESET_DOCUMENTS_DIR = EXAMPLES_DIR / "preset-documents"
@@ -156,6 +156,13 @@ class Settings(BaseSettings):
     def _resolve_path(cls, value: str | Path) -> Path:
         path = Path(value)
         return path if path.is_absolute() else ROOT_DIR / path
+
+    @field_validator("checkpoint_db_path", mode="before")
+    @classmethod
+    def _resolve_checkpoint_path(cls, value: str | Path) -> str:
+        path = Path(value)
+        resolved = path if path.is_absolute() else ROOT_DIR / path
+        return str(resolved)
 
     @field_validator(
         "chunk_size",
