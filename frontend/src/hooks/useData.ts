@@ -36,14 +36,15 @@ function writeActiveConversationId(workspaceId: string | undefined, conversation
 }
 
 export function useConversations(workspaceId?: string) {
+  const workspaceScope = workspaceId ?? ''
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [activeId, setActiveIdState] = useState<string | null>(() => readActiveConversationId(workspaceId))
+  const [activeId, setActiveIdState] = useState<string | null>(() => readActiveConversationId(workspaceScope))
   const [loading, setLoading] = useState(true)
   const requestTokenRef = useRef(0)
 
   const setActiveId = (nextActiveId: string | null) => {
     setActiveIdState(nextActiveId)
-    writeActiveConversationId(workspaceId, nextActiveId)
+    writeActiveConversationId(workspaceScope, nextActiveId)
   }
 
   const refresh = async (resetBeforeLoad = false) => {
@@ -55,9 +56,9 @@ export function useConversations(workspaceId?: string) {
       setLoading(true)
     }
     try {
-      const list = await api.getConversations(workspaceId)
+      const list = await api.getConversations(workspaceScope)
       if (requestToken !== requestTokenRef.current) return []
-      const persistedActiveId = readActiveConversationId(workspaceId)
+      const persistedActiveId = readActiveConversationId(workspaceScope)
       const nextActiveId = persistedActiveId && list.some((conversation) => conversation.id === persistedActiveId)
         ? persistedActiveId
         : activeId && list.some((conversation) => conversation.id === activeId)
@@ -79,23 +80,23 @@ export function useConversations(workspaceId?: string) {
 
   useEffect(() => {
     void refresh(true)
-  }, [workspaceId])
+  }, [workspaceScope])
 
   const create = async () => {
-    const conv = await api.createConversation('新对话', workspaceId)
+    const conv = await api.createConversation('新对话', workspaceScope)
     await refresh()
     setActiveId(conv.id)
     return conv
   }
 
   const remove = async (id: string) => {
-    await api.deleteConversation(id)
+    await api.deleteConversation(id, workspaceScope)
     await refresh()
     if (activeId === id) setActiveId(null)
   }
 
   const rename = async (id: string, title: string) => {
-    await api.renameConversation(id, title)
+    await api.renameConversation(id, title, workspaceScope)
     await refresh()
   }
 

@@ -38,6 +38,16 @@ describe('useConversations', () => {
     expect(result.current.conversations).toEqual(mockConversations)
   })
 
+  it('requests default workspace conversations with an explicit empty workspace id', async () => {
+    vi.mocked(api.getConversations).mockResolvedValue(mockConversations)
+
+    renderHook(() => useConversations())
+
+    await waitFor(() => {
+      expect(api.getConversations).toHaveBeenCalledWith('')
+    })
+  })
+
   it('restores the persisted active conversation for the current workspace', async () => {
     vi.mocked(api.getConversations).mockResolvedValue(mockConversations)
     localStorage.setItem('knowbase-active-conversation:default', 'conv-2')
@@ -93,7 +103,7 @@ describe('useConversations', () => {
       await result.current.remove('conv-1')
     })
 
-    expect(api.deleteConversation).toHaveBeenCalledWith('conv-1')
+    expect(api.deleteConversation).toHaveBeenCalledWith('conv-1', '')
     expect(result.current.activeId).toBeNull()
   })
 
@@ -111,7 +121,7 @@ describe('useConversations', () => {
       await result.current.rename('conv-1', '新标题')
     })
 
-    expect(api.renameConversation).toHaveBeenCalledWith('conv-1', '新标题')
+    expect(api.renameConversation).toHaveBeenCalledWith('conv-1', '新标题', '')
   })
 
   it('persists activeId updates for the current workspace', async () => {

@@ -12,6 +12,15 @@ from src.persistence.database import get_connection
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
+def _get_scoped_conversation_or_404(conv_id: str, workspace_id: str | None = None) -> dict:
+    conv = conversation_repository.get_conversation(get_connection, conv_id)
+    if not conv:
+        raise HTTPException(404, "对话不存在")
+    if workspace_id is not None and conv.get("workspace_id", "") != workspace_id:
+        raise HTTPException(404, "对话不存在")
+    return conv
+
+
 @router.get("")
 async def list_all(workspace_id: str | None = Query(None)) -> list[ConversationOut]:
     conversations = conversation_repository.list_conversations(get_connection, workspace_id=workspace_id)
@@ -29,21 +38,16 @@ async def create(body: ConversationCreate = ConversationCreate(), workspace_id: 
 
 
 @router.get("/{conv_id}")
-async def get(conv_id: str) -> ConversationOut:
-    conv = conversation_repository.get_conversation(get_connection, conv_id)
-    if not conv:
-        raise HTTPException(404, "对话不存在")
-    return ConversationOut(**conv)
+async def get(conv_id: str, workspace_id: str | None = Query(None)) -> ConversationOut:
+    return ConversationOut(**_get_scoped_conversation_or_404(conv_id, workspace_id))
 
 
 @router.patch("/{conv_id}")
-async def update(conv_id: str, body: ConversationCreate) -> ConversationOut:
+async def update(conv_id: str, body: ConversationCreate, workspace_id: str | None = Query(None)) -> ConversationOut:
+    _get_scoped_conversation_or_404(conv_id, workspace_id)
     if not conversation_repository.update_title(get_connection, conv_id, body.title):
         raise HTTPException(404, "对话不存在")
-    conv = conversation_repository.get_conversation(get_connection, conv_id)
-    if not conv:
-        raise HTTPException(404, "对话不存在")
-    return ConversationOut(**conv)
+    return ConversationOut(**_get_scoped_conversation_or_404(conv_id, workspace_id))
 
 
 @router.post("/batch-delete")
@@ -56,29 +60,30 @@ async def delete_batch(body: list[str]):
 
 
 @router.delete("/{conv_id}")
-async def delete(conv_id: str):
+async def delete(conv_id: str, workspace_id: str | None = Query(None)):
+    _get_scoped_conversation_or_404(conv_id, workspace_id)
     if not conversation_repository.delete_conversation(get_connection, conv_id):
         raise HTTPException(404, "对话不存在")
     return {"ok": True}
 
 
 @router.get("/{conv_id}/messages")
-async def list_messages(conv_id: str) -> list[MessageOut]:
+async def list_messages(conv_id: str, workspace_id: str | None = Query(None)) -> list[MessageOut]:
+    _get_scoped_conversation_or_404(conv_id, workspace_id)
     messages = message_repository.get_messages(get_connection, conv_id)
     return [MessageOut(**message) for message in messages]
 
 
 @router.get("/{conv_id}/pin-state")
-async def get_pin_state(conv_id: str) -> PinStateOut:
-    conv = conversation_repository.get_conversation(get_connection, conv_id)
-    if not conv:
-        raise HTTPException(404, "对话不存在")
+async def get_pin_state(conv_id: str, workspace_id: str | None = Query(None)) -> PinStateOut:
+    conv = _get_scoped_conversation_or_404(conv_id, workspace_id)
     summary = pin_state_repository.load_pin_state_summary(get_connection, conv["thread_id"])
     return PinStateOut(**summary)
 
 
 @router.post("/{conv_id}/messages/{msg_id}/feedback")
-async def feedback(conv_id: str, msg_id: int, body: MessageFeedback):
+async def feedback(conv_id: str, msg_id: int, body: MessageFeedback, workspace_id: str | None = Query(None)):
+    _get_scoped_conversation_or_404(conv_id, workspace_id)
     if not message_repository.update_feedback(
         get_connection,
         msg_id,
@@ -97,7 +102,9 @@ async def export(
     format: str = Query("markdown", pattern="^(markdown|json)$"),
     include_sources: bool = Query(True),
     include_debug: bool = Query(False),
+    workspace_id: str | None = Query(None),
 ) -> ExportOut:
+    _get_scoped_conversation_or_404(conv_id, workspace_id)
     result = message_repository.export_conversation(
         conv_id,
         fmt=format,
