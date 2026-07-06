@@ -336,8 +336,9 @@ def test_clear_workspace_returns_queued_job_without_running_kb_clear():
     queued_job["workspace_id"] = "ws-a"
     try:
         with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
-            with patch.object(fake_kb, "clear_workspace") as mock_clear_workspace:
-                response = client.post("/api/documents/clear?workspace_id=ws-a")
+            with patch("src.api.routes.documents.audit_store.record_event") as mock_audit:
+                with patch.object(fake_kb, "clear_workspace") as mock_clear_workspace:
+                    response = client.post("/api/documents/clear?workspace_id=ws-a")
     finally:
         teardown_test_env(tmp_dir, orig_db, patchers)
 
@@ -353,6 +354,13 @@ def test_clear_workspace_returns_queued_job_without_running_kb_clear():
         kwargs={"workspace_id": "ws-a"},
         inject_job_id=True,
     )
+    mock_audit.assert_called_once_with(
+        action="document.clear_queued",
+        actor_user_id=None,
+        target_type="job",
+        target_id="job-clear-1",
+        metadata={"workspace_id": "ws-a", "job_type": "clear_workspace"},
+    )
 
 
 def test_rebuild_index_returns_queued_job_without_running_kb_rebuild():
@@ -362,8 +370,9 @@ def test_rebuild_index_returns_queued_job_without_running_kb_rebuild():
     queued_job["workspace_id"] = "ws-a"
     try:
         with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
-            with patch.object(fake_kb, "rebuild_index", create=True) as mock_rebuild_index:
-                response = client.post("/api/documents/rebuild-index?workspace_id=ws-a")
+            with patch("src.api.routes.documents.audit_store.record_event") as mock_audit:
+                with patch.object(fake_kb, "rebuild_index", create=True) as mock_rebuild_index:
+                    response = client.post("/api/documents/rebuild-index?workspace_id=ws-a")
     finally:
         teardown_test_env(tmp_dir, orig_db, patchers)
 
@@ -378,4 +387,11 @@ def test_rebuild_index_returns_queued_job_without_running_kb_rebuild():
         workspace_id="ws-a",
         kwargs={"workspace_id": "ws-a"},
         inject_job_id=True,
+    )
+    mock_audit.assert_called_once_with(
+        action="document.rebuild_queued",
+        actor_user_id=None,
+        target_type="job",
+        target_id="job-rebuild-1",
+        metadata={"workspace_id": "ws-a", "job_type": "rebuild_index"},
     )

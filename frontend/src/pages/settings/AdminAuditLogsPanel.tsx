@@ -15,7 +15,12 @@ const ACTION_LABELS: Record<string, string> = {
   'job.failed': '任务失败',
   'job.succeeded': '任务完成',
   'job.canceled': '任务取消',
+  'document.file_import_queued': '文件导入入队',
   'document.url_import_queued': 'URL 导入入队',
+  'document.clear_queued': '清空工作区入队',
+  'document.rebuild_queued': '重建索引入队',
+  'document.demo_imported': '示例资料导入',
+  'document.source_deleted': '来源删除',
   'url_import.rejected': 'URL 导入被拒绝',
 }
 

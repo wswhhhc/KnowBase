@@ -147,6 +147,26 @@ def _audit_file_import_queued(
     )
 
 
+def _audit_workspace_mutation_queued(
+    *,
+    action: str,
+    actor_user_id: str | None,
+    workspace_id: str,
+    job_id: str,
+    job_type: str,
+) -> None:
+    audit_store.record_event(
+        action=action,
+        actor_user_id=actor_user_id,
+        target_type="job",
+        target_id=job_id,
+        metadata={
+            "workspace_id": workspace_id,
+            "job_type": job_type,
+        },
+    )
+
+
 def _source_audit_identity(source_name: str) -> tuple[str, dict]:
     parsed = urlsplit(source_name)
     if parsed.scheme in {"http", "https"} and parsed.hostname:
@@ -529,13 +549,21 @@ async def clear_kb(
     _workspace_access: dict | None = Depends(require_workspace_editor),
 ) -> JobCreateResponse:
     try:
+        actor_user_id = str(_workspace_access.get("id")) if _workspace_access else None
         job = enqueue_tracked_job(
             job_type="clear_workspace",
             target_path="src.jobs.document_tasks:clear_workspace_documents",
-            created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+            created_by_user_id=actor_user_id,
             workspace_id=workspace_id,
             kwargs={"workspace_id": workspace_id},
             inject_job_id=True,
+        )
+        _audit_workspace_mutation_queued(
+            action="document.clear_queued",
+            actor_user_id=actor_user_id,
+            workspace_id=workspace_id,
+            job_id=job["id"],
+            job_type="clear_workspace",
         )
         return JobCreateResponse(job_id=job["id"], job=job)
     except Exception as e:
@@ -548,13 +576,21 @@ async def rebuild_index(
     _workspace_access: dict | None = Depends(require_workspace_editor),
 ) -> JobCreateResponse:
     try:
+        actor_user_id = str(_workspace_access.get("id")) if _workspace_access else None
         job = enqueue_tracked_job(
             job_type="rebuild_index",
             target_path="src.jobs.document_tasks:rebuild_index_documents",
-            created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+            created_by_user_id=actor_user_id,
             workspace_id=workspace_id,
             kwargs={"workspace_id": workspace_id},
             inject_job_id=True,
+        )
+        _audit_workspace_mutation_queued(
+            action="document.rebuild_queued",
+            actor_user_id=actor_user_id,
+            workspace_id=workspace_id,
+            job_id=job["id"],
+            job_type="rebuild_index",
         )
         return JobCreateResponse(job_id=job["id"], job=job)
     except Exception as e:

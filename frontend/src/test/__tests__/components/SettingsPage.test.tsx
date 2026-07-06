@@ -108,11 +108,29 @@ describe('SettingsPage', () => {
       {
         id: 3,
         actor_user_id: 'user-2',
+        action: 'document.clear_queued',
+        target_type: 'job',
+        target_id: 'job-clear-1',
+        metadata: { job_type: 'clear_workspace', workspace_id: 'ws-1' },
+        created_at: '2026-01-01T08:32:00Z',
+      },
+      {
+        id: 4,
+        actor_user_id: 'user-2',
+        action: 'document.rebuild_queued',
+        target_type: 'job',
+        target_id: 'job-rebuild-1',
+        metadata: { job_type: 'rebuild_index', workspace_id: 'ws-1' },
+        created_at: '2026-01-01T08:33:00Z',
+      },
+      {
+        id: 5,
+        actor_user_id: 'user-2',
         action: 'job.canceled',
         target_type: 'job',
         target_id: 'job-cancel-1',
         metadata: { job_type: 'ingest_url', workspace_id: 'ws-1' },
-        created_at: '2026-01-01T08:32:00Z',
+        created_at: '2026-01-01T08:34:00Z',
       },
     ])
     vi.mocked(api.createAdminUser).mockResolvedValue({
@@ -317,6 +335,10 @@ describe('SettingsPage', () => {
       expect(screen.getByText('job.queued')).toBeInTheDocument()
       expect(screen.getByText('URL 导入入队')).toBeInTheDocument()
       expect(screen.getByText('document.url_import_queued')).toBeInTheDocument()
+      expect(screen.getByText('清空工作区入队')).toBeInTheDocument()
+      expect(screen.getByText('document.clear_queued')).toBeInTheDocument()
+      expect(screen.getByText('重建索引入队')).toBeInTheDocument()
+      expect(screen.getByText('document.rebuild_queued')).toBeInTheDocument()
       expect(screen.getByText('任务取消')).toBeInTheDocument()
       expect(screen.getByText('job.canceled')).toBeInTheDocument()
     })
