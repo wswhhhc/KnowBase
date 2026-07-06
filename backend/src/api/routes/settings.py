@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.api.deps import verify_api_key, get_knowledge_base
+from src.api.deps import get_knowledge_base, require_admin_or_legacy_api_key
 from src.api.models import RuntimeSettingsOut, RuntimeSettingsUpdate, SettingsUpdateResult
 from src.config.public_settings import (
     MASKED_SECRET_VALUE,
@@ -15,7 +15,7 @@ from src.config.runtime_overrides import (
     update_runtime_settings,
 )
 
-router = APIRouter(dependencies=[Depends(verify_api_key)])
+router = APIRouter(dependencies=[Depends(require_admin_or_legacy_api_key)])
 
 
 @router.get("")
