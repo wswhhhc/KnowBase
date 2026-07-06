@@ -71,6 +71,9 @@ class AuthSettings(BaseModel):
     """Layered view for backend auth configuration."""
 
     api_key: str
+    jwt_secret: str
+    access_token_minutes: int
+    refresh_token_days: int
 
 
 class StorageSettings(BaseModel):
@@ -140,6 +143,9 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("API_KEY", "KNOWBASE_API_KEY"),
     )
+    jwt_secret: str = Field(default="", validation_alias="JWT_SECRET")
+    access_token_minutes: int = Field(default=15, validation_alias="ACCESS_TOKEN_MINUTES")
+    refresh_token_days: int = Field(default=14, validation_alias="REFRESH_TOKEN_DAYS")
 
     chat_stream_rate_limit_per_minute: int = Field(
         default=12,
@@ -188,6 +194,8 @@ class Settings(BaseSettings):
         "max_upload_mb",
         "chat_stream_rate_limit_per_minute",
         "document_import_rate_limit_per_minute",
+        "access_token_minutes",
+        "refresh_token_days",
     )
     @classmethod
     def _positive_int(cls, value: int) -> int:
@@ -250,7 +258,12 @@ class Settings(BaseSettings):
 
     @property
     def auth(self) -> AuthSettings:
-        return AuthSettings(api_key=self.api_key)
+        return AuthSettings(
+            api_key=self.api_key,
+            jwt_secret=self.jwt_secret,
+            access_token_minutes=self.access_token_minutes,
+            refresh_token_days=self.refresh_token_days,
+        )
 
     @property
     def storage(self) -> StorageSettings:

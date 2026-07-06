@@ -1,3 +1,4 @@
+export * from '@/shared/api/auth'
 export * from '@/shared/api/bookmarks'
 export * from '@/shared/api/chat'
 export * from '@/shared/api/client'

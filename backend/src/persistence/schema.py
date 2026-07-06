@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Index, Integer, MetaData, Table, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, ForeignKey, Index, Integer, MetaData, Table, Text
 
 
 metadata = MetaData()
@@ -70,5 +70,55 @@ pinned_sources = Table(
     Column("created_at", Text, nullable=False),
     CheckConstraint("action IN ('pin', 'exclude')", name="ck_pinned_sources_action"),
     Index("idx_pinned_sources_thread", "thread_id", "chunk_id"),
+)
+
+users = Table(
+    "users",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("username", Text, nullable=False, unique=True),
+    Column("password_hash", Text, nullable=False),
+    Column("role", Text, nullable=False),
+    Column("is_active", Boolean, nullable=False, server_default="1"),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    CheckConstraint("role IN ('admin', 'editor', 'viewer')", name="ck_users_role"),
+)
+
+workspace_members = Table(
+    "workspace_members",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("workspace_id", Text, nullable=False),
+    Column("user_id", Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("role", Text, nullable=False),
+    Column("created_at", Text, nullable=False),
+    CheckConstraint("role IN ('admin', 'editor', 'viewer')", name="ck_workspace_members_role"),
+    Index("idx_workspace_members_workspace_user", "workspace_id", "user_id", unique=True),
+)
+
+refresh_tokens = Table(
+    "refresh_tokens",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("user_id", Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("token_hash", Text, nullable=False, unique=True),
+    Column("expires_at", Text, nullable=False),
+    Column("revoked_at", Text, nullable=True),
+    Column("created_at", Text, nullable=False),
+    Index("idx_refresh_tokens_user", "user_id"),
+)
+
+audit_logs = Table(
+    "audit_logs",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("actor_user_id", Text, nullable=True),
+    Column("action", Text, nullable=False),
+    Column("target_type", Text, server_default=""),
+    Column("target_id", Text, server_default=""),
+    Column("metadata_json", Text, server_default="{}"),
+    Column("created_at", Text, nullable=False),
+    Index("idx_audit_logs_actor_created", "actor_user_id", "created_at"),
 )
 
