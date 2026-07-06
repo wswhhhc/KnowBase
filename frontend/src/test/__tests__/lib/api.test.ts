@@ -9,6 +9,50 @@ beforeEach(() => {
 // ── req helper via public functions ──
 
 describe('req helper (tested through public functions)', () => {
+  it('authHeaders prefers stored JWT access token over legacy API key', () => {
+    localStorage.clear()
+    localStorage.setItem('knowbase_access_token', 'jwt-token')
+    localStorage.setItem('knowbase_api_key', 'legacy-key')
+
+    expect(api.authHeaders()).toEqual({ Authorization: 'Bearer jwt-token' })
+  })
+
+  it('authHeaders falls back to the legacy API key when no JWT is stored', () => {
+    localStorage.clear()
+    localStorage.setItem('knowbase_api_key', 'legacy-key')
+
+    expect(api.authHeaders()).toEqual({ Authorization: 'Bearer legacy-key' })
+  })
+
+  it('persists and clears auth session tokens', () => {
+    localStorage.clear()
+
+    api.saveAuthSession({
+      access_token: 'access-token',
+      refresh_token: 'refresh-token',
+      token_type: 'bearer',
+      expires_in: 1800,
+      user: {
+        id: 'user-1',
+        username: 'admin',
+        role: 'admin',
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    })
+
+    expect(api.getStoredAccessToken()).toBe('access-token')
+    expect(api.getStoredRefreshToken()).toBe('refresh-token')
+    expect(api.getStoredUser()?.username).toBe('admin')
+
+    api.clearAuthSession()
+
+    expect(api.getStoredAccessToken()).toBe('')
+    expect(api.getStoredRefreshToken()).toBe('')
+    expect(api.getStoredUser()).toBeNull()
+  })
+
   it('getConversations calls correct URL', async () => {
     const mock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]), text: () => Promise.resolve('[]'), headers: new Headers() })
     vi.stubGlobal('fetch', mock)
