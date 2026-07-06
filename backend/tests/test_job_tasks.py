@@ -32,6 +32,16 @@ def failing_task() -> None:
     raise RuntimeError("task exploded")
 
 
+def canceling_task(job_id: str) -> str:
+    job_store.cancel_job(job_id)
+    return "canceled during execution"
+
+
+def canceling_failing_task(job_id: str) -> None:
+    job_store.cancel_job(job_id)
+    raise RuntimeError("task exploded after cancel")
+
+
 class FakeClearKnowledgeBase:
     def __init__(self):
         self.cleared_workspaces: list[str] = []
@@ -110,6 +120,38 @@ def test_run_tracked_job_skips_canceled_job(isolated_jobs_database):
     assert stored is not None
     assert stored["status"] == "canceled"
     assert stored["attempts"] == 0
+
+
+def test_run_tracked_job_preserves_canceled_status_after_task_returns(isolated_jobs_database):
+    user = auth_store.create_user(username="editor", password_hash=hash_password("editor-pass"), role="editor")
+    job = job_store.create_job(job_type="sample", created_by_user_id=user["id"], workspace_id="ws-a")
+
+    result = run_tracked_job(job["id"], "tests.test_job_tasks:canceling_task", kwargs={"job_id": job["id"]})
+    stored = job_store.get_job(job["id"])
+    audit_events = audit_store.list_events(actor_user_id=user["id"])
+
+    assert result == "canceled during execution"
+    assert stored is not None
+    assert stored["status"] == "canceled"
+    assert stored["attempts"] == 1
+    assert stored["progress"] == {}
+    assert not [event for event in audit_events if event["action"] == "job.succeeded"]
+
+
+def test_run_tracked_job_preserves_canceled_status_after_task_raises(isolated_jobs_database):
+    user = auth_store.create_user(username="editor", password_hash=hash_password("editor-pass"), role="editor")
+    job = job_store.create_job(job_type="sample", created_by_user_id=user["id"], workspace_id="ws-a")
+
+    with pytest.raises(RuntimeError, match="task exploded after cancel"):
+        run_tracked_job(job["id"], "tests.test_job_tasks:canceling_failing_task", kwargs={"job_id": job["id"]})
+    stored = job_store.get_job(job["id"])
+    audit_events = audit_store.list_events(actor_user_id=user["id"])
+
+    assert stored is not None
+    assert stored["status"] == "canceled"
+    assert stored["attempts"] == 1
+    assert stored["error"] == ""
+    assert not [event for event in audit_events if event["action"] == "job.failed"]
 
 
 def test_enqueue_tracked_job_creates_db_job_and_uses_same_rq_job_id(isolated_jobs_database):

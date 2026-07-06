@@ -47,11 +47,13 @@ def run_tracked_job(
         result = _load_callable(target_path)(*(args or []), **(kwargs or {}))
     except Exception as exc:
         failed = job_store.mark_job_failed(job_id, error=str(exc))
-        _record_job_status_event(failed or job, "job.failed")
+        if (failed or job).get("status") != "canceled":
+            _record_job_status_event(failed or job, "job.failed")
         raise
     progress = {"phase": "done", "percent": 100}
     if isinstance(result, dict):
         progress["result"] = result
     succeeded = job_store.mark_job_succeeded(job_id, progress=progress)
-    _record_job_status_event(succeeded or job, "job.succeeded")
+    if (succeeded or job).get("status") != "canceled":
+        _record_job_status_event(succeeded or job, "job.succeeded")
     return result

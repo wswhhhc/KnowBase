@@ -102,6 +102,33 @@ def test_sqlalchemy_job_lifecycle_updates_status_progress_and_error():
     assert failed["error"] == "boom"
 
 
+def test_sqlalchemy_canceled_job_is_not_overwritten_by_success_or_failure():
+    session_factory = _session_factory()
+    user = create_user_with_session(session_factory, username="editor", password_hash="hash", role="editor")
+    success_job = create_job_with_session(session_factory, job_type="ingest_url", created_by_user_id=user["id"])
+    failure_job = create_job_with_session(session_factory, job_type="ingest_url", created_by_user_id=user["id"])
+
+    mark_job_running_with_session(session_factory, success_job["id"])
+    cancel_job_with_session(session_factory, success_job["id"])
+    succeeded = mark_job_succeeded_with_session(
+        session_factory,
+        success_job["id"],
+        progress={"phase": "done", "percent": 100},
+    )
+
+    mark_job_running_with_session(session_factory, failure_job["id"])
+    cancel_job_with_session(session_factory, failure_job["id"])
+    failed = mark_job_failed_with_session(session_factory, failure_job["id"], error="boom")
+
+    assert succeeded is not None
+    assert succeeded["status"] == "canceled"
+    assert succeeded["progress"] == {}
+    assert succeeded["error"] == ""
+    assert failed is not None
+    assert failed["status"] == "canceled"
+    assert failed["error"] == ""
+
+
 def test_sqlalchemy_progress_updates_preserve_retry_payload():
     session_factory = _session_factory()
     user = create_user_with_session(session_factory, username="editor", password_hash="hash", role="editor")
