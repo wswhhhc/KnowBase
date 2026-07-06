@@ -91,6 +91,25 @@ def test_admin_create_user_rejects_short_password(monkeypatch, tmp_path):
     assert response.status_code == 422
 
 
+def test_admin_update_user_rejects_duplicate_username(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+    auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")
+    viewer = auth_store.create_user(username="viewer", password_hash=hash_password("viewer-pass"), role="viewer")
+    auth_store.create_user(username="editor", password_hash=hash_password("editor-pass"), role="editor")
+    client = TestClient(app)
+    admin_token = _login(client, "admin", "admin-pass")
+
+    response = client.patch(
+        f"/api/admin/users/{viewer['id']}",
+        json={"username": "editor"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "用户已存在或数据冲突"
+    assert auth_store.get_user_by_id(viewer["id"])["username"] == "viewer"
+
+
 def test_last_active_admin_cannot_be_disabled_demoted_or_deleted(monkeypatch, tmp_path):
     _configure_auth_database(monkeypatch, tmp_path)
     admin = auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")

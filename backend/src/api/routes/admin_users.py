@@ -75,7 +75,10 @@ async def update_user(user_id: str, body: AdminUserUpdate, current_user: dict = 
     if password is not None:
         updates["password_hash"] = hash_password(password)
     _reject_if_removing_last_active_admin(target_user, updates)
-    user = auth_store.update_user(user_id, **updates)
+    try:
+        user = auth_store.update_user(user_id, **updates)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="用户已存在或数据冲突") from exc
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
     if {"password", "role", "is_active"}.intersection(changed_fields):
