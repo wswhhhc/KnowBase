@@ -175,6 +175,7 @@ class Settings(BaseSettings):
         default="http://localhost:5173,http://localhost:3000",
         validation_alias="CORS_ALLOW_ORIGINS",
     )
+    app_env: str = Field(default="development", validation_alias="APP_ENV")
 
     checkpoint_db_path: str = Field(
         default=str(LOCAL_RUNTIME_DIR / "checkpoints.db"),
@@ -306,6 +307,10 @@ class Settings(BaseSettings):
             if origin.strip()
         ]
         return ApiSettings(cors_allow_origins=origins)
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.strip().lower() in {"prod", "production"}
 
 
 settings = Settings()

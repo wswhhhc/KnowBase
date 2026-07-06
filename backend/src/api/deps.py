@@ -51,11 +51,13 @@ def get_current_user_or_legacy_api_key(
     """Return a JWT user, or None for the legacy API-key/local-dev path."""
     api_key = get_runtime_setting("api_key", settings.auth.api_key)
     if credentials is None:
-        if not api_key:
+        if not api_key and not settings.is_production:
             return None
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    if api_key and credentials.credentials == api_key:
+    if api_key and credentials.credentials == api_key and not settings.is_production:
         return None
+    if api_key and credentials.credentials == api_key and settings.is_production:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="JWT login required")
     if api_key and not settings.auth.jwt_secret:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key")
     return _current_user_from_access_token(credentials.credentials)
