@@ -1,5 +1,6 @@
 # 环境变量（根目录）
 .env
+.env.compose
 
 # Backend
 backend/.env
