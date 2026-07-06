@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from src.api.auth_tokens import hash_password
 from src.api.main import app
-from src.persistence import auth_store, workspace_store
+from src.persistence import audit_store, auth_store, workspace_store
 from tests.test_auth_routes import _configure_auth_database
 
 
@@ -46,6 +46,20 @@ def test_admin_can_replace_and_list_workspace_members(monkeypatch, tmp_path):
     assert listed.status_code == 200
     assert listed.json() == replaced.json()
     assert admin["id"] not in {member["user_id"] for member in listed.json()}
+
+    audit_events = audit_store.list_events(actor_user_id=admin["id"], limit=10)
+    member_events = [event for event in audit_events if event["action"] == "admin.workspace_members_replaced"]
+    assert len(member_events) == 1
+    assert member_events[0]["target_type"] == "workspace"
+    assert member_events[0]["target_id"] == workspace["id"]
+    assert member_events[0]["metadata"] == {
+        "workspace_name": "团队空间",
+        "member_count": 2,
+        "members": [
+            {"user_id": editor["id"], "username": "editor", "role": "editor"},
+            {"user_id": viewer["id"], "username": "viewer", "role": "viewer"},
+        ],
+    }
 
 
 def test_viewer_cannot_manage_workspace_members(monkeypatch, tmp_path):
