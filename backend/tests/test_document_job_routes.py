@@ -43,11 +43,12 @@ def test_upload_returns_queued_job_without_running_kb_import():
     uploaded_path = None
     try:
         with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
-            with patch.object(fake_kb, "ingest_file") as mock_ingest_file:
-                response = client.post(
-                    "/api/documents/upload?workspace_id=ws-a&version_mode=append",
-                    files={"file": ("upload.txt", b"hello", "text/plain")},
-                )
+            with patch("src.api.routes.documents.audit_store.record_event") as mock_audit:
+                with patch.object(fake_kb, "ingest_file") as mock_ingest_file:
+                    response = client.post(
+                        "/api/documents/upload?workspace_id=ws-a&version_mode=append",
+                        files={"file": ("upload.txt", b"hello", "text/plain")},
+                    )
 
         assert response.status_code == 200
         assert response.json()["job_id"] == "job-upload-1"
@@ -63,6 +64,18 @@ def test_upload_returns_queued_job_without_running_kb_import():
         assert call_kwargs["kwargs"]["version_mode"] == "append"
         assert call_kwargs["kwargs"]["workspace_id"] == "ws-a"
         assert call_kwargs["inject_job_id"] is True
+        mock_audit.assert_called_once()
+        audit_kwargs = mock_audit.call_args.kwargs
+        assert audit_kwargs["action"] == "document.file_import_queued"
+        assert audit_kwargs["target_type"] == "job"
+        assert audit_kwargs["target_id"] == "job-upload-1"
+        assert audit_kwargs["metadata"] == {
+            "workspace_id": "ws-a",
+            "job_type": "ingest_file",
+            "version_mode": "append",
+            "stream": False,
+            "source_name": "upload.txt",
+        }
     finally:
         if uploaded_path:
             from pathlib import Path

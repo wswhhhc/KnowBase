@@ -47,6 +47,16 @@ def _new_session_for_user(user: dict) -> AuthSessionOut:
     )
 
 
+def _record_refresh_failed(token: dict | None, reason: str) -> None:
+    audit_store.record_event(
+        action="auth.refresh_failed",
+        actor_user_id=token.get("user_id") if token else None,
+        target_type="refresh_token" if token else "",
+        target_id=token.get("id", "") if token else "",
+        metadata={"reason": reason},
+    )
+
+
 @router.post("/login")
 async def login(body: LoginRequest, request: Request) -> AuthSessionOut:
     enforce_auth_login_rate_limit(request, body.username)
@@ -74,19 +84,40 @@ async def refresh(body: RefreshRequest) -> AuthSessionOut:
     token_hash = hash_refresh_token(body.refresh_token)
     token = auth_store.get_refresh_token(token_hash)
     if not token or token.get("revoked_at"):
+        _record_refresh_failed(token, "revoked_or_unknown")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
     if datetime.fromisoformat(token["expires_at"]) <= datetime.now(UTC):
+        _record_refresh_failed(token, "expired")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
     user = auth_store.get_user_by_id(token["user_id"])
     if not user or not user.get("is_active"):
+        _record_refresh_failed(token, "inactive_user")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
     auth_store.revoke_refresh_token(token_hash)
-    return _new_session_for_user(user)
+    session = _new_session_for_user(user)
+    audit_store.record_event(
+        action="auth.refresh_succeeded",
+        actor_user_id=user["id"],
+        target_type="refresh_token",
+        target_id=token["id"],
+        metadata={"username": user["username"], "role": user["role"]},
+    )
+    return session
 
 
 @router.post("/logout")
 async def logout(body: LogoutRequest) -> dict:
-    auth_store.revoke_refresh_token(hash_refresh_token(body.refresh_token))
+    token_hash = hash_refresh_token(body.refresh_token)
+    token = auth_store.get_refresh_token(token_hash)
+    revoked = auth_store.revoke_refresh_token(token_hash)
+    if revoked and token:
+        audit_store.record_event(
+            action="auth.logout_succeeded",
+            actor_user_id=token["user_id"],
+            target_type="refresh_token",
+            target_id=token["id"],
+            metadata={},
+        )
     return {"ok": True}
 
 

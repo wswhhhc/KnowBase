@@ -123,6 +123,30 @@ def _audit_url_import_queued(
     )
 
 
+def _audit_file_import_queued(
+    *,
+    actor_user_id: str | None,
+    workspace_id: str,
+    job_id: str,
+    source_name: str,
+    version_mode: str,
+    stream: bool,
+) -> None:
+    audit_store.record_event(
+        action="document.file_import_queued",
+        actor_user_id=actor_user_id,
+        target_type="job",
+        target_id=job_id,
+        metadata={
+            "workspace_id": workspace_id,
+            "job_type": "ingest_file",
+            "version_mode": version_mode,
+            "stream": stream,
+            "source_name": source_name,
+        },
+    )
+
+
 def _job_event_source(job_id: str, *, fallback_done: dict) -> EventSourceResponse:
     """Stream progress for an already queued import job."""
 
@@ -208,10 +232,11 @@ async def upload_file_stream(
             return EventSourceResponse(_probe_events())
 
         actual_mode = version_mode or "replace"
+        actor_user_id = str(_workspace_access.get("id")) if _workspace_access else None
         job = enqueue_tracked_job(
             job_type="ingest_file",
             target_path="src.jobs.document_tasks:ingest_file_document",
-            created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+            created_by_user_id=actor_user_id,
             workspace_id=workspace_id,
             kwargs={
                 "file_path": str(file_path),
@@ -220,6 +245,14 @@ async def upload_file_stream(
                 "workspace_id": workspace_id,
             },
             inject_job_id=True,
+        )
+        _audit_file_import_queued(
+            actor_user_id=actor_user_id,
+            workspace_id=workspace_id,
+            job_id=job["id"],
+            source_name=source_name,
+            version_mode=actual_mode,
+            stream=True,
         )
         return _job_event_source(
             job["id"],
@@ -330,10 +363,11 @@ async def upload_file(
             )
 
         actual_mode = version_mode or "replace"
+        actor_user_id = str(_workspace_access.get("id")) if _workspace_access else None
         job = enqueue_tracked_job(
             job_type="ingest_file",
             target_path="src.jobs.document_tasks:ingest_file_document",
-            created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+            created_by_user_id=actor_user_id,
             workspace_id=workspace_id,
             kwargs={
                 "file_path": str(file_path),
@@ -342,6 +376,14 @@ async def upload_file(
                 "workspace_id": workspace_id,
             },
             inject_job_id=True,
+        )
+        _audit_file_import_queued(
+            actor_user_id=actor_user_id,
+            workspace_id=workspace_id,
+            job_id=job["id"],
+            source_name=source_name,
+            version_mode=actual_mode,
+            stream=False,
         )
         return JobCreateResponse(job_id=job["id"], job=job)
     except ValueError as e:

@@ -58,6 +58,15 @@ def test_login_me_refresh_and_logout_flow(monkeypatch, tmp_path):
     assert logout.status_code == 200
     assert logout.json() == {"ok": True}
 
+    audit_events = audit_store.list_events(actor_user_id=user["id"], limit=10)
+    actions = [event["action"] for event in audit_events]
+    assert "auth.refresh_succeeded" in actions
+    assert "auth.refresh_failed" in actions
+    assert "auth.logout_succeeded" in actions
+    for event in audit_events:
+        assert "refresh_token" not in event["metadata"]
+        assert "token_hash" not in event["metadata"]
+
 
 def test_login_rejects_bad_password(monkeypatch, tmp_path):
     _configure_auth_database(monkeypatch, tmp_path)
