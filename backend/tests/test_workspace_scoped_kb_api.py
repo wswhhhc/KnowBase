@@ -366,15 +366,31 @@ class WorkspaceScopedKnowledgeBaseApiTests(unittest.TestCase):
             ],
         )
 
-        ingest_resp = self.client.post(
-            "/api/documents/ingest-url?workspace_id=ws-beta",
-            json={"url": "https://example.com/beta"},
-        )
+        queued_job = {
+            "id": "job-url-beta",
+            "job_type": "ingest_url",
+            "status": "queued",
+            "created_by_user_id": None,
+            "workspace_id": "ws-beta",
+            "progress": {"phase": "queued", "percent": 0},
+            "error": "",
+            "attempts": 0,
+            "created_at": "2026-07-06T00:00:00+00:00",
+            "updated_at": "2026-07-06T00:00:00+00:00",
+            "started_at": None,
+            "finished_at": None,
+        }
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
+            ingest_resp = self.client.post(
+                "/api/documents/ingest-url?workspace_id=ws-beta",
+                json={"url": "https://example.com/beta"},
+            )
         self.assertEqual(ingest_resp.status_code, 200)
-        self.assertEqual(ingest_resp.json()["chunk_count"], 1)
+        self.assertEqual(ingest_resp.json()["job_id"], "job-url-beta")
+        mock_enqueue.assert_called_once()
 
         beta_stats = self.client.get("/api/knowledge-base/stats?workspace_id=ws-beta").json()
-        self.assertEqual(beta_stats["chunk_count"], 3)
+        self.assertEqual(beta_stats["chunk_count"], 2)
 
     def test_import_demo_only_touches_target_workspace(self):
         resp = self.client.post("/api/documents/import-demo?workspace_id=ws-beta")

@@ -102,6 +102,27 @@ def test_enqueue_tracked_job_creates_db_job_and_uses_same_rq_job_id(isolated_job
     assert queue.calls[0]["kwargs"]["job_id"] == job["id"]
 
 
+def test_enqueue_tracked_job_can_inject_db_job_id_into_task_kwargs(isolated_jobs_database):
+    user = auth_store.create_user(username="editor", password_hash=hash_password("editor-pass"), role="editor")
+    queue = FakeQueue()
+
+    job = enqueue_tracked_job(
+        job_type="sample",
+        target_path="tests.test_job_tasks:sample_task",
+        created_by_user_id=user["id"],
+        kwargs={"left": 2, "right": 3},
+        queue=queue,
+        inject_job_id=True,
+    )
+
+    assert queue.calls[0]["args"] == (
+        job["id"],
+        "tests.test_job_tasks:sample_task",
+        [],
+        {"left": 2, "right": 3, "job_id": job["id"]},
+    )
+
+
 def test_enqueue_tracked_job_marks_failed_when_enqueue_fails(isolated_jobs_database):
     user = auth_store.create_user(username="editor", password_hash=hash_password("editor-pass"), role="editor")
 
