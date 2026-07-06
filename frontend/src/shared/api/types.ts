@@ -33,6 +33,8 @@ export type AuthSession = Schemas['AuthSessionOut']
 export type LoginRequest = Schemas['LoginRequest']
 export type RefreshRequest = Schemas['RefreshRequest']
 export type LogoutRequest = Schemas['LogoutRequest']
+export type AdminUserCreate = Schemas['AdminUserCreate']
+export type AdminUserUpdate = Schemas['AdminUserUpdate']
 
 export type {
   ChatStreamDonePayload,

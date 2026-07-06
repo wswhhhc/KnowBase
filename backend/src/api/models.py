@@ -46,6 +46,20 @@ class AuthSessionOut(BaseModel):
     user: UserOut
 
 
+class AdminUserCreate(BaseModel):
+    username: str = Field(..., min_length=1, max_length=120)
+    password: str = Field(..., min_length=8, max_length=256)
+    role: str = Field(default="viewer", pattern="^(admin|editor|viewer)$")
+    is_active: bool = True
+
+
+class AdminUserUpdate(BaseModel):
+    username: str | None = Field(default=None, min_length=1, max_length=120)
+    password: str | None = Field(default=None, min_length=8, max_length=256)
+    role: str | None = Field(default=None, pattern="^(admin|editor|viewer)$")
+    is_active: bool | None = None
+
+
 class ChatSource(BaseModel):
     source: str
     chunk_id: str | None = None

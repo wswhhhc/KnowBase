@@ -40,6 +40,12 @@ def get_current_user(credentials: Annotated[HTTPAuthorizationCredentials | None,
     return {key: value for key, value in user.items() if key != "password_hash"}
 
 
+def require_admin(current_user: Annotated[dict, Depends(get_current_user)]) -> dict:
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+    return current_user
+
+
 @lru_cache(maxsize=1)
 def get_knowledge_base() -> KnowledgeBase:
     """Return the singleton KnowledgeBase (initialized on first call)."""

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.persistence.schema import refresh_tokens, users
@@ -63,6 +63,45 @@ def get_user_by_id_with_session(session_factory: SessionFactory, user_id: str) -
     with session_factory() as session:
         row = session.execute(select(users).where(users.c.id == user_id)).mappings().first()
     return _user_from_mapping(row) if row else None
+
+
+def list_users_with_session(session_factory: SessionFactory) -> list[dict]:
+    with session_factory() as session:
+        rows = session.execute(select(users).order_by(users.c.created_at.desc())).mappings().all()
+    return [_public_user(_user_from_mapping(row)) for row in rows]
+
+
+def update_user_with_session(
+    session_factory: SessionFactory,
+    user_id: str,
+    *,
+    username: str | None = None,
+    password_hash: str | None = None,
+    role: str | None = None,
+    is_active: bool | None = None,
+) -> dict | None:
+    values: dict[str, object] = {}
+    if username is not None:
+        values["username"] = username
+    if password_hash is not None:
+        values["password_hash"] = password_hash
+    if role is not None:
+        values["role"] = role
+    if is_active is not None:
+        values["is_active"] = is_active
+    if not values:
+        return None
+    values["updated_at"] = datetime.now(UTC).isoformat()
+    with session_factory.begin() as session:
+        session.execute(update(users).where(users.c.id == user_id).values(**values))
+        row = session.execute(select(users).where(users.c.id == user_id)).mappings().first()
+    return _public_user(_user_from_mapping(row)) if row else None
+
+
+def delete_user_with_session(session_factory: SessionFactory, user_id: str) -> bool:
+    with session_factory.begin() as session:
+        result = session.execute(delete(users).where(users.c.id == user_id))
+    return result.rowcount > 0
 
 
 def create_refresh_token_with_session(
