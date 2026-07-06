@@ -237,6 +237,16 @@ class LoaderTests(unittest.TestCase):
         self.assertEqual(docs[0].metadata["url"], "https://example.com/page")
 
     @patch("requests.Session")
+    @patch("socket.getaddrinfo")
+    def test_load_url_rejects_non_http_scheme_before_network(self, mock_addrinfo, mock_session_cls):
+        """loader 层也必须拒绝非 HTTP/HTTPS URL，不能依赖 requests 隐式失败。"""
+        with self.assertRaisesRegex(ValueError, "HTTP/HTTPS"):
+            load_url("file:///etc/passwd")
+
+        mock_addrinfo.assert_not_called()
+        mock_session_cls.assert_not_called()
+
+    @patch("requests.Session")
     @patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("1.2.3.4", 0))])
     def test_load_url_rejects_unsupported_content_type(self, mock_addrinfo, mock_session_cls):
         """非 HTML/纯文本响应不进入正文提取。"""

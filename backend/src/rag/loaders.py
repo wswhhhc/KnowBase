@@ -132,9 +132,12 @@ def _validate_url(url: str) -> Optional[str]:
         None — IP 直连（已过检），无需 pin
     """
     parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("仅允许导入 HTTP/HTTPS URL。")
+
     host = parsed.hostname
     if not host:
-        return None
+        raise ValueError("URL 缺少有效主机名。")
 
     # IP 直连
     try:
