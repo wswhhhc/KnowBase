@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, CheckCircle2, CircleDashed, Clock3, Loader2, PanelRightOpen, RefreshCw, XCircle } from 'lucide-react'
 
 import type { ViewType } from '@/app/navigation'
@@ -19,6 +19,7 @@ const STATUS_COPY: Record<string, { label: string; className: string; icon: type
   failed: { label: '失败', className: 'text-red-500 bg-red-500/10 border-red-500/20', icon: XCircle },
   canceled: { label: '已取消', className: 'text-muted-foreground bg-muted/40 border-border', icon: CircleDashed },
 }
+const ACTIVE_JOBS_REFRESH_MS = 3000
 
 export default function JobsPage({ onOpenSidebar, sidebarOpen, onNavigate }: JobsPageProps) {
   const [jobs, setJobs] = useState<Job[]>([])
@@ -32,21 +33,29 @@ export default function JobsPage({ onOpenSidebar, sidebarOpen, onNavigate }: Job
     [jobs],
   )
 
-  const loadJobs = async () => {
-    setLoading(true)
+  const loadJobs = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
     setError('')
     try {
       setJobs(await api.listJobs())
     } catch (err) {
       setError(err instanceof Error ? err.message : '任务列表加载失败')
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     void loadJobs()
-  }, [])
+  }, [loadJobs])
+
+  useEffect(() => {
+    if (activeCount === 0 || loading || error) return
+    const timer = window.setTimeout(() => {
+      void loadJobs(false)
+    }, ACTIVE_JOBS_REFRESH_MS)
+    return () => window.clearTimeout(timer)
+  }, [activeCount, error, loadJobs, loading])
 
   const handleCancelJob = async (jobId: string) => {
     setCancelingJobId(jobId)
