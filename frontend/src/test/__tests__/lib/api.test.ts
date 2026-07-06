@@ -79,6 +79,18 @@ describe('req helper (tested through public functions)', () => {
   })
 })
 
+describe('Admin API', () => {
+  it('listAdminAuditLogs builds optional query params', async () => {
+    const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]), text: () => Promise.resolve('[]'), headers: new Headers() })
+    vi.stubGlobal('fetch', fn)
+
+    await api.listAdminAuditLogs(undefined, { actorUserId: 'user-1', limit: 25 })
+
+    expect(fn).toHaveBeenCalledWith('/api/admin/audit-logs?actor_user_id=user-1&limit=25', expect.any(Object))
+    vi.unstubAllGlobals()
+  })
+})
+
 describe('Conversations API', () => {
   it('createConversation sends POST with title', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: '1' }), text: () => Promise.resolve('{}'), headers: new Headers() })
