@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from src.api.auth_tokens import hash_password
 from src.api.main import app
 from src.jobs.tasks import run_tracked_job
-from src.persistence import auth_store, job_store
+from src.persistence import audit_store, auth_store, job_store
 from src.persistence.schema import metadata
 from src.persistence.sqlalchemy_database import create_engine_for_url
 from tests.test_auth_routes import _configure_auth_database
@@ -128,6 +128,7 @@ def test_user_can_cancel_own_queued_job(isolated_jobs_database):
     editor_job = job_store.create_job(
         job_type="ingest_url",
         created_by_user_id=users["editor"]["id"],
+        workspace_id="ws-a",
     )
     client = TestClient(app)
     editor_token = _login(client, "editor", "editor-pass")
@@ -141,6 +142,10 @@ def test_user_can_cancel_own_queued_job(isolated_jobs_database):
     assert response.status_code == 200
     assert response.json()["status"] == "canceled"
     assert response.json()["finished_at"] is not None
+    audit_events = audit_store.list_events(actor_user_id=users["editor"]["id"])
+    cancel_event = next(event for event in audit_events if event["action"] == "job.canceled")
+    assert cancel_event["target_id"] == editor_job["id"]
+    assert cancel_event["metadata"] == {"job_type": "ingest_url", "workspace_id": "ws-a"}
 
 
 def test_cancel_finished_job_returns_conflict(isolated_jobs_database):

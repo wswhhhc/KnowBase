@@ -14,6 +14,8 @@ const ACTION_LABELS: Record<string, string> = {
   'job.queued': '任务入队',
   'job.failed': '任务失败',
   'job.succeeded': '任务完成',
+  'job.canceled': '任务取消',
+  'document.url_import_queued': 'URL 导入入队',
   'url_import.rejected': 'URL 导入被拒绝',
 }
 

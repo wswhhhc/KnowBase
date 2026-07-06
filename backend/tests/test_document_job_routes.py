@@ -151,11 +151,12 @@ def test_ingest_url_returns_queued_job_without_running_kb_import():
     fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
     try:
         with patch("src.api.routes.documents.enqueue_tracked_job", return_value=_job_payload()) as mock_enqueue:
-            with patch.object(fake_kb, "ingest_url") as mock_ingest_url:
-                response = client.post(
-                    "/api/documents/ingest-url?workspace_id=ws-a&version_mode=append",
-                    json={"url": "https://example.com/page"},
-                )
+            with patch("src.api.routes.documents.audit_store.record_event") as mock_audit:
+                with patch.object(fake_kb, "ingest_url") as mock_ingest_url:
+                    response = client.post(
+                        "/api/documents/ingest-url?workspace_id=ws-a&version_mode=append",
+                        json={"url": "https://example.com/page?query=private#frag"},
+                    )
     finally:
         teardown_test_env(tmp_dir, orig_db, patchers)
 
@@ -170,12 +171,27 @@ def test_ingest_url_returns_queued_job_without_running_kb_import():
         created_by_user_id=None,
         workspace_id="ws-a",
         kwargs={
-            "url": "https://example.com/page",
+            "url": "https://example.com/page?query=private#frag",
             "version_mode": "append",
             "workspace_id": "ws-a",
         },
         inject_job_id=True,
     )
+    mock_audit.assert_called_once()
+    audit_kwargs = mock_audit.call_args.kwargs
+    assert audit_kwargs["action"] == "document.url_import_queued"
+    assert audit_kwargs["actor_user_id"] is None
+    assert audit_kwargs["target_type"] == "job"
+    assert audit_kwargs["target_id"] == "job-url-1"
+    assert audit_kwargs["metadata"] == {
+        "workspace_id": "ws-a",
+        "job_type": "ingest_url",
+        "version_mode": "append",
+        "stream": False,
+        "scheme": "https",
+        "host": "example.com",
+        "url": "https://example.com/page",
+    }
 
 
 def test_ingest_url_existing_source_probe_does_not_enqueue_job():
@@ -217,12 +233,13 @@ def test_ingest_url_stream_enqueues_job_and_streams_job_status_without_running_k
     }
     try:
         with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
-            with patch("src.api.routes.documents.job_store.get_job", side_effect=[running_job, succeeded_job]):
-                with patch.object(fake_kb, "ingest_url") as mock_ingest_url:
-                    response = client.post(
-                        "/api/documents/ingest-url-stream?workspace_id=ws-a&version_mode=append",
-                        json={"url": "https://example.com/page"},
-                    )
+            with patch("src.api.routes.documents.audit_store.record_event") as mock_audit:
+                with patch("src.api.routes.documents.job_store.get_job", side_effect=[running_job, succeeded_job]):
+                    with patch.object(fake_kb, "ingest_url") as mock_ingest_url:
+                        response = client.post(
+                            "/api/documents/ingest-url-stream?workspace_id=ws-a&version_mode=append",
+                            json={"url": "https://example.com/page?query=private#frag"},
+                        )
     finally:
         teardown_test_env(tmp_dir, orig_db, patchers)
 
@@ -239,12 +256,25 @@ def test_ingest_url_stream_enqueues_job_and_streams_job_status_without_running_k
         created_by_user_id=None,
         workspace_id="ws-a",
         kwargs={
-            "url": "https://example.com/page",
+            "url": "https://example.com/page?query=private#frag",
             "version_mode": "append",
             "workspace_id": "ws-a",
         },
         inject_job_id=True,
     )
+    mock_audit.assert_called_once()
+    audit_kwargs = mock_audit.call_args.kwargs
+    assert audit_kwargs["action"] == "document.url_import_queued"
+    assert audit_kwargs["target_id"] == "job-url-stream-1"
+    assert audit_kwargs["metadata"] == {
+        "workspace_id": "ws-a",
+        "job_type": "ingest_url",
+        "version_mode": "append",
+        "stream": True,
+        "scheme": "https",
+        "host": "example.com",
+        "url": "https://example.com/page",
+    }
 
 
 def test_clear_workspace_returns_queued_job_without_running_kb_clear():

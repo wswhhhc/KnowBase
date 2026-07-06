@@ -61,10 +61,11 @@ def isolated_jobs_database(monkeypatch, tmp_path):
 
 def test_run_tracked_job_marks_success(isolated_jobs_database):
     user = auth_store.create_user(username="editor", password_hash=hash_password("editor-pass"), role="editor")
-    job = job_store.create_job(job_type="sample", created_by_user_id=user["id"])
+    job = job_store.create_job(job_type="sample", created_by_user_id=user["id"], workspace_id="ws-a")
 
     result = run_tracked_job(job["id"], "tests.test_job_tasks:sample_task", [2, 3])
     stored = job_store.get_job(job["id"])
+    audit_events = audit_store.list_events(actor_user_id=user["id"])
 
     assert result == 5
     assert stored is not None
@@ -73,21 +74,28 @@ def test_run_tracked_job_marks_success(isolated_jobs_database):
     assert stored["progress"] == {"phase": "done", "percent": 100}
     assert stored["started_at"] is not None
     assert stored["finished_at"] is not None
+    assert audit_events[0]["action"] == "job.succeeded"
+    assert audit_events[0]["target_id"] == job["id"]
+    assert audit_events[0]["metadata"] == {"job_type": "sample", "workspace_id": "ws-a", "attempts": 1}
 
 
 def test_run_tracked_job_marks_failure(isolated_jobs_database):
     user = auth_store.create_user(username="editor", password_hash=hash_password("editor-pass"), role="editor")
-    job = job_store.create_job(job_type="sample", created_by_user_id=user["id"])
+    job = job_store.create_job(job_type="sample", created_by_user_id=user["id"], workspace_id="ws-a")
 
     with pytest.raises(RuntimeError, match="task exploded"):
         run_tracked_job(job["id"], "tests.test_job_tasks:failing_task")
     stored = job_store.get_job(job["id"])
+    audit_events = audit_store.list_events(actor_user_id=user["id"])
 
     assert stored is not None
     assert stored["status"] == "failed"
     assert stored["attempts"] == 1
     assert stored["error"] == "task exploded"
     assert stored["finished_at"] is not None
+    assert audit_events[0]["action"] == "job.failed"
+    assert audit_events[0]["target_id"] == job["id"]
+    assert audit_events[0]["metadata"] == {"job_type": "sample", "workspace_id": "ws-a", "attempts": 1}
 
 
 def test_run_tracked_job_skips_canceled_job(isolated_jobs_database):

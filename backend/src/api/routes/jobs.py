@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from src.api.deps import get_current_user_or_legacy_api_key
 from src.api.models import JobOut
 from src.jobs.enqueue import retry_tracked_job
-from src.persistence import job_store
+from src.persistence import audit_store, job_store
 
 
 router = APIRouter()
@@ -53,6 +53,17 @@ async def cancel_job(
     canceled = job_store.cancel_job(job_id)
     if canceled is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    if job["status"] != "canceled":
+        audit_store.record_event(
+            action="job.canceled",
+            actor_user_id=current_user.get("id") if current_user else None,
+            target_type="job",
+            target_id=job_id,
+            metadata={
+                "job_type": canceled.get("job_type", ""),
+                "workspace_id": canceled.get("workspace_id", ""),
+            },
+        )
     return JobOut(**canceled)
 
 

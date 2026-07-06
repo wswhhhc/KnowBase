@@ -89,6 +89,31 @@ describe('SettingsPage', () => {
         metadata: { job_type: 'ingest_url', workspace_id: 'ws-1' },
         created_at: '2026-01-01T08:30:00Z',
       },
+      {
+        id: 2,
+        actor_user_id: 'user-2',
+        action: 'document.url_import_queued',
+        target_type: 'job',
+        target_id: 'job-url-1',
+        metadata: {
+          job_type: 'ingest_url',
+          workspace_id: 'ws-1',
+          stream: false,
+          scheme: 'https',
+          host: 'example.com',
+          url: 'https://example.com/page',
+        },
+        created_at: '2026-01-01T08:31:00Z',
+      },
+      {
+        id: 3,
+        actor_user_id: 'user-2',
+        action: 'job.canceled',
+        target_type: 'job',
+        target_id: 'job-cancel-1',
+        metadata: { job_type: 'ingest_url', workspace_id: 'ws-1' },
+        created_at: '2026-01-01T08:32:00Z',
+      },
     ])
     vi.mocked(api.createAdminUser).mockResolvedValue({
       id: 'user-3',
@@ -290,6 +315,10 @@ describe('SettingsPage', () => {
       })
       expect(screen.getByText('任务入队')).toBeInTheDocument()
       expect(screen.getByText('job.queued')).toBeInTheDocument()
+      expect(screen.getByText('URL 导入入队')).toBeInTheDocument()
+      expect(screen.getByText('document.url_import_queued')).toBeInTheDocument()
+      expect(screen.getByText('任务取消')).toBeInTheDocument()
+      expect(screen.getByText('job.canceled')).toBeInTheDocument()
     })
 
     await userEvent.selectOptions(screen.getByLabelText('审计日志用户过滤'), 'user-2')

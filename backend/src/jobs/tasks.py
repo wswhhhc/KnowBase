@@ -5,7 +5,21 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
-from src.persistence import job_store
+from src.persistence import audit_store, job_store
+
+
+def _record_job_status_event(job: dict, action: str) -> None:
+    audit_store.record_event(
+        action=action,
+        actor_user_id=job.get("created_by_user_id"),
+        target_type="job",
+        target_id=job["id"],
+        metadata={
+            "job_type": job.get("job_type", ""),
+            "workspace_id": job.get("workspace_id", ""),
+            "attempts": job.get("attempts", 0),
+        },
+    )
 
 
 def _load_callable(target_path: str):
@@ -32,10 +46,12 @@ def run_tracked_job(
     try:
         result = _load_callable(target_path)(*(args or []), **(kwargs or {}))
     except Exception as exc:
-        job_store.mark_job_failed(job_id, error=str(exc))
+        failed = job_store.mark_job_failed(job_id, error=str(exc))
+        _record_job_status_event(failed or job, "job.failed")
         raise
     progress = {"phase": "done", "percent": 100}
     if isinstance(result, dict):
         progress["result"] = result
-    job_store.mark_job_succeeded(job_id, progress=progress)
+    succeeded = job_store.mark_job_succeeded(job_id, progress=progress)
+    _record_job_status_event(succeeded or job, "job.succeeded")
     return result

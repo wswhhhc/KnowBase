@@ -6,6 +6,7 @@ import asyncio
 import json
 import re
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sse_starlette.sse import EventSourceResponse
@@ -14,7 +15,7 @@ from src.api.deps import get_knowledge_base, require_workspace_editor, require_w
 from src.api.models import DemoImportResponse, IngestResponse, JobCreateResponse, URLIngestRequest, SourceOut
 from src.api.rate_limit import enforce_document_import_rate_limit
 from src.jobs.enqueue import enqueue_tracked_job
-from src.persistence import job_store
+from src.persistence import audit_store, job_store
 from src.chat_utils import generate_suggested_questions
 from src.rag.models import normalize_source
 from src.rag.knowledge_base import KnowledgeBase
@@ -80,6 +81,46 @@ def _done_payload(job: dict, fallback: dict) -> dict:
         payload["existing_version"] = True
     payload["job_id"] = job["id"]
     return payload
+
+
+def _redacted_url_for_audit(raw_url: str) -> dict:
+    parsed = urlsplit(raw_url)
+    host = parsed.hostname or ""
+    netloc_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    netloc = f"{netloc_host}:{port}" if port is not None else netloc_host
+    return {
+        "scheme": parsed.scheme,
+        "host": host,
+        "url": urlunsplit((parsed.scheme, netloc, parsed.path, "", "")),
+    }
+
+
+def _audit_url_import_queued(
+    *,
+    actor_user_id: str | None,
+    workspace_id: str,
+    job_id: str,
+    url: str,
+    version_mode: str,
+    stream: bool,
+) -> None:
+    audit_store.record_event(
+        action="document.url_import_queued",
+        actor_user_id=actor_user_id,
+        target_type="job",
+        target_id=job_id,
+        metadata={
+            "workspace_id": workspace_id,
+            "job_type": "ingest_url",
+            "version_mode": version_mode,
+            "stream": stream,
+            **_redacted_url_for_audit(url),
+        },
+    )
 
 
 def _job_event_source(job_id: str, *, fallback_done: dict) -> EventSourceResponse:
@@ -225,10 +266,11 @@ async def ingest_url_stream(
             return EventSourceResponse(_probe_events())
 
         actual_mode = version_mode or "replace"
+        actor_user_id = str(_workspace_access.get("id")) if _workspace_access else None
         job = enqueue_tracked_job(
             job_type="ingest_url",
             target_path="src.jobs.document_tasks:ingest_url_document",
-            created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+            created_by_user_id=actor_user_id,
             workspace_id=workspace_id,
             kwargs={
                 "url": body.url,
@@ -236,6 +278,14 @@ async def ingest_url_stream(
                 "workspace_id": workspace_id,
             },
             inject_job_id=True,
+        )
+        _audit_url_import_queued(
+            actor_user_id=actor_user_id,
+            workspace_id=workspace_id,
+            job_id=job["id"],
+            url=body.url,
+            version_mode=actual_mode,
+            stream=True,
         )
         return _job_event_source(
             job["id"],
@@ -326,10 +376,11 @@ async def ingest_url(
             )
 
         actual_mode = version_mode or "replace"
+        actor_user_id = str(_workspace_access.get("id")) if _workspace_access else None
         job = enqueue_tracked_job(
             job_type="ingest_url",
             target_path="src.jobs.document_tasks:ingest_url_document",
-            created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+            created_by_user_id=actor_user_id,
             workspace_id=workspace_id,
             kwargs={
                 "url": body.url,
@@ -337,6 +388,14 @@ async def ingest_url(
                 "workspace_id": workspace_id,
             },
             inject_job_id=True,
+        )
+        _audit_url_import_queued(
+            actor_user_id=actor_user_id,
+            workspace_id=workspace_id,
+            job_id=job["id"],
+            url=body.url,
+            version_mode=actual_mode,
+            stream=False,
         )
         return JobCreateResponse(job_id=job["id"], job=job)
     except ValueError as e:
