@@ -8,7 +8,7 @@ from uuid import uuid4
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
-from src.persistence.schema import refresh_tokens, users
+from src.persistence.schema import refresh_tokens, users, workspace_members
 
 
 SessionFactory = sessionmaker[Session]
@@ -102,6 +102,75 @@ def delete_user_with_session(session_factory: SessionFactory, user_id: str) -> b
     with session_factory.begin() as session:
         result = session.execute(delete(users).where(users.c.id == user_id))
     return result.rowcount > 0
+
+
+def _workspace_member_from_mapping(row) -> dict:
+    return {
+        "id": row["id"],
+        "workspace_id": row["workspace_id"],
+        "user_id": row["user_id"],
+        "username": row["username"],
+        "role": row["role"],
+        "created_at": row["created_at"],
+    }
+
+
+def list_workspace_members_with_session(session_factory: SessionFactory, workspace_id: str) -> list[dict]:
+    statement = (
+        select(
+            workspace_members.c.id,
+            workspace_members.c.workspace_id,
+            workspace_members.c.user_id,
+            users.c.username,
+            workspace_members.c.role,
+            workspace_members.c.created_at,
+        )
+        .select_from(workspace_members.join(users, users.c.id == workspace_members.c.user_id))
+        .where(workspace_members.c.workspace_id == workspace_id)
+        .order_by(users.c.username)
+    )
+    with session_factory() as session:
+        rows = session.execute(statement).mappings().all()
+    return [_workspace_member_from_mapping(row) for row in rows]
+
+
+def get_workspace_member_role_with_session(
+    session_factory: SessionFactory,
+    *,
+    workspace_id: str,
+    user_id: str,
+) -> str | None:
+    with session_factory() as session:
+        role = session.execute(
+            select(workspace_members.c.role).where(
+                workspace_members.c.workspace_id == workspace_id,
+                workspace_members.c.user_id == user_id,
+            )
+        ).scalar_one_or_none()
+    return role
+
+
+def replace_workspace_members_with_session(
+    session_factory: SessionFactory,
+    *,
+    workspace_id: str,
+    members: list[dict],
+) -> list[dict]:
+    now = datetime.now(UTC).isoformat()
+    rows = [
+        {
+            "workspace_id": workspace_id,
+            "user_id": member["user_id"],
+            "role": member["role"],
+            "created_at": now,
+        }
+        for member in members
+    ]
+    with session_factory.begin() as session:
+        session.execute(delete(workspace_members).where(workspace_members.c.workspace_id == workspace_id))
+        if rows:
+            session.execute(workspace_members.insert(), rows)
+    return list_workspace_members_with_session(session_factory, workspace_id)
 
 
 def create_refresh_token_with_session(
