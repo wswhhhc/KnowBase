@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from src.api.deps import require_admin, verify_api_key
+from src.api.deps import get_current_user_or_legacy_api_key, require_admin, require_admin_or_legacy_api_key
 from src.api.models import WorkspaceMemberOut, WorkspaceMembersUpdate
 from src.persistence import auth_store, workspace_store
 
@@ -31,20 +31,38 @@ class WorkspaceUpdate(BaseModel):
 router = APIRouter()
 
 
-@router.get("", dependencies=[Depends(verify_api_key)])
-async def list_all() -> list[WorkspaceOut]:
+def _filter_visible_workspaces(workspaces: list[dict], current_user: dict | None) -> list[dict]:
+    if current_user is None or current_user.get("role") == "admin":
+        return workspaces
+    memberships = auth_store.list_workspace_memberships_for_user(str(current_user.get("id") or ""))
+    workspace_ids = {membership["workspace_id"] for membership in memberships}
+    return [workspace for workspace in workspaces if workspace["id"] in workspace_ids]
+
+
+@router.get("")
+async def list_all(
+    current_user: dict | None = Depends(get_current_user_or_legacy_api_key),
+) -> list[WorkspaceOut]:
     workspaces = workspace_store.list_workspaces()
-    return [WorkspaceOut(**workspace) for workspace in workspaces]
+    visible_workspaces = _filter_visible_workspaces(workspaces, current_user)
+    return [WorkspaceOut(**workspace) for workspace in visible_workspaces]
 
 
-@router.post("", dependencies=[Depends(verify_api_key)])
-async def create(body: WorkspaceCreate = WorkspaceCreate()) -> WorkspaceOut:
+@router.post("")
+async def create(
+    body: WorkspaceCreate = WorkspaceCreate(),
+    _admin: dict | None = Depends(require_admin_or_legacy_api_key),
+) -> WorkspaceOut:
     workspace = workspace_store.create_workspace(body.name, body.description)
     return WorkspaceOut(**workspace)
 
 
-@router.patch("/{ws_id}", dependencies=[Depends(verify_api_key)])
-async def update(ws_id: str, body: WorkspaceUpdate) -> WorkspaceOut:
+@router.patch("/{ws_id}")
+async def update(
+    ws_id: str,
+    body: WorkspaceUpdate,
+    _admin: dict | None = Depends(require_admin_or_legacy_api_key),
+) -> WorkspaceOut:
     if not workspace_store.update_workspace(ws_id, name=body.name, description=body.description):
         raise HTTPException(404, "工作区不存在")
     workspace = workspace_store.get_workspace(ws_id)
@@ -53,8 +71,11 @@ async def update(ws_id: str, body: WorkspaceUpdate) -> WorkspaceOut:
     return WorkspaceOut(**workspace)
 
 
-@router.delete("/{ws_id}", dependencies=[Depends(verify_api_key)])
-async def delete(ws_id: str):
+@router.delete("/{ws_id}")
+async def delete(
+    ws_id: str,
+    _admin: dict | None = Depends(require_admin_or_legacy_api_key),
+):
     if not workspace_store.delete_workspace(ws_id):
         raise HTTPException(404, "工作区不存在")
     return {"ok": True}

@@ -134,6 +134,23 @@ def list_workspace_members_with_session(session_factory: SessionFactory, workspa
     return [_workspace_member_from_mapping(row) for row in rows]
 
 
+def list_workspace_memberships_for_user_with_session(session_factory: SessionFactory, user_id: str) -> list[dict]:
+    statement = (
+        select(
+            workspace_members.c.id,
+            workspace_members.c.workspace_id,
+            workspace_members.c.user_id,
+            workspace_members.c.role,
+            workspace_members.c.created_at,
+        )
+        .where(workspace_members.c.user_id == user_id)
+        .order_by(workspace_members.c.created_at)
+    )
+    with session_factory() as session:
+        rows = session.execute(statement).mappings().all()
+    return [dict(row) for row in rows]
+
+
 def get_workspace_member_role_with_session(
     session_factory: SessionFactory,
     *,
