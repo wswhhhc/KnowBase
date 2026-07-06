@@ -6,6 +6,7 @@ import asyncio
 import json
 import re
 import threading
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sse_starlette.sse import EventSourceResponse
@@ -233,13 +234,15 @@ async def upload_file(
     _workspace_access: dict | None = Depends(require_workspace_editor),
     _rate_limit: None = Depends(enforce_document_import_rate_limit),
     kb: KnowledgeBase = Depends(get_knowledge_base),
-) -> IngestResponse:
+) -> IngestResponse | JobCreateResponse:
+    file_path: str | None = None
     try:
         file_path, source_name = save_uploaded_file(file)
         existing = _source_exists(kb, source_name, workspace_id=workspace_id)
 
         # If no version_mode specified and source exists, return probe info without importing
         if existing and not version_mode:
+            Path(file_path).unlink(missing_ok=True)
             return IngestResponse(
                 chunk_count=0, total_docs=kb.document_count_for_workspace(workspace_id),
                 message="来源已存在，请指定 version_mode（replace/append/skip）",
@@ -247,23 +250,26 @@ async def upload_file(
             )
 
         actual_mode = version_mode or "replace"
-        chunk_count = kb.ingest_file(
-            str(file_path),
-            source_name=source_name,
-            version_mode=actual_mode,
+        job = enqueue_tracked_job(
+            job_type="ingest_file",
+            target_path="src.jobs.document_tasks:ingest_file_document",
+            created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
             workspace_id=workspace_id,
+            kwargs={
+                "file_path": str(file_path),
+                "source_name": source_name,
+                "version_mode": actual_mode,
+                "workspace_id": workspace_id,
+            },
+            inject_job_id=True,
         )
-        suggested = _collect_suggested_questions(kb, [source_name], workspace_id=workspace_id)
-
-        msg = f"已添加 {chunk_count} 个新段落" if chunk_count else "文件内容无变化，未新增段落"
-        return IngestResponse(
-            chunk_count=chunk_count, total_docs=kb.document_count_for_workspace(workspace_id),
-            message=msg,
-            suggested_questions=suggested,
-            existing_version=existing,
-        )
+        return JobCreateResponse(job_id=job["id"], job=job)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    except Exception as e:
+        if file_path:
+            Path(file_path).unlink(missing_ok=True)
+        raise HTTPException(503, "任务队列不可用") from e
 
 
 @router.post(

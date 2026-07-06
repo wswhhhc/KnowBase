@@ -2331,7 +2331,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IngestResponse"];
+                    "application/json": components["schemas"]["IngestResponse"] | components["schemas"]["JobCreateResponse"];
                 };
             };
             /** @description Validation Error */

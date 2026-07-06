@@ -1372,7 +1372,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IngestResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/IngestResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JobCreateResponse"
+                    }
+                  ],
+                  "title": "Response Upload File Api Documents Upload Post"
                 }
               }
             }
