@@ -6,8 +6,117 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Callable
 
+from sqlalchemy import or_, select, update
+from sqlalchemy.orm import Session, sessionmaker
+
+from src.persistence.schema import bookmarks
+
 
 ConnectionFactory = Callable[[], sqlite3.Connection]
+SessionFactory = sessionmaker[Session]
+
+
+def _bookmark_from_mapping(row) -> dict:
+    bookmark = dict(row)
+    bookmark["workspace_id"] = bookmark.get("workspace_id") or ""
+    bookmark["conversation_id"] = bookmark.get("conversation_id") or ""
+    bookmark["message_id"] = bookmark.get("message_id") or 0
+    bookmark["chunk_id"] = bookmark.get("chunk_id") or ""
+    bookmark["note"] = bookmark.get("note") or ""
+    bookmark["content"] = bookmark.get("content") or ""
+    bookmark["source"] = bookmark.get("source") or ""
+    bookmark["tags"] = bookmark.get("tags") or ""
+    return bookmark
+
+
+def create_bookmark_with_session(
+    session_factory: SessionFactory,
+    workspace_id: str = "",
+    conversation_id: str = "",
+    message_id: int = 0,
+    chunk_id: str = "",
+    note: str = "",
+    content: str = "",
+    source: str = "",
+    tags: str = "",
+) -> dict:
+    with session_factory.begin() as session:
+        if chunk_id:
+            existing = session.execute(
+                select(bookmarks)
+                .where(bookmarks.c.workspace_id == workspace_id, bookmarks.c.chunk_id == chunk_id)
+                .order_by(bookmarks.c.id)
+                .limit(1)
+            ).mappings().first()
+            if existing:
+                return _bookmark_from_mapping(existing)
+
+        now = datetime.now(UTC).isoformat()
+        result = session.execute(
+            bookmarks.insert().values(
+                workspace_id=workspace_id,
+                conversation_id=conversation_id,
+                message_id=message_id,
+                chunk_id=chunk_id,
+                note=note,
+                content=content,
+                source=source,
+                tags=tags,
+                created_at=now,
+            )
+        )
+    return {
+        "id": int(result.inserted_primary_key[0]),
+        "workspace_id": workspace_id,
+        "conversation_id": conversation_id,
+        "message_id": message_id,
+        "chunk_id": chunk_id,
+        "note": note,
+        "content": content,
+        "source": source,
+        "tags": tags,
+        "created_at": now,
+    }
+
+
+def list_bookmarks_with_session(
+    session_factory: SessionFactory,
+    workspace_id: str | None = None,
+    search: str | None = None,
+) -> list[dict]:
+    statement = select(bookmarks)
+    if workspace_id is not None:
+        statement = statement.where(bookmarks.c.workspace_id == workspace_id)
+    if search:
+        like = f"%{search}%"
+        statement = statement.where(
+            or_(
+                bookmarks.c.content.like(like),
+                bookmarks.c.note.like(like),
+                bookmarks.c.tags.like(like),
+            )
+        )
+    statement = statement.order_by(bookmarks.c.created_at.desc())
+    with session_factory() as session:
+        rows = session.execute(statement).mappings().all()
+    return [_bookmark_from_mapping(row) for row in rows]
+
+
+def update_bookmark_with_session(session_factory: SessionFactory, bm_id: int, **kwargs) -> dict | None:
+    allowed = {"note", "tags"}
+    updates = {key: value for key, value in kwargs.items() if key in allowed}
+    if not updates:
+        return None
+    with session_factory.begin() as session:
+        session.execute(update(bookmarks).where(bookmarks.c.id == bm_id).values(**updates))
+        row = session.execute(select(bookmarks).where(bookmarks.c.id == bm_id)).mappings().first()
+    return _bookmark_from_mapping(row) if row else None
+
+
+def delete_bookmark_with_session(session_factory: SessionFactory, bm_id: int) -> bool:
+    with session_factory.begin() as session:
+        result = session.execute(bookmarks.delete().where(bookmarks.c.id == bm_id))
+    return result.rowcount > 0
 
 
 def create_bookmark(

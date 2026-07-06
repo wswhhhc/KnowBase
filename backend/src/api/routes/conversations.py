@@ -6,8 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.api.deps import verify_api_key
 from src.api.models import ConversationCreate, ConversationOut, ExportOut, MessageFeedback, MessageOut, PinStateOut
-from src.persistence import conversation_store, message_repository, message_store, pin_state_repository
-from src.persistence.database import get_connection
+from src.persistence import conversation_store, message_repository, message_store, pin_state_store
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
@@ -76,7 +75,7 @@ async def list_messages(conv_id: str, workspace_id: str | None = Query(None)) ->
 @router.get("/{conv_id}/pin-state")
 async def get_pin_state(conv_id: str, workspace_id: str | None = Query(None)) -> PinStateOut:
     conv = _get_scoped_conversation_or_404(conv_id, workspace_id)
-    summary = pin_state_repository.load_pin_state_summary(get_connection, conv["thread_id"])
+    summary = pin_state_store.load_pin_state_summary(conv["thread_id"])
     return PinStateOut(**summary)
 
 
