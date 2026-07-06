@@ -99,6 +99,7 @@ class SettingsTests(unittest.TestCase):
             DATABASE_URL="sqlite:///runtime/local/conversations.db",
             CORS_ALLOW_ORIGINS="http://localhost:5173,*",
             API_KEY="legacy-key",
+            KNOWBASE_E2E_FAKE_AI="true",
         )
 
         with pytest.raises(RuntimeError) as exc:
@@ -109,6 +110,7 @@ class SettingsTests(unittest.TestCase):
         self.assertIn("DATABASE_URL", message)
         self.assertIn("CORS_ALLOW_ORIGINS", message)
         self.assertIn("API_KEY", message)
+        self.assertIn("KNOWBASE_E2E_FAKE_AI", message)
 
     def test_validate_production_security_accepts_hardened_settings(self):
         settings = Settings(

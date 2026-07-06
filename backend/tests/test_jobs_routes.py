@@ -270,6 +270,28 @@ def test_user_cannot_retry_another_users_job(isolated_jobs_database):
     assert response.status_code == 404
 
 
+def test_get_succeeded_kb_mutation_job_invalidates_knowledge_base_cache(isolated_jobs_database):
+    users = _seed_users()
+    job = job_store.create_job(
+        job_type="ingest_file",
+        created_by_user_id=users["editor"]["id"],
+        workspace_id="ws-a",
+        status="succeeded",
+    )
+    client = TestClient(app)
+    editor_token = _login(client, "editor", "editor-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        with patch("src.api.routes.jobs.get_knowledge_base.cache_clear") as mock_cache_clear:
+            response = client.get(
+                f"/api/jobs/{job['id']}",
+                headers={"Authorization": f"Bearer {editor_token}"},
+            )
+
+    assert response.status_code == 200
+    mock_cache_clear.assert_called_once()
+
+
 def test_retry_file_upload_job_returns_conflict(isolated_jobs_database):
     users = _seed_users()
     failed_job = job_store.create_job(

@@ -8,6 +8,7 @@ import json
 import logging
 from pathlib import Path
 import threading
+import hashlib
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -15,6 +16,7 @@ from langchain_openai import OpenAIEmbeddings
 
 from src.config.constants import CHROMA_PERSIST_DIR, DATA_DIR, EMBEDDING_MODEL, SCORE_THRESHOLD, SILICONFLOW_BASE_URL, TOP_K_RETRIEVAL
 from src.config.runtime_overrides import get_runtime_setting, require_siliconflow_api_key
+from src.config.settings import settings
 from src.rag.kb_catalog import CatalogService
 from src.rag.kb_hotspots import HotspotTracker
 from src.rag.kb_ingestion import IngestionService
@@ -29,6 +31,20 @@ logger = logging.getLogger(__name__)
 
 class EmbeddingIndexMismatchError(ValueError):
     """Raised when the configured embedding model does not match persisted vectors."""
+
+
+class DeterministicTestEmbeddings:
+    """Small local embeddings used only by the explicit E2E fake-AI mode."""
+
+    def _embed(self, text: str) -> list[float]:
+        digest = hashlib.sha256(text.encode("utf-8")).digest()
+        return [((byte / 255.0) * 2.0) - 1.0 for byte in digest[:16]]
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self._embed(text) for text in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._embed(text)
 
 
 def _load_document(file_path: str, source_name: str | None = None) -> list[Document]:
@@ -50,12 +66,7 @@ class KnowledgeBase:
         self._embedding_mismatch_error: str | None = None
         self.embeddings = None
         if require_embeddings:
-            api_key = require_siliconflow_api_key()
-            self.embeddings = OpenAIEmbeddings(
-                model=self.embedding_model,
-                openai_api_key=api_key,
-                openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
-            )
+            self.embeddings = self._create_embeddings()
         self.vector_store = self._init_vector_store()
 
         self.state = KnowledgeBaseState(initial_chunk_ids=self.vector_store.get(include=[])["ids"])
@@ -87,6 +98,17 @@ class KnowledgeBase:
         )
 
         self._write_lock = threading.Lock()
+
+    def _create_embeddings(self):
+        if settings.e2e_fake_ai:
+            return DeterministicTestEmbeddings()
+
+        api_key = require_siliconflow_api_key()
+        return OpenAIEmbeddings(
+            model=self.embedding_model,
+            openai_api_key=api_key,
+            openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
+        )
 
     def _read_index_metadata(self) -> dict:
         try:

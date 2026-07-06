@@ -13,6 +13,7 @@ from src.api.chat_debug import DebugState, accumulate_node_debug
 from src.api.models import ChatRequest, ChatSource, DebugInfo, NodeDebug
 from src.api.chat_persistence import build_debug_payload, persist_conversation_turn
 from src.chat_utils import NODE_LABELS, record_query_metrics
+from src.config.settings import settings
 from src.graph import run_query
 from src.persistence import conversation_store
 from src.rag.knowledge_base import KnowledgeBase
@@ -83,6 +84,9 @@ class ChatStreamService:
     def run(self):
         """Generator that yields SSE dicts by streaming through the LangGraph query."""
         try:
+            if settings.e2e_fake_ai:
+                yield from self._run_e2e_fake_chat()
+                return
             yield from self._stream_updates()
             yield from self._emit_completion()
         except Exception as e:
@@ -149,6 +153,62 @@ class ChatStreamService:
                 self.first_token = int((time.monotonic() - self.t0) * 1000)
             self.accumulated_answer += chunk.content
             yield {"event": "token", "data": json.dumps({"text": chunk.content})}
+
+    def _run_e2e_fake_chat(self):
+        """Deterministic chat path for Playwright E2E without external model calls."""
+        yield {"event": "node", "data": json.dumps({"label": "检索知识库", "nodes": ["检索知识库"]})}
+
+        chunks = self._list_e2e_fake_chunks()
+        sources = []
+        if chunks:
+            chunk = chunks[0]
+            content = chunk.original_content or chunk.content
+            sources = [{
+                "source": chunk.source,
+                "chunk_id": chunk.chunk_id,
+                "chunk_index": chunk.chunk_index,
+                "page": chunk.page,
+                "score": 1.0,
+                "content": content,
+                "index": 1,
+            }]
+            snippet = content.replace("\n", " ").strip()[:120]
+            self.accumulated_answer = f"已根据当前工作区资料回答：{snippet} [1]"
+            self.final_evidence_level = "high"
+            self.final_evidence_summary = "E2E fake chat used one imported workspace chunk."
+            self.final_outcome_category = "success"
+        else:
+            self.accumulated_answer = "当前工作区还没有可用于回答的资料。"
+            self.final_evidence_level = "none"
+            self.final_outcome_category = "no_evidence"
+
+        self.final_sources = sources
+        self.final_quality = "E2E fake chat"
+        self.final_quality_ok = bool(sources)
+        self.debug_state.retrieval_k = len(sources)
+        self.debug_state.candidates_before = len(sources)
+        self.debug_state.candidates_after = len(sources)
+        self.debug_state.quality_passed = bool(sources)
+        self.debug_state.quality_reason = self.final_quality
+
+        for token in self.accumulated_answer:
+            if self.first_token == 0:
+                self.first_token = int((time.monotonic() - self.t0) * 1000)
+            yield {"event": "token", "data": json.dumps({"text": token})}
+
+        yield from self._emit_completion()
+
+    def _list_e2e_fake_chunks(self):
+        _total, chunks = self.kb.list_chunks(workspace_id=self.workspace_id, limit=1)
+        if chunks or not isinstance(self.kb, KnowledgeBase):
+            return chunks
+
+        # E2E imports run in the worker process, while the API process may
+        # still hold a cached KnowledgeBase created before the import. Reopen
+        # Chroma without embeddings so the fake chat path sees persisted rows.
+        fresh_kb = KnowledgeBase(require_embeddings=False)
+        _fresh_total, fresh_chunks = fresh_kb.list_chunks(workspace_id=self.workspace_id, limit=1)
+        return fresh_chunks
 
     def _accumulate_update(self, update: dict) -> None:
         """Merge state from a graph node update into the service accumulators."""

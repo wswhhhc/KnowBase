@@ -52,5 +52,8 @@ def validate_production_security(active_settings: Settings = settings) -> None:
     if active_settings.auth.api_key:
         errors.append("API_KEY/KNOWBASE_API_KEY is development-only; use JWT login in production.")
 
+    if active_settings.e2e_fake_ai:
+        errors.append("KNOWBASE_E2E_FAKE_AI must not be enabled in production.")
+
     if errors:
         raise RuntimeError("Production security check failed: " + " ".join(errors))

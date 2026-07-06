@@ -12,6 +12,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk
 
 from src.api.chat_stream_service import ChatStreamService
 from src.api.models import ChatRequest
+from src.rag.models import KBChunk
 from src.rag.models import RetrievalResult
 
 
@@ -62,6 +63,19 @@ class WorkspaceScopedGraphKB:
         if doc.metadata.get("workspace_id", "") != (workspace_id or ""):
             return []
         return [doc]
+
+
+class E2EFakeChatKB:
+    def list_chunks(self, *, workspace_id: str = "", source: str = "", search: str = "", skip: int = 0, limit: int = 50):
+        return 1, [
+            KBChunk(
+                source="e2e-note.md",
+                chunk_index=0,
+                chunk_id=f"{workspace_id}::e2e-note.md:0:abc" if workspace_id else "e2e-note.md:0:abc",
+                content="contextual wrapper",
+                original_content="E2E 导入资料说明 KnowBase 支持团队问答。",
+            )
+        ]
 
 
 def _route_kb(_state):
@@ -210,6 +224,34 @@ class ChatStreamServiceTests(unittest.TestCase):
             ["ws-alpha::alpha.txt:0:aaa"],
         )
         self.assertNotIn("ws-beta::beta.txt:0:bbb", json.dumps(done_payload, ensure_ascii=False))
+
+    @patch("src.api.chat_stream_service.record_query_metrics")
+    @patch.object(ChatStreamService, "_persist", return_value=("conv-1", 2))
+    @patch("src.api.chat_stream_service.settings")
+    @patch("src.api.chat_stream_service.run_query")
+    def test_e2e_fake_chat_uses_imported_workspace_chunk_without_graph(
+        self,
+        mock_run_query,
+        mock_settings,
+        _mock_persist,
+        _mock_record_query_metrics,
+    ):
+        mock_settings.e2e_fake_ai = True
+        body = ChatRequest(
+            question="团队问答是什么？",
+            web_search_enabled=False,
+            search_strategy="balanced",
+            workspace_id="ws-e2e",
+        )
+
+        events = list(ChatStreamService(body, kb=E2EFakeChatKB()).run())
+        done_payload = json.loads(next(event["data"] for event in events if event["event"] == "done"))
+        sources_payload = json.loads(next(event["data"] for event in events if event["event"] == "sources"))
+
+        mock_run_query.assert_not_called()
+        self.assertIn("KnowBase 支持团队问答", done_payload["answer"])
+        self.assertEqual(done_payload["sources"][0]["source"], "e2e-note.md")
+        self.assertEqual(sources_payload["sources"][0]["chunk_id"], "ws-e2e::e2e-note.md:0:abc")
 
 
 if __name__ == "__main__":

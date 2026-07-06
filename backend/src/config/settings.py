@@ -180,6 +180,7 @@ class Settings(BaseSettings):
         validation_alias="CORS_ALLOW_ORIGINS",
     )
     app_env: str = Field(default="development", validation_alias="APP_ENV")
+    e2e_fake_ai: bool = Field(default=False, validation_alias="KNOWBASE_E2E_FAKE_AI")
 
     checkpoint_db_path: str = Field(
         default=str(LOCAL_RUNTIME_DIR / "checkpoints.db"),

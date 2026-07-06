@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.api.deps import authorize_workspace_role, get_current_user_or_legacy_api_key
+from src.api.deps import authorize_workspace_role, get_current_user_or_legacy_api_key, get_knowledge_base
 from src.api.models import JobOut
 from src.jobs.enqueue import retry_tracked_job
 from src.persistence import audit_store, job_store
 
 
 router = APIRouter()
+_KB_MUTATION_JOB_TYPES = {"ingest_file", "ingest_url", "clear_workspace", "rebuild_index"}
 
 
 def _is_admin_or_legacy(current_user: dict | None) -> bool:
@@ -26,6 +27,11 @@ def _visible_job_or_404(job_id: str, current_user: dict | None) -> dict:
     return job
 
 
+def _invalidate_kb_cache_after_successful_mutation(job: dict) -> None:
+    if job.get("status") == "succeeded" and job.get("job_type") in _KB_MUTATION_JOB_TYPES:
+        get_knowledge_base.cache_clear()
+
+
 @router.get("")
 async def list_jobs(
     current_user: dict | None = Depends(get_current_user_or_legacy_api_key),
@@ -39,7 +45,9 @@ async def get_job(
     job_id: str,
     current_user: dict | None = Depends(get_current_user_or_legacy_api_key),
 ) -> JobOut:
-    return JobOut(**_visible_job_or_404(job_id, current_user))
+    job = _visible_job_or_404(job_id, current_user)
+    _invalidate_kb_cache_after_successful_mutation(job)
+    return JobOut(**job)
 
 
 @router.post("/{job_id}/cancel")
