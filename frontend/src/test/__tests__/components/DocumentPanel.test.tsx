@@ -106,4 +106,23 @@ describe('DocumentPanel', () => {
       )
     })
   })
+
+  it('shows sources but hides import and delete actions in read-only mode', () => {
+    render(
+      <DocumentPanel
+        sources={[{ source: 'readonly.md', count: 2 } as any]}
+        onRefresh={onRefresh}
+        workspaceId="ws-viewer"
+        workspaceName="只读工作区"
+        canManageKnowledgeBase={false}
+      />,
+    )
+
+    expect(screen.getByText('当前账号为只读权限')).toBeInTheDocument()
+    expect(screen.getByText('readonly.md')).toBeInTheDocument()
+    expect(screen.queryByText('导入示例资料')).not.toBeInTheDocument()
+    expect(screen.queryByText('上传文档')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('https://…')).not.toBeInTheDocument()
+    expect(screen.queryByText('清空')).not.toBeInTheDocument()
+  })
 })

@@ -12,6 +12,7 @@ interface DocumentPanelProps {
   workspaceName?: string
   onSendQuestion?: (q: string) => void
   onOpenKnowledgeBase?: () => void
+  canManageKnowledgeBase?: boolean
 }
 
 type VersionPrompt =
@@ -50,6 +51,7 @@ export default function DocumentPanel({
   workspaceName = '默认工作区',
   onSendQuestion,
   onOpenKnowledgeBase,
+  canManageKnowledgeBase = true,
 }: DocumentPanelProps) {
   const [urlInput, setUrlInput] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -232,173 +234,182 @@ export default function DocumentPanel({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-border/70 bg-surface/35 p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-foreground">导入示例资料</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              一键导入 3 份演示资料到“{workspaceName}”，用于快速体验问答、知识库核对与工作区作用域。
-            </p>
-          </div>
-          <Button size="sm" onClick={startDemoImport} disabled={demoImporting || uploading} className="shrink-0">
-            {demoImporting ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-            导入示例资料
-          </Button>
-        </div>
-      </div>
-
-      {/* Upload */}
-      <div>
-        <label className="block text-xs font-medium text-muted-foreground mb-1.5 tracking-wide uppercase">上传文档</label>
-        <label
-          onDragEnter={(event) => {
-            event.preventDefault()
-            dragDepthRef.current += 1
-            setIsDragActive(true)
-          }}
-          onDragOver={(event) => {
-            event.preventDefault()
-            if (!uploading) {
-              event.dataTransfer.dropEffect = 'copy'
-            }
-          }}
-          onDragLeave={(event) => {
-            event.preventDefault()
-            dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
-            if (dragDepthRef.current === 0) {
-              setIsDragActive(false)
-            }
-          }}
-          onDrop={(event) => {
-            event.preventDefault()
-            dragDepthRef.current = 0
-            setIsDragActive(false)
-            const file = event.dataTransfer.files?.[0]
-            void startDroppedUpload(file)
-          }}
-          className={`block cursor-pointer rounded-xl border border-dashed px-3 py-3 text-sm transition-colors ${
-          uploading
-            ? 'border-primary/40 bg-primary/5 text-primary'
-            : isDragActive
-              ? 'border-primary/60 bg-primary/10 text-foreground'
-              : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
-        }`}>
-          <div className="flex items-start gap-3">
-            {uploading ? <Loader2 className="mt-0.5 h-4 w-4 animate-spin" /> : <Upload className="mt-0.5 h-4 w-4" />}
-            <div className="min-w-0 flex-1">
-              {uploading && uploadPhase ? (
-                <>
-                  <p className="font-medium text-foreground">{progressCopy.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{progressCopy.detail}</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-medium text-foreground">拖拽文件到这里，或选择文件</p>
-                  <p className="mt-1 text-xs text-muted-foreground">支持 `.txt`、`.md`、`.pdf`、`.docx`、`.html`，沿用当前工作区作用域导入。</p>
-                </>
-              )}
-            </div>
-          </div>
-          <input ref={fileInputRef} type="file" className="hidden" accept=".txt,.md,.pdf,.docx,.html" onChange={handleUpload} disabled={uploading} />
-        </label>
-        {uploading && (
-          <div className="mt-1.5 space-y-1">
-            <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
-              <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
-            </div>
-            <p className="text-2xs text-muted-foreground/60 text-right">{uploadPercent}%</p>
-          </div>
-        )}
-
-        {postImportGuide && (
-          <div className="mt-3 rounded-xl border border-primary/15 bg-primary/5 p-3">
-            <p className="text-sm font-medium text-foreground">{postImportGuide.title}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{postImportGuide.description}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {onOpenKnowledgeBase && (
-                <Button size="sm" variant="outline" onClick={onOpenKnowledgeBase}>
-                  去知识库核对来源
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setPostImportGuide(null)
-                  fileInputRef.current?.click()
-                }}
-              >
-                继续导入
+      {canManageKnowledgeBase ? (
+        <>
+          <div className="rounded-xl border border-border/70 bg-surface/35 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">导入示例资料</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  一键导入 3 份演示资料到“{workspaceName}”，用于快速体验问答、知识库核对与工作区作用域。
+                </p>
+              </div>
+              <Button size="sm" onClick={startDemoImport} disabled={demoImporting || uploading} className="shrink-0">
+                {demoImporting ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                导入示例资料
               </Button>
             </div>
-            {postImportGuide.suggestedQuestions.length > 0 && (
-              <div className="mt-3 rounded-lg border border-primary/10 bg-background/70 p-2.5">
-                <p className="text-2xs font-medium text-primary/80 mb-2 tracking-wide">推荐直接追问</p>
+          </div>
+
+          {/* Upload */}
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5 tracking-wide uppercase">上传文档</label>
+            <label
+              onDragEnter={(event) => {
+                event.preventDefault()
+                dragDepthRef.current += 1
+                setIsDragActive(true)
+              }}
+              onDragOver={(event) => {
+                event.preventDefault()
+                if (!uploading) {
+                  event.dataTransfer.dropEffect = 'copy'
+                }
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault()
+                dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+                if (dragDepthRef.current === 0) {
+                  setIsDragActive(false)
+                }
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                dragDepthRef.current = 0
+                setIsDragActive(false)
+                const file = event.dataTransfer.files?.[0]
+                void startDroppedUpload(file)
+              }}
+              className={`block cursor-pointer rounded-xl border border-dashed px-3 py-3 text-sm transition-colors ${
+              uploading
+                ? 'border-primary/40 bg-primary/5 text-primary'
+                : isDragActive
+                  ? 'border-primary/60 bg-primary/10 text-foreground'
+                  : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+            }`}>
+              <div className="flex items-start gap-3">
+                {uploading ? <Loader2 className="mt-0.5 h-4 w-4 animate-spin" /> : <Upload className="mt-0.5 h-4 w-4" />}
+                <div className="min-w-0 flex-1">
+                  {uploading && uploadPhase ? (
+                    <>
+                      <p className="font-medium text-foreground">{progressCopy.title}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{progressCopy.detail}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-medium text-foreground">拖拽文件到这里，或选择文件</p>
+                      <p className="mt-1 text-xs text-muted-foreground">支持 `.txt`、`.md`、`.pdf`、`.docx`、`.html`，沿用当前工作区作用域导入。</p>
+                    </>
+                  )}
+                </div>
+              </div>
+              <input ref={fileInputRef} type="file" className="hidden" accept=".txt,.md,.pdf,.docx,.html" onChange={handleUpload} disabled={uploading} />
+            </label>
+            {uploading && (
+              <div className="mt-1.5 space-y-1">
+                <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                  <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${uploadPercent}%` }} />
+                </div>
+                <p className="text-2xs text-muted-foreground/60 text-right">{uploadPercent}%</p>
+              </div>
+            )}
+
+            {postImportGuide && (
+              <div className="mt-3 rounded-xl border border-primary/15 bg-primary/5 p-3">
+                <p className="text-sm font-medium text-foreground">{postImportGuide.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{postImportGuide.description}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {onOpenKnowledgeBase && (
+                    <Button size="sm" variant="outline" onClick={onOpenKnowledgeBase}>
+                      去知识库核对来源
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setPostImportGuide(null)
+                      fileInputRef.current?.click()
+                    }}
+                  >
+                    继续导入
+                  </Button>
+                </div>
+                {postImportGuide.suggestedQuestions.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-primary/10 bg-background/70 p-2.5">
+                    <p className="text-2xs font-medium text-primary/80 mb-2 tracking-wide">推荐直接追问</p>
+                    <div className="space-y-1">
+                      {postImportGuide.suggestedQuestions.map((q, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            onSendQuestion?.(q)
+                            setPostImportGuide(null)
+                          }}
+                          className="block w-full text-left text-xs text-foreground/75 hover:text-foreground hover:bg-primary/10 rounded px-2 py-1.5 transition-colors"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Version mode selector */}
+            {versionPrompted && (
+              <div className="mt-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
+                <p className="text-2xs font-medium text-primary/80 mb-2 tracking-wide">该来源已存在，请选择操作方式</p>
                 <div className="space-y-1">
-                  {postImportGuide.suggestedQuestions.map((q, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        onSendQuestion?.(q)
-                        setPostImportGuide(null)
-                      }}
-                      className="block w-full text-left text-xs text-foreground/75 hover:text-foreground hover:bg-primary/10 rounded px-2 py-1.5 transition-colors"
-                    >
-                      {q}
-                    </button>
-                  ))}
+                  <button onClick={() => handleVersionAction('replace')}
+                    className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">
+                    替换为新版本（删除旧内容后重新导入）
+                  </button>
+                  <button onClick={() => handleVersionAction('append')}
+                    className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">
+                    保留两者（新旧版本共存）
+                  </button>
+                  <button onClick={() => handleVersionAction('skip')}
+                    className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-muted/50 text-muted-foreground transition-colors">
+                    取消，不重复导入
+                  </button>
                 </div>
               </div>
             )}
           </div>
-        )}
 
-        {/* Version mode selector */}
-        {versionPrompted && (
-          <div className="mt-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
-            <p className="text-2xs font-medium text-primary/80 mb-2 tracking-wide">该来源已存在，请选择操作方式</p>
-            <div className="space-y-1">
-              <button onClick={() => handleVersionAction('replace')}
-                className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">
-                替换为新版本（删除旧内容后重新导入）
-              </button>
-              <button onClick={() => handleVersionAction('append')}
-                className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-primary/10 text-foreground/80 transition-colors">
-                保留两者（新旧版本共存）
-              </button>
-              <button onClick={() => handleVersionAction('skip')}
-                className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-muted/50 text-muted-foreground transition-colors">
-                取消，不重复导入
-              </button>
+          {/* URL Import */}
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5 tracking-wide uppercase">导入公开网页</label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="https://…"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleIngestUrl() }}
+                className="flex-1"
+              />
+              <Button size="sm" onClick={handleIngestUrl}>
+                <Globe className="h-3.5 w-3.5" />
+              </Button>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* URL Import */}
-      <div>
-        <label className="block text-xs font-medium text-muted-foreground mb-1.5 tracking-wide uppercase">导入公开网页</label>
-        <div className="flex gap-2">
-          <Input
-            placeholder="https://…"
-            value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleIngestUrl() }}
-            className="flex-1"
-          />
-          <Button size="sm" onClick={handleIngestUrl}>
-            <Globe className="h-3.5 w-3.5" />
-          </Button>
+        </>
+      ) : (
+        <div className="rounded-xl border border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground/80">当前账号为只读权限</p>
+          <p className="mt-1">可以浏览引用文档并发起问答，导入、删除和清空知识库需要编辑者或管理员权限。</p>
         </div>
-      </div>
+      )}
 
-      <Separator />
+      {canManageKnowledgeBase && <Separator />}
 
       {/* Source List */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">引用文档</span>
-          {sources.length > 0 && (
+          {canManageKnowledgeBase && sources.length > 0 && (
             <button onClick={() => setClearOpen(true)} className="text-2xs text-destructive/50 hover:text-destructive transition-colors">
               清空
             </button>
@@ -409,18 +420,20 @@ export default function DocumentPanel({
             <div key={s.source} className="group flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-foreground/70 hover:bg-muted transition-colors">
               <span className="truncate flex-1">{s.source}</span>
               <span className="text-2xs text-muted-foreground mr-2 font-mono">{s.count} 段落</span>
-              <button
-                onClick={() => setDeleteSourceTarget(s.source)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
+              {canManageKnowledgeBase && (
+                <button
+                  onClick={() => setDeleteSourceTarget(s.source)}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              )}
             </div>
           ))}
           {sources.length === 0 && (
             <p className="text-xs text-muted-foreground/60 text-center py-6 italic">知识库为空</p>
           )}
-        </div>
+          </div>
       </div>
 
       {/* Delete source confirm */}

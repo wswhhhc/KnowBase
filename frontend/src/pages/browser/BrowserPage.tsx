@@ -19,9 +19,19 @@ interface BrowserPageProps {
   onHighlightConsumed?: () => void
   workspaceId?: string
   workspaceName?: string
+  canManageKnowledgeBase?: boolean
 }
 
-export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, highlightChunkId, onHighlightConsumed, workspaceId, workspaceName = '默认工作区' }: BrowserPageProps) {
+export default function BrowserPage({
+  onOpenSidebar,
+  sidebarOpen,
+  onNavigate,
+  highlightChunkId,
+  onHighlightConsumed,
+  workspaceId,
+  workspaceName = '默认工作区',
+  canManageKnowledgeBase = true,
+}: BrowserPageProps) {
   const {
     fileInputRef,
     scrollRef,
@@ -85,8 +95,10 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
 
   return (
     <div className="flex flex-col h-full">
-      <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.md,.pdf,.docx,.html"
-        onChange={async (e) => { const f = e.target.files?.[0]; if (f) await startUpload(f) }} />
+      {canManageKnowledgeBase && (
+        <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.md,.pdf,.docx,.html"
+          onChange={async (e) => { const f = e.target.files?.[0]; if (f) await startUpload(f) }} />
+      )}
 
       <BrowserHeader
         stats={stats}
@@ -96,11 +108,17 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
         workspaceName={workspaceName}
       />
 
-      <DocumentActions uploading={uploading} ingesting={ingesting} uploadPhase={uploadPhase} uploadPercent={uploadPercent}
-        urlInput={urlInput} setUrlInput={setUrlInput} handleIngestUrl={() => { const u = urlInput.trim(); if (u) startUrlIngest(u) }}
-        refreshData={refreshData} onUploadClick={() => fileInputRef.current?.click()} />
+      {canManageKnowledgeBase ? (
+        <DocumentActions uploading={uploading} ingesting={ingesting} uploadPhase={uploadPhase} uploadPercent={uploadPercent}
+          urlInput={urlInput} setUrlInput={setUrlInput} handleIngestUrl={() => { const u = urlInput.trim(); if (u) startUrlIngest(u) }}
+          refreshData={refreshData} onUploadClick={() => fileInputRef.current?.click()} />
+      ) : (
+        <div className="border-b border-border bg-muted/20 px-5 py-3 text-xs text-muted-foreground">
+          当前账号可浏览和问答，导入、替换、删除资料需要编辑者或管理员权限。
+        </div>
+      )}
 
-      {versionPrompted && (
+      {canManageKnowledgeBase && versionPrompted && (
         <div className="border-b border-border bg-primary/5 px-5 py-3">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-foreground/80">引用来源"{versionPrompted.sourceName}"已存在，选择处理方式：</span>
@@ -129,7 +147,7 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
             </div>
           ) : (<>
             <AnimatePresence initial={false}>
-              {showPostUploadGuide && (
+              {canManageKnowledgeBase && showPostUploadGuide && (
                 <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                   className="mb-4 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
                   <div>
@@ -183,10 +201,12 @@ export default function BrowserPage({ onOpenSidebar, sidebarOpen, onNavigate, hi
                     onPrimaryAction={
                       hasDocuments
                         ? () => { void resetBrowseFilters() }
-                        : () => fileInputRef.current?.click()
+                        : canManageKnowledgeBase
+                          ? () => fileInputRef.current?.click()
+                          : undefined
                     }
                     onSecondaryAction={hasDocuments ? () => onNavigate('chat') : undefined}
-                    primaryLabel={hasDocuments ? '清空筛选' : '上传文档'}
+                    primaryLabel={hasDocuments ? '清空筛选' : canManageKnowledgeBase ? '上传文档' : undefined}
                     secondaryLabel={hasDocuments ? '去聊天页提问' : undefined}
                   />
                 ) : chunkView === 'slice' && selectedSource ? (
@@ -219,9 +239,9 @@ interface BrowserEmptyStateProps {
   workspaceName: string
   hasDocuments: boolean
   hasActiveFilters: boolean
-  onPrimaryAction: () => void
+  onPrimaryAction?: () => void
   onSecondaryAction?: () => void
-  primaryLabel: string
+  primaryLabel?: string
   secondaryLabel?: string
 }
 
@@ -248,7 +268,9 @@ function BrowserEmptyState({
       <p className="mt-1 text-xs text-muted-foreground/70">{workspaceName}</p>
       <p className="mt-2 max-w-md text-xs text-muted-foreground/60">{description}</p>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-        <Button size="sm" onClick={onPrimaryAction}>{primaryLabel}</Button>
+        {primaryLabel && onPrimaryAction && (
+          <Button size="sm" onClick={onPrimaryAction}>{primaryLabel}</Button>
+        )}
         {secondaryLabel && onSecondaryAction && (
           <Button size="sm" variant="outline" onClick={onSecondaryAction}>{secondaryLabel}</Button>
         )}

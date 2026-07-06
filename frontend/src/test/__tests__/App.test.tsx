@@ -5,6 +5,19 @@ import App from '@/app/App'
 
 const mockLogin = vi.fn()
 
+function storeSession(role: string) {
+  localStorage.setItem('knowbase_access_token', 'access-token')
+  localStorage.setItem('knowbase_refresh_token', 'refresh-token')
+  localStorage.setItem('knowbase_auth_user', JSON.stringify({
+    id: `user-${role}`,
+    username: role,
+    role,
+    is_active: true,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  }))
+}
+
 const mockChat = {
   messages: [],
   isStreaming: false,
@@ -208,17 +221,35 @@ describe('App component', () => {
     expect(screen.queryByTitle('上传文档')).not.toBeInTheDocument()
   })
 
+  it('hides admin nav items and import FAB for viewer sessions on mobile', async () => {
+    storeSession('viewer')
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
+
+    render(<App />)
+
+    expect(await screen.findByTestId('chatarea')).toBeInTheDocument()
+    expect(screen.queryByText('指标')).not.toBeInTheDocument()
+    expect(screen.queryByText('设置')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getAllByText('知识库')[0])
+    expect(await screen.findByTestId('browserpage')).toBeInTheDocument()
+    expect(screen.queryByTitle('上传文档')).not.toBeInTheDocument()
+  })
+
   it('logs out and returns to the login page', async () => {
-    localStorage.setItem('knowbase_access_token', 'access-token')
-    localStorage.setItem('knowbase_refresh_token', 'refresh-token')
-    localStorage.setItem('knowbase_auth_user', JSON.stringify({
-      id: 'user-1',
-      username: 'admin',
-      role: 'admin',
-      is_active: true,
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-    }))
+    storeSession('admin')
 
     render(<App />)
 

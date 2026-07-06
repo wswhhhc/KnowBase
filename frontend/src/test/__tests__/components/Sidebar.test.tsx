@@ -126,6 +126,16 @@ describe('Sidebar', () => {
     expect(screen.getByText('设置')).toBeInTheDocument()
   })
 
+  it('hides admin panels and workspace management when the user lacks admin rights', () => {
+    render(<Sidebar {...defaultProps} canManageApp={false} canManageWorkspaces={false} />)
+
+    expect(screen.getByText('知识库')).toBeInTheDocument()
+    expect(screen.queryByText('指标')).not.toBeInTheDocument()
+    expect(screen.queryByText('设置')).not.toBeInTheDocument()
+    expect(screen.queryByTitle('创建工作区')).not.toBeInTheDocument()
+    expect(screen.queryByTitle('删除工作区')).not.toBeInTheDocument()
+  })
+
   it('shows conversation list from useConversations', async () => {
     render(<Sidebar {...defaultProps} />)
     await waitFor(() => {
