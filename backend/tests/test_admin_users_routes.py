@@ -91,6 +91,46 @@ def test_admin_create_user_rejects_short_password(monkeypatch, tmp_path):
     assert response.status_code == 422
 
 
+def test_admin_create_user_rejects_blank_username(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+    auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")
+    client = TestClient(app)
+    admin_token = _login(client, "admin", "admin-pass")
+
+    response = client.post(
+        "/api/admin/users",
+        json={"username": "   ", "password": "viewer-pass", "role": "viewer"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_admin_create_and_update_user_trim_username(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+    auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")
+    client = TestClient(app)
+    admin_token = _login(client, "admin", "admin-pass")
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    created = client.post(
+        "/api/admin/users",
+        json={"username": "  viewer  ", "password": "viewer-pass", "role": "viewer"},
+        headers=headers,
+    )
+    assert created.status_code == 200
+    assert created.json()["username"] == "viewer"
+
+    updated = client.patch(
+        f"/api/admin/users/{created.json()['id']}",
+        json={"username": "  editor  "},
+        headers=headers,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["username"] == "editor"
+    assert auth_store.get_user_by_id(created.json()["id"])["username"] == "editor"
+
+
 def test_admin_update_user_rejects_duplicate_username(monkeypatch, tmp_path):
     _configure_auth_database(monkeypatch, tmp_path)
     auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")

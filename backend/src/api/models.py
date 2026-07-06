@@ -6,6 +6,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from src.rag.models import HotspotEntry, KBChunk
 
 
+def _normalize_username(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("username must not be blank")
+    return normalized
+
+
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=4096)
     thread_id: str | None = None
@@ -28,6 +37,11 @@ class UserOut(BaseModel):
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=120)
     password: str = Field(..., min_length=1, max_length=256)
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def _normalize_username(cls, value: object) -> object:
+        return _normalize_username(value)
 
 
 class RefreshRequest(BaseModel):
@@ -52,12 +66,22 @@ class AdminUserCreate(BaseModel):
     role: str = Field(default="viewer", pattern="^(admin|editor|viewer)$")
     is_active: bool = True
 
+    @field_validator("username", mode="before")
+    @classmethod
+    def _normalize_username(cls, value: object) -> object:
+        return _normalize_username(value)
+
 
 class AdminUserUpdate(BaseModel):
     username: str | None = Field(default=None, min_length=1, max_length=120)
     password: str | None = Field(default=None, min_length=8, max_length=256)
     role: str | None = Field(default=None, pattern="^(admin|editor|viewer)$")
     is_active: bool | None = None
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def _normalize_username(cls, value: object) -> object:
+        return _normalize_username(value) if value is not None else None
 
 
 class AuditLogOut(BaseModel):
