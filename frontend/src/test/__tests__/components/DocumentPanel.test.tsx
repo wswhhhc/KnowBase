@@ -70,7 +70,10 @@ vi.mock('@/shared/api', async () => {
       suggested_questions: ['这组示例资料分别覆盖了什么主题？'],
     }),
     deleteSource: vi.fn(),
-    clearKnowledgeBase: vi.fn(),
+    clearKnowledgeBase: vi.fn().mockResolvedValue({
+      job_id: 'job-clear-workspace',
+      job: createJob({ id: 'job-clear-workspace', job_type: 'clear_workspace' }),
+    }),
   }
 })
 
@@ -159,5 +162,28 @@ describe('DocumentPanel', () => {
     expect(screen.queryByText('上传文档')).not.toBeInTheDocument()
     expect(screen.queryByPlaceholderText('https://…')).not.toBeInTheDocument()
     expect(screen.queryByText('清空')).not.toBeInTheDocument()
+  })
+
+  it('clears the workspace through a background job before refreshing', async () => {
+    render(
+      <DocumentPanel
+        sources={[{ source: 'policy.md', count: 2 } as any]}
+        onRefresh={onRefresh}
+        workspaceId="ws-clear"
+        workspaceName="清理工作区"
+      />,
+    )
+
+    await userEvent.click(screen.getByText('清空'))
+    await userEvent.click(screen.getByText('确认删除'))
+
+    await waitFor(() => {
+      expect(api.clearKnowledgeBase).toHaveBeenCalledWith('ws-clear')
+      expect(api.waitForImportJob).toHaveBeenCalledWith(
+        expect.objectContaining({ job_id: 'job-clear-workspace' }),
+        expect.any(Function),
+      )
+      expect(onRefresh).toHaveBeenCalled()
+    })
   })
 })

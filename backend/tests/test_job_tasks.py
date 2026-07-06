@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from src.api.auth_tokens import hash_password
+from src.jobs.document_tasks import clear_workspace_documents
 from src.jobs.enqueue import enqueue_tracked_job
 from src.jobs.tasks import run_tracked_job
 from src.persistence import auth_store, job_store
@@ -29,6 +30,18 @@ def sample_task(left: int, right: int) -> int:
 
 def failing_task() -> None:
     raise RuntimeError("task exploded")
+
+
+class FakeClearKnowledgeBase:
+    def __init__(self):
+        self.cleared_workspaces: list[str] = []
+
+    def clear_workspace(self, workspace_id: str = "") -> int:
+        self.cleared_workspaces.append(workspace_id)
+        return 4
+
+    def document_count_for_workspace(self, workspace_id: str = "") -> int:
+        return 0
 
 
 @pytest.fixture()
@@ -137,3 +150,16 @@ def test_enqueue_tracked_job_marks_failed_when_enqueue_fails(isolated_jobs_datab
 
     assert stored_jobs[0]["status"] == "failed"
     assert stored_jobs[0]["error"] == "redis unavailable"
+
+
+def test_clear_workspace_documents_clears_workspace_and_returns_result():
+    kb = FakeClearKnowledgeBase()
+
+    result = clear_workspace_documents(workspace_id="ws-a", kb=kb)
+
+    assert kb.cleared_workspaces == ["ws-a"]
+    assert result == {
+        "removed": 4,
+        "total_docs": 0,
+        "message": "知识库已清空",
+    }

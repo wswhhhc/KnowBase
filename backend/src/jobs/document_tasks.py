@@ -115,3 +115,24 @@ def ingest_file_document(
         return result
     finally:
         Path(file_path).unlink(missing_ok=True)
+
+
+def clear_workspace_documents(
+    *,
+    workspace_id: str = "",
+    job_id: str | None = None,
+    kb: KnowledgeBase | None = None,
+) -> dict:
+    knowledge_base = kb or KnowledgeBase()
+    if job_id:
+        job_store.update_job_progress(
+            job_id,
+            progress={"phase": "clearing", "percent": 50, "message": "正在清空知识库"},
+        )
+
+    removed = knowledge_base.clear_workspace(workspace_id=workspace_id)
+    return {
+        "removed": removed,
+        "total_docs": knowledge_base.document_count_for_workspace(workspace_id),
+        "message": "知识库已清空",
+    }

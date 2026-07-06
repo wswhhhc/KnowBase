@@ -141,7 +141,7 @@ export const deleteSource = (source: string, workspaceId?: string) =>
   req(withWorkspaceScope(`/documents/source/${encodeURIComponent(source)}`, workspaceId), { method: 'DELETE' })
 
 export const clearKnowledgeBase = (workspaceId?: string) =>
-  req(withWorkspaceScope('/documents/clear', workspaceId), { method: 'POST' })
+  req<JobCreateResponse>(withWorkspaceScope('/documents/clear', workspaceId), { method: 'POST' })
 
 export const importDemoDocuments = (workspaceId?: string) =>
   req<DemoImportResponse>(withWorkspaceScope('/documents/import-demo', workspaceId), { method: 'POST' })

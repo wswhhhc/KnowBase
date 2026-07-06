@@ -390,7 +390,16 @@ async def delete_source(
 async def clear_kb(
     workspace_id: str = Query(""),
     _workspace_access: dict | None = Depends(require_workspace_editor),
-    kb: KnowledgeBase = Depends(get_knowledge_base),
-):
-    removed = kb.clear_workspace(workspace_id=workspace_id)
-    return {"ok": True, "message": "知识库已清空", "removed": removed}
+) -> JobCreateResponse:
+    try:
+        job = enqueue_tracked_job(
+            job_type="clear_workspace",
+            target_path="src.jobs.document_tasks:clear_workspace_documents",
+            created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+            workspace_id=workspace_id,
+            kwargs={"workspace_id": workspace_id},
+            inject_job_id=True,
+        )
+        return JobCreateResponse(job_id=job["id"], job=job)
+    except Exception as e:
+        raise HTTPException(503, "任务队列不可用") from e

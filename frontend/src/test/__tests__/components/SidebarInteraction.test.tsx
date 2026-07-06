@@ -88,7 +88,10 @@ vi.mock('@/shared/api', async () => {
       callbacks.onDone?.({ chunk_count: 1, existing_version: false })
       return { abort: vi.fn() }
     }),
-    clearKnowledgeBase: vi.fn(),
+    clearKnowledgeBase: vi.fn().mockResolvedValue({
+      job_id: 'job-sidebar-clear',
+      job: createJob({ id: 'job-sidebar-clear', job_type: 'clear_workspace' }),
+    }),
     deleteSource: vi.fn(),
     deleteConversations: vi.fn(),
     getKBStats: vi.fn(),
