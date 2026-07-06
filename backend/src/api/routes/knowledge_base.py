@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from src.api.deps import get_knowledge_base, verify_api_key
+from src.api.deps import get_current_user_or_legacy_api_key, get_knowledge_base, require_workspace_viewer
 from src.api.models import KBChunk, KBStats, HotspotEntry, KBConfig
 from src.rag.models import RetrievalResult
 from src.rag.knowledge_base import KnowledgeBase
@@ -60,12 +60,13 @@ def _resolve_debug_search_params(strategy: str, requested_k: int, default_retrie
     return retrieval_k, vector_candidate_k
 
 
-router = APIRouter(dependencies=[Depends(verify_api_key)])
+router = APIRouter()
 
 
 @router.get("/stats")
 async def stats(
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_viewer),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> KBStats:
     return KBStats(**kb.stats(workspace_id=workspace_id))
@@ -76,6 +77,7 @@ async def chunks(
     source: str = Query(""), search: str = Query(""),
     skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_viewer),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> dict:
     total, items = kb.list_chunks(
@@ -95,6 +97,7 @@ async def chunks(
 async def chunk_by_id(
     chunk_id: str,
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_viewer),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> KBChunk:
     chunk = kb.get_chunk_by_id(chunk_id, workspace_id=workspace_id)
@@ -106,13 +109,14 @@ async def chunk_by_id(
 @router.get("/sources")
 async def list_source_names(
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_viewer),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> list[str]:
     return sorted(s for s, _c in kb.source_counts(workspace_id=workspace_id))
 
 
 @router.get("/config")
-async def kb_config() -> KBConfig:
+async def kb_config(_auth: dict | None = Depends(get_current_user_or_legacy_api_key)) -> KBConfig:
     return KBConfig(
         chunk_size=get_runtime_setting("chunk_size", CHUNK_SIZE),
         chunk_overlap=get_runtime_setting("chunk_overlap", CHUNK_OVERLAP),
@@ -122,6 +126,7 @@ async def kb_config() -> KBConfig:
 @router.get("/hotspots")
 async def hotspots(
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_viewer),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> list[HotspotEntry]:
     return kb.get_hotspots(workspace_id=workspace_id)
@@ -131,6 +136,7 @@ async def hotspots(
 async def debug_search(
     body: DebugSearchRequest,
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_viewer),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> DebugSearchResponse:
     """Run a debug hybrid search that returns per-document scores (vector, BM25, RRF)."""
