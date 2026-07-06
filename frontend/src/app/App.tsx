@@ -1,13 +1,17 @@
+import { useState } from 'react'
 import { Toaster } from 'sonner'
-import { Upload } from 'lucide-react'
+import { LogOut, Upload } from 'lucide-react'
 
 import { APP_NAV_ITEMS, type ViewType } from '@/app/navigation'
 import AppViewRenderer from '@/app/AppViewRenderer'
 import { useAppShell } from '@/app/useAppShell'
 import Sidebar from '@/components/Sidebar'
 import { UPLOAD_TRIGGER_EVENT } from '@/lib/ui-events'
+import LoginPage from '@/pages/auth/LoginPage'
+import { clearAuthSession, getStoredAccessToken, getStoredRefreshToken } from '@/shared/api/session'
 
 export default function App() {
+  const [authVersion, setAuthVersion] = useState(0)
   const {
     activeThreadId,
     activeView,
@@ -29,8 +33,31 @@ export default function App() {
     workspaceSummary,
   } = useAppShell()
 
+  const hasJwtSession = Boolean(getStoredAccessToken())
+  const hasLegacyApiKey = Boolean(localStorage.getItem('knowbase_api_key'))
+  const isAuthenticated = hasJwtSession || hasLegacyApiKey
+
+  const handleLogout = () => {
+    clearAuthSession()
+    setAuthVersion((version) => version + 1)
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginPage onAuthenticated={() => setAuthVersion((version) => version + 1)} />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: { background: 'hsl(var(--surface))', color: 'hsl(var(--foreground))', border: '1px solid hsl(var(--border))' },
+          }}
+        />
+      </>
+    )
+  }
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background noise-overlay">
+    <div key={authVersion} className="flex h-screen w-screen overflow-hidden bg-background noise-overlay">
       {isMobile && sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40"
@@ -64,6 +91,16 @@ export default function App() {
       </div>
 
       <main className="relative flex min-w-0 flex-1 flex-col pb-safe">
+        {hasJwtSession && getStoredRefreshToken() && (
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="absolute right-4 top-4 z-30 flex h-9 items-center gap-2 rounded-md border border-border bg-surface/90 px-3 text-sm text-muted-foreground backdrop-blur transition-colors hover:border-primary/50 hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            退出登录
+          </button>
+        )}
         <AppViewRenderer
           activeView={activeView}
           activeWsId={activeWsId}
