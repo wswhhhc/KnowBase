@@ -136,3 +136,22 @@ def clear_workspace_documents(
         "total_docs": knowledge_base.document_count_for_workspace(workspace_id),
         "message": "知识库已清空",
     }
+
+
+def rebuild_index_documents(
+    *,
+    job_id: str | None = None,
+    kb: KnowledgeBase | None = None,
+) -> dict:
+    knowledge_base = kb or KnowledgeBase()
+    if job_id:
+        job_store.update_job_progress(
+            job_id,
+            progress={"phase": "rebuilding", "percent": 50, "message": "正在重建索引"},
+        )
+
+    total_docs = knowledge_base.rebuild_index()
+    return {
+        "total_docs": total_docs,
+        "message": "索引已重建",
+    }

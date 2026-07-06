@@ -199,6 +199,14 @@ describe('Documents API', () => {
     vi.unstubAllGlobals()
   })
 
+  it('rebuildIndex sends POST with workspace scope', async () => {
+    const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ job_id: 'job-1', job: {} }), text: () => Promise.resolve('{}'), headers: new Headers() })
+    vi.stubGlobal('fetch', fn)
+    await api.rebuildIndex('ws-1')
+    expect(fn).toHaveBeenCalledWith('/api/documents/rebuild-index?workspace_id=ws-1', expect.objectContaining({ method: 'POST' }))
+    vi.unstubAllGlobals()
+  })
+
   it('importDemoDocuments sends POST with workspace scope', async () => {
     const fn = vi.fn().mockResolvedValue({
       ok: true,

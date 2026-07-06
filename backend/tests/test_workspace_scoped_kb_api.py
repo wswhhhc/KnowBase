@@ -272,6 +272,7 @@ class WorkspaceScopedKnowledgeBaseApiTests(unittest.TestCase):
             ("/api/documents/import-demo", "post"),
             ("/api/documents/source/{source_name}", "delete"),
             ("/api/documents/clear", "post"),
+            ("/api/documents/rebuild-index", "post"),
             ("/api/knowledge-base/stats", "get"),
             ("/api/knowledge-base/chunks", "get"),
             ("/api/knowledge-base/chunks/{chunk_id}", "get"),

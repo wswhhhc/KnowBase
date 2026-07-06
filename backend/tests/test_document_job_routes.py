@@ -271,3 +271,29 @@ def test_clear_workspace_returns_queued_job_without_running_kb_clear():
         kwargs={"workspace_id": "ws-a"},
         inject_job_id=True,
     )
+
+
+def test_rebuild_index_returns_queued_job_without_running_kb_rebuild():
+    fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
+    queued_job = _job_payload("job-rebuild-1")
+    queued_job["job_type"] = "rebuild_index"
+    queued_job["workspace_id"] = "ws-a"
+    try:
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
+            with patch.object(fake_kb, "rebuild_index", create=True) as mock_rebuild_index:
+                response = client.post("/api/documents/rebuild-index?workspace_id=ws-a")
+    finally:
+        teardown_test_env(tmp_dir, orig_db, patchers)
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == "job-rebuild-1"
+    assert response.json()["job"]["status"] == "queued"
+    mock_rebuild_index.assert_not_called()
+    mock_enqueue.assert_called_once_with(
+        job_type="rebuild_index",
+        target_path="src.jobs.document_tasks:rebuild_index_documents",
+        created_by_user_id=None,
+        workspace_id="ws-a",
+        kwargs={},
+        inject_job_id=True,
+    )
