@@ -11,6 +11,7 @@ vi.mock('@/shared/api', async () => {
   return {
     ...actual,
     listJobs: vi.fn(),
+    cancelJob: vi.fn(),
   }
 })
 
@@ -112,5 +113,63 @@ describe('JobsPage', () => {
       expect(api.listJobs).toHaveBeenCalledTimes(2)
     })
     expect(await screen.findByText('暂无后台任务')).toBeInTheDocument()
+  })
+
+  it('cancels queued jobs and updates the rendered status', async () => {
+    vi.mocked(api.listJobs).mockResolvedValue([
+      job({
+        id: 'job-cancel-1',
+        job_type: 'ingest_file',
+        status: 'queued',
+        progress: { phase: 'queued', percent: 0, message: '等待执行' },
+      }),
+    ])
+    vi.mocked(api.cancelJob).mockResolvedValue(job({
+      id: 'job-cancel-1',
+      job_type: 'ingest_file',
+      status: 'canceled',
+      progress: { phase: 'canceled', percent: 0, message: '已取消' },
+    }))
+
+    render(<JobsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: '取消任务 job-cancel-1' }))
+
+    expect(api.cancelJob).toHaveBeenCalledWith('job-cancel-1')
+    expect(await screen.findAllByText('已取消')).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: '取消任务 job-cancel-1' })).not.toBeInTheDocument()
+  })
+
+  it('does not show cancel actions for finished jobs', async () => {
+    vi.mocked(api.listJobs).mockResolvedValue([
+      job({
+        id: 'job-done-1',
+        status: 'succeeded',
+        progress: { phase: 'done', percent: 100, message: '完成' },
+      }),
+    ])
+
+    render(<JobsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+
+    expect(await screen.findByText('已完成')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '取消任务 job-done-1' })).not.toBeInTheDocument()
+  })
+
+  it('shows a row-level error when canceling fails', async () => {
+    vi.mocked(api.listJobs).mockResolvedValue([
+      job({
+        id: 'job-cancel-fail',
+        status: 'queued',
+        progress: { phase: 'queued', percent: 0, message: '等待执行' },
+      }),
+    ])
+    vi.mocked(api.cancelJob).mockRejectedValue(new Error('任务已开始，无法取消'))
+
+    render(<JobsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: '取消任务 job-cancel-fail' }))
+
+    expect(await screen.findByText('任务已开始，无法取消')).toBeInTheDocument()
+    expect(screen.getByText('排队中')).toBeInTheDocument()
   })
 })

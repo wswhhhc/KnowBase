@@ -24,6 +24,8 @@ export default function JobsPage({ onOpenSidebar, sidebarOpen, onNavigate }: Job
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [cancelingJobId, setCancelingJobId] = useState<string | null>(null)
+  const [jobErrors, setJobErrors] = useState<Record<string, string>>({})
 
   const activeCount = useMemo(
     () => jobs.filter((job) => !api.isTerminalJob(job)).length,
@@ -45,6 +47,22 @@ export default function JobsPage({ onOpenSidebar, sidebarOpen, onNavigate }: Job
   useEffect(() => {
     void loadJobs()
   }, [])
+
+  const handleCancelJob = async (jobId: string) => {
+    setCancelingJobId(jobId)
+    setJobErrors((current) => ({ ...current, [jobId]: '' }))
+    try {
+      const canceled = await api.cancelJob(jobId)
+      setJobs((current) => current.map((job) => job.id === jobId ? canceled : job))
+    } catch (err) {
+      setJobErrors((current) => ({
+        ...current,
+        [jobId]: err instanceof Error ? err.message : '取消任务失败',
+      }))
+    } finally {
+      setCancelingJobId(null)
+    }
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -100,7 +118,13 @@ export default function JobsPage({ onOpenSidebar, sidebarOpen, onNavigate }: Job
           ) : (
             <div className="space-y-3">
               {jobs.map((job) => (
-                <JobRow key={job.id} job={job} />
+                <JobRow
+                  key={job.id}
+                  job={job}
+                  canceling={cancelingJobId === job.id}
+                  cancelError={jobErrors[job.id] || ''}
+                  onCancel={() => void handleCancelJob(job.id)}
+                />
               ))}
             </div>
           )}
@@ -110,11 +134,22 @@ export default function JobsPage({ onOpenSidebar, sidebarOpen, onNavigate }: Job
   )
 }
 
-function JobRow({ job }: { job: Job }) {
+function JobRow({
+  job,
+  canceling,
+  cancelError,
+  onCancel,
+}: {
+  job: Job
+  canceling: boolean
+  cancelError: string
+  onCancel: () => void
+}) {
   const status = STATUS_COPY[job.status] ?? { label: job.status, className: 'text-muted-foreground bg-muted/40 border-border', icon: CircleDashed }
   const StatusIcon = status.icon
   const percent = clampPercent(job.progress?.percent)
   const phase = job.progress?.message || job.progress?.phase || '等待 worker 更新进度'
+  const canCancel = job.status === 'queued' || job.status === 'running'
 
   return (
     <article className="rounded-lg border border-border bg-surface/30 p-4">
@@ -133,6 +168,19 @@ function JobRow({ job }: { job: Job }) {
         <div className="text-right font-mono text-2xs text-muted-foreground/50">
           <p>{formatDate(job.created_at)}</p>
           <p className="mt-1">{job.workspace_id || '默认工作区'}</p>
+          {canCancel && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCancel}
+              disabled={canceling}
+              aria-label={`取消任务 ${job.id}`}
+              className="mt-3 h-7 px-2 text-2xs font-sans"
+            >
+              {canceling ? '取消中' : '取消任务'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -149,6 +197,11 @@ function JobRow({ job }: { job: Job }) {
       {job.error && (
         <p className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {job.error}
+        </p>
+      )}
+      {cancelError && (
+        <p className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {cancelError}
         </p>
       )}
     </article>
