@@ -34,5 +34,8 @@ def run_tracked_job(
     except Exception as exc:
         job_store.mark_job_failed(job_id, error=str(exc))
         raise
-    job_store.mark_job_succeeded(job_id, progress={"phase": "done", "percent": 100})
+    progress = {"phase": "done", "percent": 100}
+    if isinstance(result, dict):
+        progress["result"] = result
+    job_store.mark_job_succeeded(job_id, progress=progress)
     return result
