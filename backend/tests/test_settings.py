@@ -62,6 +62,25 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(settings.quality.enabled)
         self.assertEqual(settings.auth.api_key, "local-key")
 
+    def test_settings_parses_cors_allow_origins(self):
+        settings = Settings(
+            SILICONFLOW_API_KEY="sk-1234567890",
+            CORS_ALLOW_ORIGINS="https://knowbase.internal, http://localhost:5173,",
+        )
+
+        self.assertEqual(
+            settings.api.cors_allow_origins,
+            ["https://knowbase.internal", "http://localhost:5173"],
+        )
+
+    def test_settings_defaults_cors_to_local_development_origins(self):
+        settings = Settings(SILICONFLOW_API_KEY="sk-1234567890")
+
+        self.assertEqual(
+            settings.api.cors_allow_origins,
+            ["http://localhost:5173", "http://localhost:3000"],
+        )
+
     def test_settings_defaults_runtime_paths_to_runtime_local(self):
         settings = Settings(SILICONFLOW_API_KEY="sk-1234567890")
         repo_root = Path(__file__).resolve().parents[2]
