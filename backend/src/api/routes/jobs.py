@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from src.api.deps import get_current_user_or_legacy_api_key
+from src.api.deps import authorize_workspace_role, get_current_user_or_legacy_api_key
 from src.api.models import JobOut
 from src.jobs.enqueue import retry_tracked_job
 from src.persistence import audit_store, job_store
@@ -72,7 +72,10 @@ async def retry_job(
     job_id: str,
     current_user: dict | None = Depends(get_current_user_or_legacy_api_key),
 ) -> JobOut:
-    _visible_job_or_404(job_id, current_user)
+    job = _visible_job_or_404(job_id, current_user)
+    workspace_id = str(job.get("workspace_id") or "")
+    if workspace_id and not _is_admin_or_legacy(current_user):
+        authorize_workspace_role(current_user, workspace_id, "editor")
     try:
         retried = retry_tracked_job(job_id)
     except ValueError as exc:
