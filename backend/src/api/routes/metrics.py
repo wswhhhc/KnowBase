@@ -9,12 +9,12 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
 
-from src.api.deps import verify_api_key
+from src.api.deps import require_admin_or_legacy_api_key
 from src.api.models import QueryLogEntry, QueryLogsResponse
 from src.config.constants import DATA_DIR
 from src.persistence import message_store
 
-router = APIRouter(dependencies=[Depends(verify_api_key)])
+router = APIRouter(dependencies=[Depends(require_admin_or_legacy_api_key)])
 _LOG_DIR = Path(DATA_DIR) / "rag_logs"
 
 _MODEL_PRICING_PER_MILLION: dict[str, tuple[float, float]] = {
