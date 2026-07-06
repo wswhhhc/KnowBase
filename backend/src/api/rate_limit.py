@@ -115,10 +115,9 @@ class RedisRateLimiter:
 
 
 def _resolve_request_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    if forwarded_for:
-        return f"ip:{forwarded_for}"
-
+    # Forwarded headers are client-controllable unless a trusted proxy has
+    # already normalized them. Use the direct peer address for the security
+    # boundary so spoofed headers cannot bypass auth/login rate limits.
     host = request.client.host if request.client else "unknown"
     return f"ip:{host}"
 

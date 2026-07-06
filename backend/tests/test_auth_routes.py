@@ -91,6 +91,30 @@ def test_login_is_rate_limited_by_ip_and_username(monkeypatch, tmp_path):
     assert int(second.headers["Retry-After"]) >= 1
 
 
+def test_login_ip_rate_limit_ignores_spoofed_forwarded_for(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+
+    client = TestClient(app)
+    with patch(
+        "src.api.rate_limit.get_runtime_setting",
+        side_effect=lambda key, default=None: 1 if key == "auth_login_rate_limit_per_minute" else default,
+    ):
+        first = client.post(
+            "/api/auth/login",
+            json={"username": "alice", "password": "bad"},
+            headers={"X-Forwarded-For": "203.0.113.10"},
+        )
+        second = client.post(
+            "/api/auth/login",
+            json={"username": "bob", "password": "bad"},
+            headers={"X-Forwarded-For": "203.0.113.11"},
+        )
+
+    assert first.status_code == 401
+    assert second.status_code == 429
+    assert "请求过于频繁" in second.json()["detail"]
+
+
 def test_me_requires_valid_access_token(monkeypatch, tmp_path):
     _configure_auth_database(monkeypatch, tmp_path)
 
