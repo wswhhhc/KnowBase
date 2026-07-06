@@ -40,6 +40,7 @@ export type RefreshRequest = Schemas['RefreshRequest']
 export type LogoutRequest = Schemas['LogoutRequest']
 export type AdminUserCreate = Schemas['AdminUserCreate']
 export type AdminUserUpdate = Schemas['AdminUserUpdate']
+export type AuditLog = Schemas['AuditLogOut']
 
 export type {
   ChatStreamDonePayload,

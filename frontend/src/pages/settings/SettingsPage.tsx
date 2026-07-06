@@ -6,6 +6,7 @@ import * as api from '@/shared/api'
 import { MASKED_SECRET_VALUE } from '@/shared/api'
 import type { RuntimeSettings } from '@/shared/api'
 import type { ViewType } from '@/app/navigation'
+import AdminAuditLogsPanel from '@/pages/settings/AdminAuditLogsPanel'
 import AdminUsersPanel from '@/pages/settings/AdminUsersPanel'
 import WorkspaceMembersPanel from '@/pages/settings/WorkspaceMembersPanel'
 
@@ -153,6 +154,7 @@ export default function SettingsPage({ onOpenSidebar, sidebarOpen }: SettingsPag
 
           <AdminUsersPanel />
           <WorkspaceMembersPanel />
+          <AdminAuditLogsPanel />
 
           {GROUP_ORDER.map((group) => (
             <div key={group.title}>

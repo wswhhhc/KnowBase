@@ -15,6 +15,7 @@ vi.mock('lucide-react', () => {
     AlertTriangle: 'AlertTriangle',
     Check: 'Check',
     Loader2: 'Loader2',
+    RefreshCw: 'RefreshCw',
     X: 'X',
   }
   return Object.fromEntries(
@@ -30,6 +31,7 @@ vi.mock('@/shared/api', async () => {
     getSettings: vi.fn(),
     updateSettings: vi.fn(),
     listAdminUsers: vi.fn(),
+    listAdminAuditLogs: vi.fn(),
     createAdminUser: vi.fn(),
     updateAdminUser: vi.fn(),
     deleteAdminUser: vi.fn(),
@@ -75,6 +77,17 @@ describe('SettingsPage', () => {
         is_active: true,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
+      },
+    ])
+    vi.mocked(api.listAdminAuditLogs).mockResolvedValue([
+      {
+        id: 1,
+        actor_user_id: 'user-2',
+        action: 'job.queued',
+        target_type: 'job',
+        target_id: 'job-1',
+        metadata: { job_type: 'ingest_url', workspace_id: 'ws-1' },
+        created_at: '2026-01-01T08:30:00Z',
       },
     ])
     vi.mocked(api.createAdminUser).mockResolvedValue({
@@ -263,6 +276,28 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(api.replaceWorkspaceMembers).toHaveBeenCalledWith(undefined, 'ws-1', {
         members: [{ user_id: 'user-2', role: 'editor' }],
+      })
+    })
+  })
+
+  it('lists and filters admin audit logs', async () => {
+    render(<SettingsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(api.listAdminAuditLogs).toHaveBeenCalledWith(undefined, {
+        actorUserId: undefined,
+        limit: 50,
+      })
+      expect(screen.getByText('任务入队')).toBeInTheDocument()
+      expect(screen.getByText('job.queued')).toBeInTheDocument()
+    })
+
+    await userEvent.selectOptions(screen.getByLabelText('审计日志用户过滤'), 'user-2')
+
+    await waitFor(() => {
+      expect(api.listAdminAuditLogs).toHaveBeenLastCalledWith(undefined, {
+        actorUserId: 'user-2',
+        limit: 50,
       })
     })
   })
