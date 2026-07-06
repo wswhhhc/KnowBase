@@ -33,6 +33,36 @@ test('viewer sessions hide admin navigation and receive 403 from settings api', 
   expect(status).toBe(403)
 })
 
+test('viewer can browse an assigned workspace but cannot delete sources', async ({ page }) => {
+  await page.goto('/')
+
+  await login(page, 'viewer', 'viewer-pass')
+
+  const result = await page.evaluate(async () => {
+    const token = localStorage.getItem('knowbase_access_token') || ''
+    const headers = { Authorization: `Bearer ${token}` }
+    const workspacesResponse = await fetch('/api/workspaces', { headers })
+    const workspaces = await workspacesResponse.json()
+    const workspaceId = workspaces[0]?.id || ''
+    const deleteResponse = await fetch(
+      `/api/documents/source/${encodeURIComponent('missing-source.txt')}?workspace_id=${encodeURIComponent(workspaceId)}`,
+      {
+        method: 'DELETE',
+        headers,
+      },
+    )
+    return {
+      workspacesStatus: workspacesResponse.status,
+      workspaceCount: Array.isArray(workspaces) ? workspaces.length : 0,
+      deleteStatus: deleteResponse.status,
+    }
+  })
+
+  expect(result.workspacesStatus).toBe(200)
+  expect(result.workspaceCount).toBeGreaterThan(0)
+  expect(result.deleteStatus).toBe(403)
+})
+
 test('admin can create a user, create a workspace, assign membership, and the new user sees that workspace', async ({ page }) => {
   const suffix = `${Date.now()}`
   const username = `qa-viewer-${suffix}`

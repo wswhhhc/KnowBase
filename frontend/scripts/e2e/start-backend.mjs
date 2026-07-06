@@ -20,6 +20,7 @@ const env = {
   SILICONFLOW_API_KEY: process.env.SILICONFLOW_API_KEY || '',
   TAVILY_API_KEY: process.env.TAVILY_API_KEY || '',
   REDIS_URL: process.env.REDIS_URL || `redis://127.0.0.1:${redisPort}/0`,
+  AUTH_LOGIN_RATE_LIMIT_PER_MINUTE: process.env.AUTH_LOGIN_RATE_LIMIT_PER_MINUTE || '30',
 }
 
 const childProcesses = []
