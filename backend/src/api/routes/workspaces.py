@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from src.api.deps import get_current_user_or_legacy_api_key, require_admin, require_admin_or_legacy_api_key
 from src.api.models import WorkspaceMemberOut, WorkspaceMembersUpdate
-from src.persistence import auth_store, workspace_store
+from src.persistence import audit_store, auth_store, workspace_store
 
 
 class WorkspaceOut(BaseModel):
@@ -93,9 +93,10 @@ async def list_members(ws_id: str, _admin: dict = Depends(require_admin)) -> lis
 async def replace_members(
     ws_id: str,
     body: WorkspaceMembersUpdate,
-    _admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ) -> list[WorkspaceMemberOut]:
-    if workspace_store.get_workspace(ws_id) is None:
+    workspace = workspace_store.get_workspace(ws_id)
+    if workspace is None:
         raise HTTPException(404, "工作区不存在")
     user_ids = [member.user_id for member in body.members]
     if len(user_ids) != len(set(user_ids)):
@@ -106,5 +107,23 @@ async def replace_members(
     members = auth_store.replace_workspace_members(
         workspace_id=ws_id,
         members=[member.model_dump() for member in body.members],
+    )
+    audit_store.record_event(
+        action="admin.workspace_members_replaced",
+        actor_user_id=admin.get("id"),
+        target_type="workspace",
+        target_id=ws_id,
+        metadata={
+            "workspace_name": workspace["name"],
+            "member_count": len(members),
+            "members": [
+                {
+                    "user_id": member["user_id"],
+                    "username": member["username"],
+                    "role": member["role"],
+                }
+                for member in members
+            ],
+        },
     )
     return [WorkspaceMemberOut(**member) for member in members]
