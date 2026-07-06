@@ -1450,7 +1450,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IngestResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/IngestResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JobCreateResponse"
+                    }
+                  ],
+                  "title": "Response Ingest Url Api Documents Ingest Url Post"
                 }
               }
             }
@@ -3582,6 +3590,23 @@
           "message"
         ],
         "title": "IngestResponse"
+      },
+      "JobCreateResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "job": {
+            "$ref": "#/components/schemas/JobOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "job"
+        ],
+        "title": "JobCreateResponse"
       },
       "JobOut": {
         "properties": {

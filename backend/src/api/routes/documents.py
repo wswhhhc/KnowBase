@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sse_starlette.sse import EventSourceResponse
 
 from src.api.deps import get_knowledge_base, require_workspace_editor, require_workspace_viewer
-from src.api.models import DemoImportResponse, IngestResponse, URLIngestRequest, SourceOut
+from src.api.models import DemoImportResponse, IngestResponse, JobCreateResponse, URLIngestRequest, SourceOut
 from src.api.rate_limit import enforce_document_import_rate_limit
+from src.jobs.enqueue import enqueue_tracked_job
 from src.chat_utils import generate_suggested_questions
 from src.rag.models import normalize_source
 from src.rag.knowledge_base import KnowledgeBase
@@ -276,7 +277,7 @@ async def ingest_url(
     _workspace_access: dict | None = Depends(require_workspace_editor),
     _rate_limit: None = Depends(enforce_document_import_rate_limit),
     kb: KnowledgeBase = Depends(get_knowledge_base),
-) -> IngestResponse:
+) -> IngestResponse | JobCreateResponse:
     try:
         existing = _source_exists(kb, body.url, workspace_id=workspace_id)
 
@@ -289,16 +290,23 @@ async def ingest_url(
             )
 
         actual_mode = version_mode or "replace"
-        chunk_count = kb.ingest_url(body.url, version_mode=actual_mode, workspace_id=workspace_id)
-        suggested = _collect_suggested_questions(kb, [body.url], workspace_id=workspace_id)
-        return IngestResponse(
-            chunk_count=chunk_count, total_docs=kb.document_count_for_workspace(workspace_id),
-            message=f"已添加 {chunk_count} 个新段落" if chunk_count else "URL 内容已存在",
-            suggested_questions=suggested,
-            existing_version=existing,
+        job = enqueue_tracked_job(
+            job_type="ingest_url",
+            target_path="src.jobs.document_tasks:ingest_url_document",
+            created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+            workspace_id=workspace_id,
+            kwargs={
+                "url": body.url,
+                "version_mode": actual_mode,
+                "workspace_id": workspace_id,
+            },
+            inject_job_id=True,
         )
+        return JobCreateResponse(job_id=job["id"], job=job)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(503, "任务队列不可用") from e
 
 
 @router.post("/import-demo")

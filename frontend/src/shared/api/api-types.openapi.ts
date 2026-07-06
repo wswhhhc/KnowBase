@@ -1062,6 +1062,12 @@ export interface components {
              */
             existing_version: boolean;
         };
+        /** JobCreateResponse */
+        JobCreateResponse: {
+            /** Job Id */
+            job_id: string;
+            job: components["schemas"]["JobOut"];
+        };
         /** JobOut */
         JobOut: {
             /** Id */
@@ -2368,7 +2374,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IngestResponse"];
+                    "application/json": components["schemas"]["IngestResponse"] | components["schemas"]["JobCreateResponse"];
                 };
             };
             /** @description Validation Error */

@@ -20,6 +20,7 @@ def enqueue_tracked_job(
     args: list[Any] | None = None,
     kwargs: dict[str, Any] | None = None,
     queue: Queue | None = None,
+    inject_job_id: bool = False,
 ) -> dict:
     job = job_store.create_job(
         job_type=job_type,
@@ -27,13 +28,16 @@ def enqueue_tracked_job(
         workspace_id=workspace_id,
         progress={"phase": "queued", "percent": 0},
     )
+    task_kwargs = dict(kwargs or {})
+    if inject_job_id:
+        task_kwargs["job_id"] = job["id"]
     try:
         (queue or create_queue()).enqueue(
             run_tracked_job,
             job["id"],
             target_path,
             args or [],
-            kwargs or {},
+            task_kwargs,
             job_id=job["id"],
         )
     except Exception as exc:

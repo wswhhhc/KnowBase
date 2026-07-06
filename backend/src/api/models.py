@@ -99,6 +99,11 @@ class JobOut(BaseModel):
     finished_at: str | None = None
 
 
+class JobCreateResponse(BaseModel):
+    job_id: str
+    job: JobOut
+
+
 class ChatSource(BaseModel):
     source: str
     chunk_id: str | None = None

@@ -1,6 +1,6 @@
 import { apiUrl, authHeaders, createApiErrorFromResponse, req, withWorkspaceScope } from '@/shared/api/client'
 import { handleSSEEvent, SSEParser } from '@/shared/api/sse'
-import type { DemoImportResponse, DocSource } from '@/shared/api/types'
+import type { DemoImportResponse, DocSource, IngestResponse, JobCreateResponse } from '@/shared/api/types'
 
 export const checkSource = (sourceName: string, workspaceId?: string) => {
   const params = new URLSearchParams({ source_name: sourceName })
@@ -127,7 +127,7 @@ export function ingestUrlStream(
 export const ingestUrl = (url: string, versionMode?: string, workspaceId?: string) => {
   const params = new URLSearchParams()
   if (versionMode) params.set('version_mode', versionMode)
-  return req<{ chunk_count: number; total_docs: number; message: string }>(withWorkspaceScope('/documents/ingest-url', workspaceId, params), {
+  return req<IngestResponse | JobCreateResponse>(withWorkspaceScope('/documents/ingest-url', workspaceId, params), {
     method: 'POST',
     body: JSON.stringify({ url }),
   })

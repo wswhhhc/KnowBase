@@ -1,0 +1,70 @@
+"""Document ingestion tasks executed by RQ workers."""
+
+from __future__ import annotations
+
+from src.chat_utils import generate_suggested_questions
+from src.persistence import job_store
+from src.rag.knowledge_base import KnowledgeBase
+
+
+def collect_suggested_questions(
+    kb: KnowledgeBase,
+    source_names: list[str],
+    *,
+    workspace_id: str = "",
+) -> list[str]:
+    texts: list[str] = []
+    seen_sources: set[str] = set()
+    for source_name in source_names:
+        if source_name in seen_sources:
+            continue
+        seen_sources.add(source_name)
+        _total, source_chunks = kb.list_chunks(
+            workspace_id=workspace_id,
+            source=source_name,
+            limit=1000,
+        )
+        if source_chunks:
+            texts.append(" ".join(chunk.content for chunk in source_chunks))
+    docs_text = " ".join(texts).strip()
+    return generate_suggested_questions(docs_text) if docs_text else []
+
+
+def ingest_url_document(
+    *,
+    url: str,
+    version_mode: str = "replace",
+    workspace_id: str = "",
+    job_id: str | None = None,
+    kb: KnowledgeBase | None = None,
+) -> dict:
+    knowledge_base = kb or KnowledgeBase()
+
+    def _progress(phase: str, percent: int):
+        if job_id:
+            job_store.update_job_progress(
+                job_id,
+                progress={"phase": phase, "percent": percent},
+            )
+
+    chunk_count = knowledge_base.ingest_url(
+        url,
+        version_mode=version_mode,
+        progress_callback=_progress,
+        workspace_id=workspace_id,
+    )
+    suggested = collect_suggested_questions(knowledge_base, [url], workspace_id=workspace_id)
+    message = f"已添加 {chunk_count} 个新段落" if chunk_count else "URL 内容已存在"
+    result = {
+        "chunk_count": chunk_count,
+        "total_docs": knowledge_base.document_count_for_workspace(workspace_id),
+        "message": message,
+        "suggested_questions": suggested,
+        "existing_version": False,
+    }
+    if job_id:
+        job_store.update_job_progress(
+            job_id,
+            progress={"phase": "finalizing", "percent": 95, "message": message},
+        )
+    return result
