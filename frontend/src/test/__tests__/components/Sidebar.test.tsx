@@ -9,6 +9,7 @@ vi.mock('lucide-react', () => {
     Plus: 'Plus',
     Trash2: 'Trash2',
     BookOpen: 'BookOpen',
+    ClipboardList: 'ClipboardList',
     BarChart3: 'BarChart3',
     PanelRightClose: 'PanelRightClose',
     Sun: 'Sun',

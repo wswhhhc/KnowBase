@@ -8,11 +8,13 @@ import type { WorkspaceSummary } from '@/types/workspace-summary'
 
 const loadChatPage = () => import('@/pages/chat/ChatPage')
 const loadBrowserPage = () => import('@/pages/browser/BrowserPage')
+const loadJobsPage = () => import('@/pages/jobs/JobsPage')
 const loadDashboardPage = () => import('@/pages/dashboard/DashboardPage')
 const loadSettingsPage = () => import('@/pages/settings/SettingsPage')
 
 const ChatPage = lazy(loadChatPage)
 const BrowserPage = lazy(loadBrowserPage)
+const JobsPage = lazy(loadJobsPage)
 const DashboardPage = lazy(loadDashboardPage)
 const SettingsPage = lazy(loadSettingsPage)
 
@@ -24,6 +26,10 @@ const PAGE_COPY: Record<ViewType, { loading: string; error: string }> = {
   browser: {
     loading: '正在加载知识库页面…',
     error: '知识库组件异常，请刷新页面',
+  },
+  jobs: {
+    loading: '正在加载任务中心…',
+    error: '任务中心异常，请刷新页面',
   },
   dashboard: {
     loading: '正在加载指标页面…',
@@ -81,6 +87,7 @@ export default function AppViewRenderer({
 
     const preloadViews = () => {
       void loadBrowserPage()
+      void loadJobsPage()
       void loadDashboardPage()
       void loadSettingsPage()
     }
@@ -128,6 +135,18 @@ export default function AppViewRenderer({
               workspaceId={activeWsId}
               workspaceName={workspaceSummary.workspaceName}
               canManageKnowledgeBase={canManageKnowledgeBase}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      )
+    case 'jobs':
+      return (
+        <ErrorBoundary key="jobs" fallback={renderStatus(PAGE_COPY.jobs.error)}>
+          <Suspense fallback={renderStatus(PAGE_COPY.jobs.loading)}>
+            <JobsPage
+              onOpenSidebar={() => setSidebarOpen(true)}
+              sidebarOpen={sidebarOpen}
+              onNavigate={setActiveView}
             />
           </Suspense>
         </ErrorBoundary>
