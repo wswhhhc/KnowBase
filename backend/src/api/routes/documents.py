@@ -10,7 +10,7 @@ import threading
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sse_starlette.sse import EventSourceResponse
 
-from src.api.deps import get_knowledge_base, verify_api_key
+from src.api.deps import get_knowledge_base, require_workspace_editor, require_workspace_viewer
 from src.api.models import DemoImportResponse, IngestResponse, URLIngestRequest, SourceOut
 from src.api.rate_limit import enforce_document_import_rate_limit
 from src.chat_utils import generate_suggested_questions
@@ -18,7 +18,7 @@ from src.rag.models import normalize_source
 from src.rag.knowledge_base import KnowledgeBase
 from src.utils import save_uploaded_file
 
-router = APIRouter(dependencies=[Depends(verify_api_key)])
+router = APIRouter()
 _VERSIONED_SOURCE_RE = re.compile(r"^(.+?)\s+\(v\d+\)$")
 
 
@@ -96,6 +96,7 @@ def _threaded_event_source(job) -> EventSourceResponse:
 @router.get("/sources")
 async def list_sources(
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_viewer),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> list[SourceOut]:
     return [SourceOut(source=s, count=c) for s, c in kb.source_counts(workspace_id=workspace_id)]
@@ -105,6 +106,7 @@ async def list_sources(
 async def check_source(
     source_name: str,
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_viewer),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> dict:
     """Check if a source name already exists, without modifying any data."""
@@ -119,6 +121,7 @@ async def upload_file_stream(
     file: UploadFile = File(...),
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_editor),
     _rate_limit: None = Depends(enforce_document_import_rate_limit),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ):
@@ -172,6 +175,7 @@ async def ingest_url_stream(
     body: URLIngestRequest,
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_editor),
     _rate_limit: None = Depends(enforce_document_import_rate_limit),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ):
@@ -225,6 +229,7 @@ async def upload_file(
     file: UploadFile = File(...),
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_editor),
     _rate_limit: None = Depends(enforce_document_import_rate_limit),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse:
@@ -268,6 +273,7 @@ async def ingest_url(
     body: URLIngestRequest,
     version_mode: str | None = Query(None, pattern="^(replace|append|skip)$"),
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_editor),
     _rate_limit: None = Depends(enforce_document_import_rate_limit),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse:
@@ -298,6 +304,7 @@ async def ingest_url(
 @router.post("/import-demo")
 async def import_demo_documents(
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_editor),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> DemoImportResponse:
     try:
@@ -323,6 +330,7 @@ async def import_demo_documents(
 async def delete_source(
     source_name: str,
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_editor),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse:
     removed = kb.delete_source(source_name, workspace_id=workspace_id)
@@ -337,6 +345,7 @@ async def delete_source(
 @router.post("/clear")
 async def clear_kb(
     workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_editor),
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ):
     removed = kb.clear_workspace(workspace_id=workspace_id)
