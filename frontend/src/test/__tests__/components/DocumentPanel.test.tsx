@@ -4,6 +4,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import DocumentPanel from '@/components/sidebar/DocumentPanel'
 import * as api from '@/shared/api'
 
+function createJob(overrides: Partial<api.Job> = {}): api.Job {
+  return {
+    id: 'job-document-panel',
+    job_type: 'ingest_file',
+    status: 'queued',
+    workspace_id: '',
+    progress: { phase: 'queued', percent: 0, message: '' },
+    error: '',
+    attempts: 0,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
@@ -17,6 +32,10 @@ vi.mock('@/shared/api', async () => {
   return {
     ...actual,
     checkSource: vi.fn().mockResolvedValue({ exists: false }),
+    uploadDocument: vi.fn().mockResolvedValue({
+      job_id: 'job-document-panel',
+      job: createJob(),
+    }),
     uploadDocumentStream: vi.fn().mockImplementation((_file, _mode, callbacks) => {
       callbacks.onDone?.({
         chunk_count: 1,
@@ -26,7 +45,18 @@ vi.mock('@/shared/api', async () => {
       })
       return { abort: vi.fn() }
     }),
+    ingestUrl: vi.fn(),
     ingestUrlStream: vi.fn(),
+    pollJob: vi.fn().mockImplementation((_jobId, options) => {
+      options?.onUpdate?.(createJob({
+        status: 'running',
+        progress: { phase: 'embedding', percent: 60, message: '正在向量化' },
+      }))
+      return Promise.resolve(createJob({
+        status: 'succeeded',
+        progress: { phase: 'done', percent: 100, message: '完成' },
+      }))
+    }),
     importDemoDocuments: vi.fn().mockResolvedValue({
       chunk_count: 3,
       total_docs: 9,
@@ -94,16 +124,16 @@ describe('DocumentPanel', () => {
 
     await waitFor(() => {
       expect(api.checkSource).toHaveBeenCalledWith('drag.txt', '')
-      expect(api.uploadDocumentStream).toHaveBeenCalledWith(
+      expect(api.uploadDocument).toHaveBeenCalledWith(
         expect.any(File),
         undefined,
-        expect.objectContaining({
-          onProgress: expect.any(Function),
-          onDone: expect.any(Function),
-          onError: expect.any(Function),
-        }),
         '',
       )
+      expect(api.pollJob).toHaveBeenCalledWith('job-document-panel', expect.objectContaining({
+        intervalMs: 1000,
+        onUpdate: expect.any(Function),
+      }))
+      expect(api.uploadDocumentStream).not.toHaveBeenCalled()
     })
   })
 

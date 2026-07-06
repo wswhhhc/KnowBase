@@ -25,6 +25,21 @@ vi.mock('sonner', () => ({
 // sonner 的 mock 引用（vi.mock 已提升到文件顶部，这里拿到的引用是安全可用的）
 import { toast as sonnerToast } from 'sonner'
 
+function createJob(overrides: Partial<api.Job> = {}): api.Job {
+  return {
+    id: 'job-sidebar-import',
+    job_type: 'ingest_file',
+    status: 'queued',
+    workspace_id: '',
+    progress: { phase: 'queued', percent: 0, message: '' },
+    error: '',
+    attempts: 0,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
 // Mock lucide-react
 vi.mock('lucide-react', () => {
   const icons: Record<string, string> = {
@@ -56,13 +71,19 @@ vi.mock('@/shared/api', async () => {
     ...actual,
     getMessages: vi.fn().mockResolvedValue([]),
     getConversationPinState: vi.fn().mockResolvedValue({ thread_id: 'thread-1', pinned_chunk_ids: [], excluded_chunk_ids: [] }),
-    uploadDocument: vi.fn(),
+    uploadDocument: vi.fn().mockResolvedValue({
+      job_id: 'job-sidebar-upload',
+      job: createJob({ id: 'job-sidebar-upload', job_type: 'ingest_file' }),
+    }),
     uploadDocumentStream: vi.fn().mockImplementation((file, versionMode, callbacks) => {
       callbacks.onDone?.({ chunk_count: 5, existing_version: false })
       return { abort: vi.fn() }
     }),
     checkSource: vi.fn(),
-    ingestUrl: vi.fn(),
+    ingestUrl: vi.fn().mockResolvedValue({
+      job_id: 'job-sidebar-url',
+      job: createJob({ id: 'job-sidebar-url', job_type: 'ingest_url' }),
+    }),
     ingestUrlStream: vi.fn().mockImplementation((url, _mode, callbacks) => {
       callbacks.onDone?.({ chunk_count: 1, existing_version: false })
       return { abort: vi.fn() }
@@ -71,6 +92,16 @@ vi.mock('@/shared/api', async () => {
     deleteSource: vi.fn(),
     deleteConversations: vi.fn(),
     getKBStats: vi.fn(),
+    pollJob: vi.fn().mockImplementation((_jobId, options) => {
+      options?.onUpdate?.(createJob({
+        status: 'running',
+        progress: { phase: 'embedding', percent: 60, message: '正在向量化' },
+      }))
+      return Promise.resolve(createJob({
+        status: 'succeeded',
+        progress: { phase: 'done', percent: 100, message: '完成' },
+      }))
+    }),
     queryLogs: vi.fn().mockResolvedValue([]),
   }
 })
@@ -491,28 +522,25 @@ describe('Sidebar interactions', () => {
     await userEvent.click(screen.getByText('替换为新版本（删除旧内容后重新导入）'))
 
     await waitFor(() => {
-      expect(api.uploadDocumentStream).toHaveBeenCalledWith(
+      expect(api.uploadDocument).toHaveBeenCalledWith(
         expect.any(File),
         'replace',
-        expect.objectContaining({
-          onProgress: expect.any(Function),
-          onDone: expect.any(Function),
-          onError: expect.any(Function),
-        }),
         '',
       )
     })
   })
 
-  it('re-prompts version handling if the stream completion reports an existing source', async () => {
+  it('re-prompts version handling if the upload response reports an existing source', async () => {
     const refresh = vi.fn().mockResolvedValue(true)
     vi.mocked(useSources).mockReturnValue({
       sources: mockSources, sourceError: null, refresh,
     })
     vi.mocked(api.checkSource).mockResolvedValue({ exists: false })
-    vi.mocked(api.uploadDocumentStream).mockImplementationOnce((_file, _mode, callbacks) => {
-      callbacks.onDone?.({ existing_version: true, chunk_count: 0 })
-      return { abort: vi.fn() } as any
+    vi.mocked(api.uploadDocument).mockResolvedValueOnce({
+      existing_version: true,
+      chunk_count: 0,
+      total_docs: 0,
+      message: '来源已存在，请指定 version_mode（replace/append/skip）',
     })
 
     render(<Sidebar {...defaultProps} />)
