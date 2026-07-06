@@ -254,6 +254,13 @@ class KnowledgeBase:
         with self._write_lock:
             return self.catalog.clear_workspace(workspace_id=workspace_id)
 
+    def rebuild_index(self) -> int:
+        with self._write_lock:
+            self._ensure_embedding_compatible()
+            self.ingestion._ensure_loaded()
+            self.ingestion._rebuild_all()
+            return self.document_count
+
     def get_hotspots(self, top_n: int = 50, workspace_id: str | None = None) -> list[HotspotEntry]:
         return self.catalog.get_hotspots(top_n=top_n, workspace_id=workspace_id)
 

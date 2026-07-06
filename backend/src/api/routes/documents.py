@@ -403,3 +403,22 @@ async def clear_kb(
         return JobCreateResponse(job_id=job["id"], job=job)
     except Exception as e:
         raise HTTPException(503, "任务队列不可用") from e
+
+
+@router.post("/rebuild-index")
+async def rebuild_index(
+    workspace_id: str = Query(""),
+    _workspace_access: dict | None = Depends(require_workspace_editor),
+) -> JobCreateResponse:
+    try:
+        job = enqueue_tracked_job(
+            job_type="rebuild_index",
+            target_path="src.jobs.document_tasks:rebuild_index_documents",
+            created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+            workspace_id=workspace_id,
+            kwargs={},
+            inject_job_id=True,
+        )
+        return JobCreateResponse(job_id=job["id"], job=job)
+    except Exception as e:
+        raise HTTPException(503, "任务队列不可用") from e

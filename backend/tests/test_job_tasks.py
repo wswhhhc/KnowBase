@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from src.api.auth_tokens import hash_password
-from src.jobs.document_tasks import clear_workspace_documents
+from src.jobs.document_tasks import clear_workspace_documents, rebuild_index_documents
 from src.jobs.enqueue import enqueue_tracked_job
 from src.jobs.tasks import run_tracked_job
 from src.persistence import auth_store, job_store
@@ -42,6 +42,15 @@ class FakeClearKnowledgeBase:
 
     def document_count_for_workspace(self, workspace_id: str = "") -> int:
         return 0
+
+
+class FakeRebuildKnowledgeBase:
+    def __init__(self):
+        self.rebuild_calls = 0
+
+    def rebuild_index(self) -> int:
+        self.rebuild_calls += 1
+        return 7
 
 
 @pytest.fixture()
@@ -162,4 +171,16 @@ def test_clear_workspace_documents_clears_workspace_and_returns_result():
         "removed": 4,
         "total_docs": 0,
         "message": "知识库已清空",
+    }
+
+
+def test_rebuild_index_documents_rebuilds_index_and_returns_result():
+    kb = FakeRebuildKnowledgeBase()
+
+    result = rebuild_index_documents(kb=kb)
+
+    assert kb.rebuild_calls == 1
+    assert result == {
+        "total_docs": 7,
+        "message": "索引已重建",
     }

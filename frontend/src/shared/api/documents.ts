@@ -143,5 +143,8 @@ export const deleteSource = (source: string, workspaceId?: string) =>
 export const clearKnowledgeBase = (workspaceId?: string) =>
   req<JobCreateResponse>(withWorkspaceScope('/documents/clear', workspaceId), { method: 'POST' })
 
+export const rebuildIndex = (workspaceId?: string) =>
+  req<JobCreateResponse>(withWorkspaceScope('/documents/rebuild-index', workspaceId), { method: 'POST' })
+
 export const importDemoDocuments = (workspaceId?: string) =>
   req<DemoImportResponse>(withWorkspaceScope('/documents/import-demo', workspaceId), { method: 'POST' })
