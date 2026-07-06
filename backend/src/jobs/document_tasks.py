@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from src.chat_utils import generate_suggested_questions
 from src.persistence import job_store
 from src.rag.knowledge_base import KnowledgeBase
@@ -68,3 +70,48 @@ def ingest_url_document(
             progress={"phase": "finalizing", "percent": 95, "message": message},
         )
     return result
+
+
+def ingest_file_document(
+    *,
+    file_path: str,
+    source_name: str,
+    version_mode: str = "replace",
+    workspace_id: str = "",
+    job_id: str | None = None,
+    kb: KnowledgeBase | None = None,
+) -> dict:
+    knowledge_base = kb or KnowledgeBase()
+
+    def _progress(phase: str, percent: int):
+        if job_id:
+            job_store.update_job_progress(
+                job_id,
+                progress={"phase": phase, "percent": percent},
+            )
+
+    try:
+        chunk_count = knowledge_base.ingest_file(
+            file_path,
+            source_name=source_name,
+            version_mode=version_mode,
+            progress_callback=_progress,
+            workspace_id=workspace_id,
+        )
+        suggested = collect_suggested_questions(knowledge_base, [source_name], workspace_id=workspace_id)
+        message = f"已添加 {chunk_count} 个新段落" if chunk_count else "文件内容无变化，未新增段落"
+        result = {
+            "chunk_count": chunk_count,
+            "total_docs": knowledge_base.document_count_for_workspace(workspace_id),
+            "message": message,
+            "suggested_questions": suggested,
+            "existing_version": False,
+        }
+        if job_id:
+            job_store.update_job_progress(
+                job_id,
+                progress={"phase": "finalizing", "percent": 95, "message": message},
+            )
+        return result
+    finally:
+        Path(file_path).unlink(missing_ok=True)

@@ -42,15 +42,30 @@ class RateLimitTests(unittest.TestCase):
         self.assertLessEqual(int(second.headers["Retry-After"]), 60)
 
     def test_document_upload_and_url_import_share_the_same_rate_limit_bucket(self):
+        queued_job = {
+            "id": "job-upload-rate-limit",
+            "job_type": "ingest_file",
+            "status": "queued",
+            "created_by_user_id": None,
+            "workspace_id": "",
+            "progress": {"phase": "queued", "percent": 0},
+            "error": "",
+            "attempts": 0,
+            "created_at": "2026-07-06T00:00:00+00:00",
+            "updated_at": "2026-07-06T00:00:00+00:00",
+            "started_at": None,
+            "finished_at": None,
+        }
         with patch("src.api.rate_limit.get_runtime_setting", side_effect=lambda key, default=None: 1 if key == "document_import_rate_limit_per_minute" else default):
-            first = self.client.post(
-                "/api/documents/upload",
-                files={"file": ("fresh.txt", b"hello world", "text/plain")},
-            )
-            second = self.client.post(
-                "/api/documents/ingest-url",
-                json={"url": "https://example.com/page"},
-            )
+            with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job):
+                first = self.client.post(
+                    "/api/documents/upload",
+                    files={"file": ("fresh.txt", b"hello world", "text/plain")},
+                )
+                second = self.client.post(
+                    "/api/documents/ingest-url",
+                    json={"url": "https://example.com/page"},
+                )
 
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 429)

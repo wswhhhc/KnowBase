@@ -341,19 +341,34 @@ class WorkspaceScopedKnowledgeBaseApiTests(unittest.TestCase):
         self.assertEqual(missing_resp.status_code, 200)
         self.assertEqual(missing_resp.json(), {"exists": False})
 
-        upload_resp = self.client.post(
-            "/api/documents/upload?workspace_id=ws-beta",
-            files={"file": ("workspace-beta.txt", b"beta content", "text/plain")},
-        )
+        upload_job = {
+            "id": "job-upload-beta",
+            "job_type": "ingest_file",
+            "status": "queued",
+            "created_by_user_id": None,
+            "workspace_id": "ws-beta",
+            "progress": {"phase": "queued", "percent": 0},
+            "error": "",
+            "attempts": 0,
+            "created_at": "2026-07-06T00:00:00+00:00",
+            "updated_at": "2026-07-06T00:00:00+00:00",
+            "started_at": None,
+            "finished_at": None,
+        }
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=upload_job) as mock_upload_enqueue:
+            upload_resp = self.client.post(
+                "/api/documents/upload?workspace_id=ws-beta",
+                files={"file": ("workspace-beta.txt", b"beta content", "text/plain")},
+            )
         self.assertEqual(upload_resp.status_code, 200)
-        self.assertEqual(upload_resp.json()["chunk_count"], 1)
+        self.assertEqual(upload_resp.json()["job_id"], "job-upload-beta")
+        mock_upload_enqueue.assert_called_once()
 
         beta_sources_after_upload = self.client.get("/api/documents/sources?workspace_id=ws-beta").json()
         self.assertEqual(
             beta_sources_after_upload,
             [
                 {"source": "beta-only.txt", "count": 1},
-                {"source": "workspace-beta.txt", "count": 1},
             ],
         )
 
@@ -390,7 +405,7 @@ class WorkspaceScopedKnowledgeBaseApiTests(unittest.TestCase):
         mock_enqueue.assert_called_once()
 
         beta_stats = self.client.get("/api/knowledge-base/stats?workspace_id=ws-beta").json()
-        self.assertEqual(beta_stats["chunk_count"], 2)
+        self.assertEqual(beta_stats["chunk_count"], 1)
 
     def test_import_demo_only_touches_target_workspace(self):
         resp = self.client.post("/api/documents/import-demo?workspace_id=ws-beta")

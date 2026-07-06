@@ -10,7 +10,11 @@ export const checkSource = (sourceName: string, workspaceId?: string) => {
 export const getSources = (workspaceId?: string) =>
   req<DocSource[]>(withWorkspaceScope('/documents/sources', workspaceId))
 
-export const uploadDocument = async (file: File, versionMode?: string, workspaceId?: string) => {
+export const uploadDocument = async (
+  file: File,
+  versionMode?: string,
+  workspaceId?: string,
+): Promise<IngestResponse | JobCreateResponse> => {
   const form = new FormData()
   form.append('file', file)
   const params = new URLSearchParams()

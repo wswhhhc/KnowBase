@@ -407,7 +407,7 @@ describe('Sidebar interactions', () => {
     vi.mocked(useSources).mockReturnValue({
       sources: mockSources, sourceError: null, refresh,
     })
-    vi.mocked(api.uploadDocument).mockResolvedValue({ chunk_count: 5, existing_version: false })
+    vi.mocked(api.uploadDocument).mockResolvedValue({ chunk_count: 5, total_docs: 5, message: 'ok', existing_version: false })
     vi.mocked(api.checkSource).mockResolvedValue({ exists: false })
     refresh.mockResolvedValue(true)
     render(<Sidebar {...defaultProps} />)
@@ -425,7 +425,7 @@ describe('Sidebar interactions', () => {
     vi.mocked(useSources).mockReturnValue({
       sources: mockSources, sourceError: null, refresh,
     })
-    vi.mocked(api.uploadDocument).mockResolvedValue({ chunk_count: 5, existing_version: false })
+    vi.mocked(api.uploadDocument).mockResolvedValue({ chunk_count: 5, total_docs: 5, message: 'ok', existing_version: false })
     vi.mocked(api.checkSource).mockResolvedValue({ exists: false })
     refresh.mockResolvedValue(false)
     render(<Sidebar {...defaultProps} />)
