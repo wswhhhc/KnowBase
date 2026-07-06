@@ -51,9 +51,19 @@ async def list_all(
 @router.post("")
 async def create(
     body: WorkspaceCreate = WorkspaceCreate(),
-    _admin: dict | None = Depends(require_admin_or_legacy_api_key),
+    admin: dict | None = Depends(require_admin_or_legacy_api_key),
 ) -> WorkspaceOut:
     workspace = workspace_store.create_workspace(body.name, body.description)
+    audit_store.record_event(
+        action="admin.workspace_created",
+        actor_user_id=admin.get("id") if admin else None,
+        target_type="workspace",
+        target_id=workspace["id"],
+        metadata={
+            "name": workspace["name"],
+            "description": workspace["description"],
+        },
+    )
     return WorkspaceOut(**workspace)
 
 
@@ -61,23 +71,46 @@ async def create(
 async def update(
     ws_id: str,
     body: WorkspaceUpdate,
-    _admin: dict | None = Depends(require_admin_or_legacy_api_key),
+    admin: dict | None = Depends(require_admin_or_legacy_api_key),
 ) -> WorkspaceOut:
+    changed_fields = sorted(body.model_dump(exclude_unset=True).keys())
     if not workspace_store.update_workspace(ws_id, name=body.name, description=body.description):
         raise HTTPException(404, "工作区不存在")
     workspace = workspace_store.get_workspace(ws_id)
     if workspace is None:
         raise HTTPException(500, "更新后未找到工作区")
+    audit_store.record_event(
+        action="admin.workspace_updated",
+        actor_user_id=admin.get("id") if admin else None,
+        target_type="workspace",
+        target_id=workspace["id"],
+        metadata={
+            "name": workspace["name"],
+            "description": workspace["description"],
+            "changed_fields": changed_fields,
+        },
+    )
     return WorkspaceOut(**workspace)
 
 
 @router.delete("/{ws_id}")
 async def delete(
     ws_id: str,
-    _admin: dict | None = Depends(require_admin_or_legacy_api_key),
+    admin: dict | None = Depends(require_admin_or_legacy_api_key),
 ):
+    workspace = workspace_store.get_workspace(ws_id)
     if not workspace_store.delete_workspace(ws_id):
         raise HTTPException(404, "工作区不存在")
+    audit_store.record_event(
+        action="admin.workspace_deleted",
+        actor_user_id=admin.get("id") if admin else None,
+        target_type="workspace",
+        target_id=ws_id,
+        metadata={
+            "name": workspace["name"] if workspace else "",
+            "description": workspace["description"] if workspace else "",
+        },
+    )
     return {"ok": True}
 
 
