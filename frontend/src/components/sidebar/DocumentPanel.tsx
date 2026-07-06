@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Button, Input, Separator, ConfirmDialog } from '@/components/ui'
 import { Globe, Trash2, Upload, Loader2 } from 'lucide-react'
 import * as api from '@/shared/api'
-import type { DocSource, IngestResponse, Job, JobCreateResponse } from '@/shared/api'
+import type { DocSource } from '@/shared/api'
 
 interface DocumentPanelProps {
   sources: DocSource[]
@@ -44,39 +44,8 @@ const PHASE_COPY: Record<string, { title: string; detail: string }> = {
   },
 }
 
-function isJobCreateResponse(result: IngestResponse | JobCreateResponse): result is JobCreateResponse {
-  return 'job_id' in result
-}
-
 function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
-}
-
-async function waitForQueuedImport(
-  result: IngestResponse | JobCreateResponse,
-  onProgress: (phase: string, percent: number) => void,
-): Promise<IngestResponse | null> {
-  if (!isJobCreateResponse(result)) return result
-
-  const applyJobProgress = (job: Job) => {
-    onProgress(job.progress?.phase || job.status, job.progress?.percent ?? 0)
-  }
-
-  applyJobProgress(result.job)
-  const finished = await api.pollJob(result.job_id, {
-    intervalMs: 1000,
-    onUpdate: applyJobProgress,
-  })
-
-  if (finished.status === 'failed') {
-    throw new Error(finished.error || '后台导入任务失败')
-  }
-  if (finished.status === 'canceled') {
-    throw new Error('后台导入任务已取消')
-  }
-
-  onProgress('done', 100)
-  return null
 }
 
 export default function DocumentPanel({
@@ -125,12 +94,12 @@ export default function DocumentPanel({
       }
 
       const result = await api.uploadDocument(file, versionMode, workspaceId)
-      if (!isJobCreateResponse(result) && result.existing_version && !versionMode) {
+      if (!api.isJobCreateResponse(result) && result.existing_version && !versionMode) {
         setVersionPrompted({ kind: 'file', file, sourceName: file.name })
         resetUploadState()
         return
       }
-      const importResult = await waitForQueuedImport(result, (phase, percent) => {
+      const importResult = await api.waitForImportJob(result, (phase, percent) => {
         setUploadPhase(phase)
         setUploadPercent(percent)
       })
@@ -193,12 +162,12 @@ export default function DocumentPanel({
 
     try {
       const result = await api.ingestUrl(url, versionMode, workspaceId)
-      if (!isJobCreateResponse(result) && result.existing_version && !versionMode) {
+      if (!api.isJobCreateResponse(result) && result.existing_version && !versionMode) {
         setVersionPrompted({ kind: 'url', url, sourceName: url })
         resetUploadState()
         return
       }
-      const importResult = await waitForQueuedImport(result, (phase, percent) => {
+      const importResult = await api.waitForImportJob(result, (phase, percent) => {
         setUploadPhase(phase)
         setUploadPercent(percent)
       })

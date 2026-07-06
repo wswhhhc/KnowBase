@@ -220,6 +220,7 @@ describe('Jobs API', () => {
     status: 'queued',
     workspace_id: '',
     error: '',
+    attempts: 0,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   }
@@ -292,6 +293,32 @@ describe('Jobs API', () => {
 
     await expect(api.pollJob('job-1', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
     expect(fn).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('waitForImportJob returns direct ingest responses without polling', async () => {
+    const onProgress = vi.fn()
+    const response = { chunk_count: 1, total_docs: 1, message: 'ok', existing_version: false }
+
+    await expect(api.waitForImportJob(response, onProgress)).resolves.toBe(response)
+    expect(onProgress).not.toHaveBeenCalled()
+  })
+
+  it('waitForImportJob polls job responses and maps progress updates', async () => {
+    const onProgress = vi.fn()
+    const runningJob = { ...queuedJob, status: 'running', progress: { phase: 'embedding', percent: 60, message: '' } }
+    const doneJob = { ...succeededJob, progress: { phase: 'done', percent: 100, message: '' } }
+    const fn = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(runningJob), text: () => Promise.resolve('{}'), headers: new Headers() })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(doneJob), text: () => Promise.resolve('{}'), headers: new Headers() })
+    vi.stubGlobal('fetch', fn)
+
+    const result = await api.waitForImportJob({ job_id: 'job-1', job: queuedJob }, onProgress)
+
+    expect(result).toBeNull()
+    expect(onProgress).toHaveBeenCalledWith('queued', 0)
+    expect(onProgress).toHaveBeenCalledWith('embedding', 60)
+    expect(onProgress).toHaveBeenCalledWith('done', 100)
     vi.unstubAllGlobals()
   })
 })

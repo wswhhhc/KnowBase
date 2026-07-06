@@ -2,7 +2,6 @@ import { useCallback, type RefObject } from 'react'
 import { toast } from 'sonner'
 
 import * as api from '@/shared/api'
-import type { IngestResponse, Job, JobCreateResponse } from '@/shared/api'
 import { useBrowserImportState } from '@/features/knowledge-browser/hooks/useBrowserImportState'
 
 type VersionMode = 'replace' | 'append'
@@ -24,10 +23,6 @@ function createSuccessCopy(type: '文档' | '网页', versionMode?: VersionMode)
   if (versionMode === 'replace') return `${type}已替换为新版本`
   if (versionMode === 'append') return `${type}已追加新版本`
   return `${type}已${type === '文档' ? '上传' : '导入'}`
-}
-
-function isJobCreateResponse(result: IngestResponse | JobCreateResponse): result is JobCreateResponse {
-  return 'job_id' in result
 }
 
 function getErrorMessage(err: unknown): string {
@@ -64,33 +59,6 @@ export function useBrowserImport({
     versionPrompted,
   } = useBrowserImportState(fileInputRef)
 
-  const waitForQueuedImport = useCallback(async (
-    result: IngestResponse | JobCreateResponse,
-    onProgress: (phase: string, percent: number) => void,
-  ) => {
-    if (!isJobCreateResponse(result)) return result
-
-    const applyJobProgress = (job: Job) => {
-      onProgress(job.progress?.phase || job.status, job.progress?.percent ?? 0)
-    }
-
-    applyJobProgress(result.job)
-    const finished = await api.pollJob(result.job_id, {
-      intervalMs: 1000,
-      onUpdate: applyJobProgress,
-    })
-
-    if (finished.status === 'failed') {
-      throw new Error(finished.error || '后台导入任务失败')
-    }
-    if (finished.status === 'canceled') {
-      throw new Error('后台导入任务已取消')
-    }
-
-    onProgress('done', 100)
-    return null
-  }, [])
-
   const startUpload = useCallback(async (file: File, versionMode?: VersionMode) => {
     const scopeToken = getScopeToken()
     setUploading(true)
@@ -116,12 +84,12 @@ export function useBrowserImport({
     try {
       const result = await api.uploadDocument(file, versionMode, browserWsId)
       if (!isScopeCurrent(scopeToken)) return
-      if (!isJobCreateResponse(result) && result.existing_version && !versionMode) {
+      if (!api.isJobCreateResponse(result) && result.existing_version && !versionMode) {
         setVersionPrompted({ kind: 'file', file, sourceName: file.name })
         resetProgress()
         return
       }
-      await waitForQueuedImport(result, (phase, pct) => {
+      await api.waitForImportJob(result, (phase, pct) => {
         if (!isScopeCurrent(scopeToken)) return
         setUploadPhase(phase)
         setUploadPercent(pct)
@@ -150,7 +118,6 @@ export function useBrowserImport({
     refreshData,
     resetProgress,
     showImportedSourceGuide,
-    waitForQueuedImport,
   ])
 
   const startUrlIngest = useCallback(async (url: string, versionMode?: VersionMode) => {
@@ -178,12 +145,12 @@ export function useBrowserImport({
     try {
       const result = await api.ingestUrl(url, versionMode, browserWsId)
       if (!isScopeCurrent(scopeToken)) return
-      if (!isJobCreateResponse(result) && result.existing_version && !versionMode) {
+      if (!api.isJobCreateResponse(result) && result.existing_version && !versionMode) {
         setVersionPrompted({ kind: 'url', url, sourceName: url })
         resetProgress()
         return
       }
-      await waitForQueuedImport(result, (phase, pct) => {
+      await api.waitForImportJob(result, (phase, pct) => {
         if (!isScopeCurrent(scopeToken)) return
         setUploadPhase(phase)
         setUploadPercent(pct)
@@ -210,7 +177,6 @@ export function useBrowserImport({
     refreshData,
     resetProgress,
     showImportedSourceGuide,
-    waitForQueuedImport,
   ])
 
   return {

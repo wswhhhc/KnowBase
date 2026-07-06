@@ -92,6 +92,11 @@ vi.mock('@/shared/api', async () => {
     deleteSource: vi.fn(),
     deleteConversations: vi.fn(),
     getKBStats: vi.fn(),
+    waitForImportJob: vi.fn().mockImplementation((_result, onProgress) => {
+      onProgress('embedding', 60)
+      onProgress('done', 100)
+      return Promise.resolve(null)
+    }),
     pollJob: vi.fn().mockImplementation((_jobId, options) => {
       options?.onUpdate?.(createJob({
         status: 'running',

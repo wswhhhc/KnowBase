@@ -82,6 +82,11 @@ vi.mock('@/shared/api', async () => {
       callbacks.onDone?.({ chunk_count: 1, total_docs: 1, message: 'ok' })
       return { abort: vi.fn() }
     }),
+    waitForImportJob: vi.fn().mockImplementation((_result, onProgress) => {
+      onProgress('embedding', 60)
+      onProgress('done', 100)
+      return Promise.resolve(null)
+    }),
     pollJob: vi.fn().mockImplementation((_jobId, options) => {
       options?.onUpdate?.(createJob({
         status: 'running',
@@ -377,10 +382,10 @@ describe('BrowserPage interactions', () => {
       undefined,
       '',
     )
-    expect(api.pollJob).toHaveBeenCalledWith('job-browser-upload', expect.objectContaining({
-      intervalMs: 1000,
-      onUpdate: expect.any(Function),
-    }))
+    expect(api.waitForImportJob).toHaveBeenCalledWith(
+      expect.objectContaining({ job_id: 'job-browser-upload' }),
+      expect.any(Function),
+    )
     expect(api.uploadDocumentStream).not.toHaveBeenCalled()
     expect(screen.getByText(/资料已进入/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /去当前工作区提问/i })).toBeInTheDocument()
@@ -494,10 +499,10 @@ describe('BrowserPage interactions', () => {
         '',
       )
     })
-    expect(api.pollJob).toHaveBeenCalledWith('job-browser-url', expect.objectContaining({
-      intervalMs: 1000,
-      onUpdate: expect.any(Function),
-    }))
+    expect(api.waitForImportJob).toHaveBeenCalledWith(
+      expect.objectContaining({ job_id: 'job-browser-url' }),
+      expect.any(Function),
+    )
     expect(api.ingestUrlStream).not.toHaveBeenCalled()
     expect(screen.getByText(/资料已进入/)).toBeInTheDocument()
   })

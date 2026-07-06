@@ -47,6 +47,11 @@ vi.mock('@/shared/api', async () => {
     }),
     ingestUrl: vi.fn(),
     ingestUrlStream: vi.fn(),
+    waitForImportJob: vi.fn().mockImplementation((_result, onProgress) => {
+      onProgress('embedding', 60)
+      onProgress('done', 100)
+      return Promise.resolve(null)
+    }),
     pollJob: vi.fn().mockImplementation((_jobId, options) => {
       options?.onUpdate?.(createJob({
         status: 'running',
@@ -129,10 +134,10 @@ describe('DocumentPanel', () => {
         undefined,
         '',
       )
-      expect(api.pollJob).toHaveBeenCalledWith('job-document-panel', expect.objectContaining({
-        intervalMs: 1000,
-        onUpdate: expect.any(Function),
-      }))
+      expect(api.waitForImportJob).toHaveBeenCalledWith(
+        expect.objectContaining({ job_id: 'job-document-panel' }),
+        expect.any(Function),
+      )
       expect(api.uploadDocumentStream).not.toHaveBeenCalled()
     })
   })
