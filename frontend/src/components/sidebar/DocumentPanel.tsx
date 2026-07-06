@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Button, Input, Separator, ConfirmDialog } from '@/components/ui'
 import { Globe, Trash2, Upload, Loader2 } from 'lucide-react'
 import * as api from '@/shared/api'
-import type { DocSource } from '@/shared/api'
+import type { DocSource, IngestResponse, Job, JobCreateResponse } from '@/shared/api'
 
 interface DocumentPanelProps {
   sources: DocSource[]
@@ -42,6 +42,41 @@ const PHASE_COPY: Record<string, { title: string; detail: string }> = {
     title: '资料已处理完成',
     detail: '现在可以直接提问，或先去知识库核对原文来源。',
   },
+}
+
+function isJobCreateResponse(result: IngestResponse | JobCreateResponse): result is JobCreateResponse {
+  return 'job_id' in result
+}
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
+async function waitForQueuedImport(
+  result: IngestResponse | JobCreateResponse,
+  onProgress: (phase: string, percent: number) => void,
+): Promise<IngestResponse | null> {
+  if (!isJobCreateResponse(result)) return result
+
+  const applyJobProgress = (job: Job) => {
+    onProgress(job.progress?.phase || job.status, job.progress?.percent ?? 0)
+  }
+
+  applyJobProgress(result.job)
+  const finished = await api.pollJob(result.job_id, {
+    intervalMs: 1000,
+    onUpdate: applyJobProgress,
+  })
+
+  if (finished.status === 'failed') {
+    throw new Error(finished.error || '后台导入任务失败')
+  }
+  if (finished.status === 'canceled') {
+    throw new Error('后台导入任务已取消')
+  }
+
+  onProgress('done', 100)
+  return null
 }
 
 export default function DocumentPanel({
@@ -89,37 +124,30 @@ export default function DocumentPanel({
         return
       }
 
-      api.uploadDocumentStream(file, versionMode, {
-        onProgress: (phase, percent) => {
-          setUploadPhase(phase)
-          setUploadPercent(percent)
-        },
-        onDone: async (res) => {
-          if (res.existing_version && !versionMode) {
-            setVersionPrompted({ kind: 'file', file, sourceName: file.name })
-            resetUploadState()
-            return
-          }
-          if (await onRefresh()) {
-            const msg = versionMode === 'replace' ? '文档已替换为新版本' :
-                        versionMode === 'append' ? '文档已追加新版本' :
-                        '文档已上传'
-            toast.success(msg, { description: file.name })
-            setPostImportGuide({
-              title: `资料已进入“${workspaceName}”`,
-              description: `当前来源是“${file.name}”。可以直接发起第一个问题，或先去知识库核对原文。`,
-              suggestedQuestions: res.suggested_questions ?? [],
-            })
-          }
-          resetUploadState()
-        },
-        onError: (message) => {
-          toast.error('上传失败', { description: message })
-          resetUploadState()
-        },
-      }, workspaceId)
+      const result = await api.uploadDocument(file, versionMode, workspaceId)
+      if (!isJobCreateResponse(result) && result.existing_version && !versionMode) {
+        setVersionPrompted({ kind: 'file', file, sourceName: file.name })
+        resetUploadState()
+        return
+      }
+      const importResult = await waitForQueuedImport(result, (phase, percent) => {
+        setUploadPhase(phase)
+        setUploadPercent(percent)
+      })
+      if (await onRefresh()) {
+        const msg = versionMode === 'replace' ? '文档已替换为新版本' :
+                    versionMode === 'append' ? '文档已追加新版本' :
+                    '文档已上传'
+        toast.success(msg, { description: file.name })
+        setPostImportGuide({
+          title: `资料已进入“${workspaceName}”`,
+          description: `当前来源是“${file.name}”。可以直接发起第一个问题，或先去知识库核对原文。`,
+          suggestedQuestions: importResult?.suggested_questions ?? [],
+        })
+      }
+      resetUploadState()
     } catch (err) {
-      toast.error('上传失败', { description: String(err) })
+      toast.error('上传失败', { description: getErrorMessage(err) })
       resetUploadState()
     }
   }
@@ -163,36 +191,34 @@ export default function DocumentPanel({
       return
     }
 
-    api.ingestUrlStream(url, versionMode, {
-      onProgress: (phase, percent) => {
+    try {
+      const result = await api.ingestUrl(url, versionMode, workspaceId)
+      if (!isJobCreateResponse(result) && result.existing_version && !versionMode) {
+        setVersionPrompted({ kind: 'url', url, sourceName: url })
+        resetUploadState()
+        return
+      }
+      const importResult = await waitForQueuedImport(result, (phase, percent) => {
         setUploadPhase(phase)
         setUploadPercent(percent)
-      },
-      onDone: async (res) => {
-        if (res.existing_version && !versionMode) {
-          setVersionPrompted({ kind: 'url', url, sourceName: url })
-          resetUploadState()
-          return
-        }
-        setUrlInput('')
-        if (await onRefresh()) {
-          const msg = versionMode === 'replace' ? '网页已替换为新版本' :
-            versionMode === 'append' ? '网页已追加新版本' :
-            '网页已导入'
-          toast.success(msg)
-          setPostImportGuide({
-            title: `资料已进入“${workspaceName}”`,
-            description: `当前来源是“${url}”。你可以先去知识库核对原文，或直接基于这份资料发问。`,
-            suggestedQuestions: res.suggested_questions ?? [],
-          })
-        }
-        resetUploadState()
-      },
-      onError: (message) => {
-        toast.error('导入失败', { description: message })
-        resetUploadState()
-      },
-    }, workspaceId)
+      })
+      setUrlInput('')
+      if (await onRefresh()) {
+        const msg = versionMode === 'replace' ? '网页已替换为新版本' :
+          versionMode === 'append' ? '网页已追加新版本' :
+          '网页已导入'
+        toast.success(msg)
+        setPostImportGuide({
+          title: `资料已进入“${workspaceName}”`,
+          description: `当前来源是“${url}”。你可以先去知识库核对原文，或直接基于这份资料发问。`,
+          suggestedQuestions: importResult?.suggested_questions ?? [],
+        })
+      }
+      resetUploadState()
+    } catch (err) {
+      toast.error('导入失败', { description: getErrorMessage(err) })
+      resetUploadState()
+    }
   }
 
   const handleIngestUrl = async () => {
