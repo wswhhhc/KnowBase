@@ -60,6 +60,16 @@ class AdminUserUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class AuditLogOut(BaseModel):
+    id: int
+    actor_user_id: str | None = None
+    action: str
+    target_type: str = ""
+    target_id: str = ""
+    metadata: dict = Field(default_factory=dict)
+    created_at: str
+
+
 class WorkspaceMemberIn(BaseModel):
     user_id: str = Field(..., min_length=1)
     role: str = Field(..., pattern="^(admin|editor|viewer)$")

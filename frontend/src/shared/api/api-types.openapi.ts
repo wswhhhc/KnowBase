@@ -125,6 +125,23 @@ export interface paths {
         patch: operations["update_user_api_admin_users__user_id__patch"];
         trace?: never;
     };
+    "/api/admin/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Audit Logs */
+        get: operations["list_audit_logs_api_admin_audit_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/conversations": {
         parameters: {
             query?: never;
@@ -798,6 +815,31 @@ export interface components {
             role?: string | null;
             /** Is Active */
             is_active?: boolean | null;
+        };
+        /** AuditLogOut */
+        AuditLogOut: {
+            /** Id */
+            id: number;
+            /** Actor User Id */
+            actor_user_id?: string | null;
+            /** Action */
+            action: string;
+            /**
+             * Target Type
+             * @default
+             */
+            target_type: string;
+            /**
+             * Target Id
+             * @default
+             */
+            target_id: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** Created At */
+            created_at: string;
         };
         /** AuthSessionOut */
         AuthSessionOut: {
@@ -1820,6 +1862,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_audit_logs_api_admin_audit_logs_get: {
+        parameters: {
+            query?: {
+                actor_user_id?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogOut"][];
                 };
             };
             /** @description Validation Error */
