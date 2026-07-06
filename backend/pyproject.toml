@@ -33,6 +33,8 @@ dependencies = [
     "alembic>=1.18.5",
     "sqlalchemy>=2.0.0",
     "psycopg[binary]>=3.2.0",
+    "redis>=8.0.1",
+    "rq>=2.10.0",
 ]
 
 [tool.uv]
