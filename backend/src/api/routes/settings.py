@@ -14,6 +14,7 @@ from src.config.public_settings import (
 from src.config.runtime_overrides import (
     update_runtime_settings,
 )
+from src.persistence import audit_store
 
 router = APIRouter(dependencies=[Depends(require_admin_or_legacy_api_key)])
 
@@ -25,7 +26,10 @@ async def get_settings() -> RuntimeSettingsOut:
 
 
 @router.put("")
-async def update_settings(body: RuntimeSettingsUpdate) -> SettingsUpdateResult:
+async def update_settings(
+    body: RuntimeSettingsUpdate,
+    current_user: dict | None = Depends(require_admin_or_legacy_api_key),
+) -> SettingsUpdateResult:
     """Update runtime configuration. Only known keys are accepted."""
     filtered = body.model_dump(exclude_unset=True)
     filtered = {
@@ -49,5 +53,24 @@ async def update_settings(body: RuntimeSettingsUpdate) -> SettingsUpdateResult:
 
     if {"embedding_model", "siliconflow_base_url", "siliconflow_api_key"} & set(filtered):
         get_knowledge_base.cache_clear()
+
+    changed_fields = sorted(filtered)
+    secret_fields = sorted(key for key in filtered if key in _SECRET_SETTINGS)
+    non_secret_values = {
+        key: value
+        for key, value in filtered.items()
+        if key not in _SECRET_SETTINGS
+    }
+    audit_store.record_event(
+        action="admin.settings_updated",
+        actor_user_id=current_user.get("id") if current_user else None,
+        target_type="settings",
+        target_id="runtime",
+        metadata={
+            "changed_fields": changed_fields,
+            "secret_fields": secret_fields,
+            "non_secret_values": non_secret_values,
+        },
+    )
 
     return SettingsUpdateResult(updated=True, warnings=warnings)
