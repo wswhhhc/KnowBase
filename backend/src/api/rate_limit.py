@@ -1,19 +1,22 @@
-"""Simple in-memory rate limiting for critical API routes."""
+"""Rate limiting for critical API routes."""
 
 from __future__ import annotations
 
 import hashlib
 import math
 import time
+from uuid import uuid4
 from collections import deque
 from threading import Lock
 from typing import Callable
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
+from redis import Redis
 
 from src.api.deps import _security
 from src.config.runtime_overrides import get_runtime_setting
+from src.config.settings import settings
 
 
 class InMemoryRateLimiter:
@@ -42,6 +45,72 @@ class InMemoryRateLimiter:
 
             bucket.append(current)
             return None
+
+
+class RedisRateLimiter:
+    """Track request timestamps in Redis with an in-memory fallback for local outages."""
+
+    def __init__(
+        self,
+        *,
+        redis_client=None,
+        fallback: InMemoryRateLimiter | None = None,
+        key_prefix: str = "knowbase:rate-limit",
+    ) -> None:
+        self._redis = redis_client or Redis.from_url(
+            settings.job_queue.redis_url,
+            socket_connect_timeout=0.05,
+            socket_timeout=0.05,
+        )
+        self._fallback = fallback or InMemoryRateLimiter()
+        self._key_prefix = key_prefix
+        self._redis_disabled_until = 0.0
+
+    def clear(self) -> None:
+        self._fallback.clear()
+        if self._redis_disabled_until > time.monotonic():
+            return
+        try:
+            keys = list(self._redis.scan_iter(match=f"{self._key_prefix}:*"))
+            if keys:
+                self._redis.delete(*keys)
+        except Exception:
+            self._redis_disabled_until = time.monotonic() + 5
+            return
+
+    def hit(self, key: str, *, limit: int, window_seconds: int, now: float | None = None) -> int | None:
+        current = time.monotonic() if now is None else now
+        redis_key = f"{self._key_prefix}:{key}"
+        cutoff = current - window_seconds
+
+        if self._redis_disabled_until > time.monotonic():
+            return self._fallback.hit(
+                key,
+                limit=limit,
+                window_seconds=window_seconds,
+                now=current,
+            )
+
+        try:
+            self._redis.zremrangebyscore(redis_key, float("-inf"), cutoff)
+            if int(self._redis.zcard(redis_key)) >= limit:
+                oldest = self._redis.zrange(redis_key, 0, 0, withscores=True)
+                if not oldest:
+                    return 1
+                oldest_score = float(oldest[0][1])
+                return max(1, math.ceil(window_seconds - (current - oldest_score)))
+
+            self._redis.zadd(redis_key, {f"{current:.6f}:{uuid4().hex}": current})
+            self._redis.expire(redis_key, max(window_seconds * 2, window_seconds + 1))
+            return None
+        except Exception:
+            self._redis_disabled_until = time.monotonic() + 5
+            return self._fallback.hit(
+                key,
+                limit=limit,
+                window_seconds=window_seconds,
+                now=current,
+            )
 
 
 def _resolve_request_identity(

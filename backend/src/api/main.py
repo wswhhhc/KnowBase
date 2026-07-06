@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.rate_limit import InMemoryRateLimiter
+from src.api.rate_limit import RedisRateLimiter
 from src.api.routes import admin_users, auth, chat, conversations, documents, jobs, knowledge_base, metrics, workspaces, bookmarks, settings as settings_router
 from src.api.deps import get_knowledge_base
 from src.config.runtime_overrides import _is_configured_api_key, get_runtime_setting
@@ -30,7 +30,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="KnowBase API", version="0.1.0", lifespan=lifespan)
-app.state.rate_limiter = InMemoryRateLimiter()
+app.state.rate_limiter = RedisRateLimiter()
 
 app.add_middleware(
     CORSMiddleware,
