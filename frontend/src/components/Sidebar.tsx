@@ -38,8 +38,25 @@ interface SidebarProps {
   onWorkspaceChange?: (wsId: string) => void
   onWorkspaceSummaryChange?: (summary: WorkspaceSummary) => void
   isMobile?: boolean
+  canManageApp?: boolean
+  canManageKnowledgeBase?: boolean
+  canManageWorkspaces?: boolean
 }
-export default function Sidebar({ chat, activeView, onNavigate, onClose, convRefreshKey, activeThreadId, onLoadingMessages, onWorkspaceChange, onWorkspaceSummaryChange, isMobile = false }: SidebarProps) {
+export default function Sidebar({
+  chat,
+  activeView,
+  onNavigate,
+  onClose,
+  convRefreshKey,
+  activeThreadId,
+  onLoadingMessages,
+  onWorkspaceChange,
+  onWorkspaceSummaryChange,
+  isMobile = false,
+  canManageApp = true,
+  canManageKnowledgeBase = true,
+  canManageWorkspaces = true,
+}: SidebarProps) {
   const theme = useTheme()
   const wss = useWorkspaces()
   const convs = useConversations(wss.activeWorkspaceId || undefined)
@@ -88,6 +105,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
     onLoadingMessages,
     isMobile,
   })
+  const navItems = APP_NAV_ITEMS.filter((item) => canManageApp || (item.view !== 'dashboard' && item.view !== 'settings'))
 
   return (
     <div className="flex h-full flex-col bg-surface">
@@ -140,14 +158,16 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
               ))}
             </SelectContent>
           </Select>
-          <button
-            onClick={openCreateDialog}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-            title="创建工作区"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
-          {wss.activeWorkspaceId && (
+          {canManageWorkspaces && (
+            <button
+              onClick={openCreateDialog}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              title="创建工作区"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {canManageWorkspaces && wss.activeWorkspaceId && (
             <button
               onClick={requestDeleteWorkspace}
               className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
@@ -161,7 +181,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
 
       {/* Nav */}
       <div className="flex gap-0.5 border-b border-border p-1.5">
-        {APP_NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <button
             key={item.view}
             onClick={() => onNavigate(item.view)}
@@ -202,6 +222,7 @@ export default function Sidebar({ chat, activeView, onNavigate, onClose, convRef
               workspaceName={activeWorkspaceName}
               onSendQuestion={(q) => { onNavigate('chat'); chat.sendMessage(q, false, 'balanced') }}
               onOpenKnowledgeBase={() => onNavigate('browser')}
+              canManageKnowledgeBase={canManageKnowledgeBase}
             />
           ) : (
             <BookmarkPanel

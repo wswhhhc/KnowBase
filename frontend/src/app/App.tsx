@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Toaster } from 'sonner'
 import { LogOut, Upload } from 'lucide-react'
 
@@ -8,7 +8,8 @@ import { useAppShell } from '@/app/useAppShell'
 import Sidebar from '@/components/Sidebar'
 import { UPLOAD_TRIGGER_EVENT } from '@/lib/ui-events'
 import LoginPage from '@/pages/auth/LoginPage'
-import { clearAuthSession, getStoredAccessToken, getStoredRefreshToken } from '@/shared/api/session'
+import { getRoleCapabilities, getUserRole } from '@/shared/auth/permissions'
+import { clearAuthSession, getStoredAccessToken, getStoredRefreshToken, getStoredUser } from '@/shared/api/session'
 
 export default function App() {
   const [authVersion, setAuthVersion] = useState(0)
@@ -36,11 +37,23 @@ export default function App() {
   const hasJwtSession = Boolean(getStoredAccessToken())
   const hasLegacyApiKey = Boolean(localStorage.getItem('knowbase_api_key'))
   const isAuthenticated = hasJwtSession || hasLegacyApiKey
+  const role = getUserRole(getStoredUser(), hasLegacyApiKey)
+  const capabilities = getRoleCapabilities(role)
+  const navItems = useMemo(
+    () => APP_NAV_ITEMS.filter((item) => capabilities.canManageApp || (item.view !== 'dashboard' && item.view !== 'settings')),
+    [capabilities.canManageApp],
+  )
 
   const handleLogout = () => {
     clearAuthSession()
     setAuthVersion((version) => version + 1)
   }
+
+  useEffect(() => {
+    if (!capabilities.canManageApp && (activeView === 'dashboard' || activeView === 'settings')) {
+      setActiveView('chat')
+    }
+  }, [activeView, capabilities.canManageApp, setActiveView])
 
   if (!isAuthenticated) {
     return (
@@ -87,6 +100,9 @@ export default function App() {
           onLoadingMessages={setIsLoadingMessages}
           onWorkspaceChange={syncWorkspace}
           onWorkspaceSummaryChange={setWorkspaceSummary}
+          canManageApp={capabilities.canManageApp}
+          canManageKnowledgeBase={capabilities.canManageKnowledgeBase}
+          canManageWorkspaces={capabilities.canManageWorkspaces}
         />
       </div>
 
@@ -115,11 +131,12 @@ export default function App() {
           setSidebarOpen={setSidebarOpen}
           sidebarOpen={sidebarOpen}
           workspaceSummary={workspaceSummary}
+          canManageKnowledgeBase={capabilities.canManageKnowledgeBase}
         />
 
         {isMobile && (
           <>
-            {activeView === 'browser' && (
+            {activeView === 'browser' && capabilities.canManageKnowledgeBase && (
               <button
                 onClick={() => {
                   sessionStorage.setItem('kb_trigger_upload', 'true')
@@ -135,7 +152,7 @@ export default function App() {
             )}
             <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/90 backdrop-blur-lg safe-area-bottom md:hidden">
               <div className="flex h-14 items-center justify-around">
-                {APP_NAV_ITEMS.map(({ view, icon: Icon, label }) => (
+                {navItems.map(({ view, icon: Icon, label }) => (
                   <button
                     key={view}
                     onClick={() => {

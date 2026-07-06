@@ -49,6 +49,7 @@ interface AppViewRendererProps {
   setSidebarOpen: (open: boolean) => void
   sidebarOpen: boolean
   workspaceSummary: WorkspaceSummary
+  canManageKnowledgeBase?: boolean
 }
 
 function renderStatus(message: string) {
@@ -73,6 +74,7 @@ export default function AppViewRenderer({
   setSidebarOpen,
   sidebarOpen,
   workspaceSummary,
+  canManageKnowledgeBase = true,
 }: AppViewRendererProps) {
   useEffect(() => {
     if (import.meta.env.MODE === 'test') return
@@ -125,6 +127,7 @@ export default function AppViewRenderer({
               onHighlightConsumed={() => setHighlightChunkId(null)}
               workspaceId={activeWsId}
               workspaceName={workspaceSummary.workspaceName}
+              canManageKnowledgeBase={canManageKnowledgeBase}
             />
           </Suspense>
         </ErrorBoundary>

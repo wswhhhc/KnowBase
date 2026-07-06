@@ -143,6 +143,22 @@ describe('BrowserPage', () => {
     })
   })
 
+  it('renders the browser in read-only mode without import actions', async () => {
+    vi.mocked(api.getKBChunks).mockResolvedValue({ items: [], total: 0 })
+    vi.mocked(api.getKBStats).mockResolvedValue({ ...mockKBStats, source_count: 0 })
+    vi.mocked(api.getKBSourceNames).mockResolvedValue([])
+
+    await act(async () => {
+      render(<BrowserPage {...defaultProps} canManageKnowledgeBase={false} />)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('当前账号可浏览和问答，导入、替换、删除资料需要编辑者或管理员权限。')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('上传文档')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('输入网页 URL')).not.toBeInTheDocument()
+  })
+
   it('keeps the loading state until the initial chunk request resolves', async () => {
     let resolveChunks: ((value: { items: typeof mockKBChunks; total: number } | { items: []; total: number }) => void) | undefined
     vi.mocked(api.getKBChunks).mockImplementation(
