@@ -65,6 +65,16 @@ def require_admin(current_user: Annotated[dict, Depends(get_current_user)]) -> d
     return current_user
 
 
+def require_admin_or_legacy_api_key(
+    current_user: Annotated[dict | None, Depends(get_current_user_or_legacy_api_key)],
+) -> dict | None:
+    if current_user is None:
+        return None
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+    return current_user
+
+
 def _require_workspace_role(current_user: dict | None, workspace_id: str, minimum_role: str) -> dict | None:
     if current_user is None:
         return None
