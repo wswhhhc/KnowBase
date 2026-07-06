@@ -1,3 +1,4 @@
+import os
 import unittest
 from pathlib import Path
 import tempfile
@@ -232,6 +233,10 @@ class LoaderTests(unittest.TestCase):
 
     # ── 真实 HTTPS 请求（集成 test）──
 
+    @unittest.skipUnless(
+        os.environ.get("KNOWBASE_RUN_NETWORK_TESTS") == "1",
+        "真实外网请求测试默认跳过；设置 KNOWBASE_RUN_NETWORK_TESTS=1 可手动启用",
+    )
     def test_load_url_real_https(self):
         """真实请求 https://example.com 验证 TLS 握手正常"""
         docs = load_url("https://example.com")
