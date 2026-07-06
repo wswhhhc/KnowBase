@@ -814,8 +814,9 @@ export interface components {
             /**
              * Role
              * @default viewer
+             * @enum {string}
              */
-            role: string;
+            role: "admin" | "editor" | "viewer";
             /**
              * Is Active
              * @default true
@@ -829,7 +830,7 @@ export interface components {
             /** Password */
             password?: string | null;
             /** Role */
-            role?: string | null;
+            role?: ("admin" | "editor" | "viewer") | null;
             /** Is Active */
             is_active?: boolean | null;
         };
@@ -1150,8 +1151,11 @@ export interface components {
             id: string;
             /** Job Type */
             job_type: string;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "canceled";
             /** Created By User Id */
             created_by_user_id?: string | null;
             /**
@@ -1519,8 +1523,11 @@ export interface components {
             id: string;
             /** Username */
             username: string;
-            /** Role */
-            role: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "editor" | "viewer";
             /** Is Active */
             is_active: boolean;
             /** Created At */
@@ -1558,8 +1565,11 @@ export interface components {
         WorkspaceMemberIn: {
             /** User Id */
             user_id: string;
-            /** Role */
-            role: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "editor" | "viewer";
         };
         /** WorkspaceMemberOut */
         WorkspaceMemberOut: {
@@ -1571,8 +1581,11 @@ export interface components {
             user_id: string;
             /** Username */
             username: string;
-            /** Role */
-            role: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "editor" | "viewer";
             /** Created At */
             created_at: string;
         };

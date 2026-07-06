@@ -3014,7 +3014,11 @@
           },
           "role": {
             "type": "string",
-            "pattern": "^(admin|editor|viewer)$",
+            "enum": [
+              "admin",
+              "editor",
+              "viewer"
+            ],
             "title": "Role",
             "default": "viewer"
           },
@@ -3063,7 +3067,11 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^(admin|editor|viewer)$"
+                "enum": [
+                  "admin",
+                  "editor",
+                  "viewer"
+                ]
               },
               {
                 "type": "null"
@@ -3844,7 +3852,13 @@
           },
           "status": {
             "type": "string",
-            "pattern": "^(queued|running|succeeded|failed|canceled)$",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "canceled"
+            ],
             "title": "Status"
           },
           "created_by_user_id": {
@@ -4690,6 +4704,11 @@
           },
           "role": {
             "type": "string",
+            "enum": [
+              "admin",
+              "editor",
+              "viewer"
+            ],
             "title": "Role"
           },
           "is_active": {
@@ -4781,7 +4800,11 @@
           },
           "role": {
             "type": "string",
-            "pattern": "^(admin|editor|viewer)$",
+            "enum": [
+              "admin",
+              "editor",
+              "viewer"
+            ],
             "title": "Role"
           }
         },
@@ -4812,6 +4835,11 @@
           },
           "role": {
             "type": "string",
+            "enum": [
+              "admin",
+              "editor",
+              "viewer"
+            ],
             "title": "Role"
           },
           "created_at": {

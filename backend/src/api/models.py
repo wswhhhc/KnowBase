@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from src.rag.models import HotspotEntry, KBChunk
+
+WorkspaceRole = Literal["admin", "editor", "viewer"]
+JobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
 
 
 def _normalize_username(value: object) -> object:
@@ -28,7 +33,7 @@ class ChatRequest(BaseModel):
 class UserOut(BaseModel):
     id: str
     username: str
-    role: str
+    role: WorkspaceRole
     is_active: bool
     created_at: str
     updated_at: str
@@ -63,7 +68,7 @@ class AuthSessionOut(BaseModel):
 class AdminUserCreate(BaseModel):
     username: str = Field(..., min_length=1, max_length=120)
     password: str = Field(..., min_length=8, max_length=256)
-    role: str = Field(default="viewer", pattern="^(admin|editor|viewer)$")
+    role: WorkspaceRole = "viewer"
     is_active: bool = True
 
     @field_validator("username", mode="before")
@@ -75,7 +80,7 @@ class AdminUserCreate(BaseModel):
 class AdminUserUpdate(BaseModel):
     username: str | None = Field(default=None, min_length=1, max_length=120)
     password: str | None = Field(default=None, min_length=8, max_length=256)
-    role: str | None = Field(default=None, pattern="^(admin|editor|viewer)$")
+    role: WorkspaceRole | None = None
     is_active: bool | None = None
 
     @field_validator("username", mode="before")
@@ -96,7 +101,7 @@ class AuditLogOut(BaseModel):
 
 class WorkspaceMemberIn(BaseModel):
     user_id: str = Field(..., min_length=1)
-    role: str = Field(..., pattern="^(admin|editor|viewer)$")
+    role: WorkspaceRole
 
 
 class WorkspaceMembersUpdate(BaseModel):
@@ -108,7 +113,7 @@ class WorkspaceMemberOut(BaseModel):
     workspace_id: str
     user_id: str
     username: str
-    role: str
+    role: WorkspaceRole
     created_at: str
 
 
@@ -121,7 +126,7 @@ class JobProgress(BaseModel):
 class JobOut(BaseModel):
     id: str
     job_type: str
-    status: str = Field(..., pattern="^(queued|running|succeeded|failed|canceled)$")
+    status: JobStatus
     created_by_user_id: str | None = None
     workspace_id: str = ""
     progress: JobProgress = Field(default_factory=JobProgress)

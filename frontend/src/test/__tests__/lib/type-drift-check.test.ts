@@ -9,9 +9,11 @@ import { describe, it, expect } from 'vitest'
 import type {
   QueryLogEntry,
   KBChunk,
+  JobStatus,
   RuntimeSettings,
   SettingsUpdateResult,
   Source,
+  WorkspaceRole,
 } from '@/shared/api'
 
 describe('api type contracts', () => {
@@ -94,5 +96,13 @@ describe('api type contracts', () => {
     // Verify it can hold an index at runtime
     const withIndex: typeof source & { index: number } = { ...source, index: 1 }
     expect(withIndex.index).toBe(1)
+  })
+
+  it('team role and job status unions expose the准生产 contract values', () => {
+    const roles: WorkspaceRole[] = ['admin', 'editor', 'viewer']
+    const statuses: JobStatus[] = ['queued', 'running', 'succeeded', 'failed', 'canceled']
+
+    expect(roles).toContain('editor')
+    expect(statuses).toContain('failed')
   })
 })

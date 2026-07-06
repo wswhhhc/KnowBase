@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as api from '@/shared/api'
-import type { ChatStreamCallbacks } from '@/shared/api'
+import type { ChatStreamCallbacks, Job } from '@/shared/api'
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -256,7 +256,7 @@ describe('Documents API', () => {
 })
 
 describe('Jobs API', () => {
-  const queuedJob = {
+  const queuedJob: Job = {
     id: 'job-1',
     job_type: 'ingest_file',
     status: 'queued',
@@ -266,7 +266,7 @@ describe('Jobs API', () => {
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   }
-  const succeededJob = { ...queuedJob, status: 'succeeded' }
+  const succeededJob: Job = { ...queuedJob, status: 'succeeded' }
 
   it('listJobs calls the jobs endpoint', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]), text: () => Promise.resolve('[]'), headers: new Headers() })
