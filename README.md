@@ -89,10 +89,19 @@ npm run dev
 Docker 开发环境：
 
 ```bash
-docker compose up --build
+cp backend/.env.example backend/.env
+cp .env.compose.example .env.compose
+# 填写至少 POSTGRES_PASSWORD、JWT_SECRET、CORS_ALLOW_ORIGINS、SILICONFLOW_API_KEY
+docker compose --env-file .env.compose up --build
 ```
 
-Compose 会同时启动一个本地 Postgres 服务，供准生产团队版迁移使用；当前默认业务数据仍写入 `runtime/local/conversations.db`，直到 repository 层迁移完成并显式设置 `DATABASE_URL`。
+Compose 会同时启动 Postgres、Redis、backend、worker 和 frontend，并把容器内 `DATABASE_URL` 显式绑定到 compose 中的 Postgres 服务。根目录 `runtime/` 与 `examples/` 会挂载到容器内，避免 Chroma、本地运行时覆盖和示例文档只存在于容器临时层。
+
+启动前建议先做静态检查：
+
+```bash
+docker compose --env-file .env.compose config
+```
 
 前端默认地址为 [http://localhost:5173](http://localhost:5173)。
 
@@ -109,6 +118,10 @@ CORS_ALLOW_ORIGINS=https://knowbase.internal
 ```
 
 生产模式启动时会拒绝弱 `JWT_SECRET`、SQLite `DATABASE_URL`、通配/localhost CORS，以及 legacy `API_KEY`。生产请求必须使用账号密码登录后的 JWT。
+
+如果使用 Compose 部署，推荐直接复制根目录的 `.env.compose.example` 为 `.env.compose`，再通过 `docker compose --env-file .env.compose up --build` 启动。`backend/.env` 继续承担非敏感默认项；Compose 会基于 `.env.compose` 中的 Postgres/Redis/JWT/CORS 变量计算并注入容器内的 `DATABASE_URL`、`REDIS_URL` 等运行环境。
+
+`.env.compose.example` 默认按内网自托管准生产场景给出 `APP_ENV=production`，因此 `CORS_ALLOW_ORIGINS` 不能填 `localhost`。如果你只是本机联调，可以把 `APP_ENV` 改回 `development` 后再启动。
 
 ## 质量门禁
 

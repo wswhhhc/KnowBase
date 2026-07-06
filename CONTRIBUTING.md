@@ -60,13 +60,21 @@ npm run dev
 Docker 开发环境：
 
 ```bash
-docker compose up --build
+cp backend/.env.example backend/.env
+cp .env.compose.example .env.compose
+docker compose --env-file .env.compose up --build
 ```
 
 或：
 
 ```bash
 bash scripts/dev.sh --docker
+```
+
+如果改了 Compose、端口映射或环境变量约定，至少补一遍：
+
+```bash
+docker compose --env-file .env.compose.example config
 ```
 
 ## 测试要求
@@ -116,6 +124,7 @@ npm run check-api-types
 - 后端接口变化后，要先导出 `backend/openapi.json`，再同步更新前端生成的 API 类型。
 - 启动方式、配置项、产品行为、工作区语义或架构假设变化后，要同步更新 `README.md`、`CLAUDE.md`、`docs/requirements/product-boundaries.md` 或相关文档。
 - 新增配置项已经体现在 `backend/.env.example`。
+- Compose 自托管相关变量样例维护在根目录 `.env.compose.example`；真实 `.env.compose` 不应提交。
 - 准生产团队版数据库配置通过 `DATABASE_URL` 管理；在 repository 层迁移完成前，默认值仍保留 SQLite 本地路径。
 - 不要提交密钥、本地数据库、覆盖率产物（如 `backend/.coverage`）或运行期生成文件。
 - 尽量保持 PR 小而明确，一个 PR 解决一个清晰问题。

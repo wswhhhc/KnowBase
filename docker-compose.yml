@@ -2,20 +2,30 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: knowbase
-      POSTGRES_USER: knowbase
-      POSTGRES_PASSWORD: knowbase_dev_password
+      POSTGRES_DB: ${POSTGRES_DB:-knowbase}
+      POSTGRES_USER: ${POSTGRES_USER:-knowbase}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-knowbase} -d ${POSTGRES_DB:-knowbase}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
@@ -25,14 +35,24 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-knowbase}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}@postgres:5432/${POSTGRES_DB:-knowbase}
       REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.compose}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?Set CORS_ALLOW_ORIGINS in .env.compose}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:?Set SILICONFLOW_API_KEY in .env.compose}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./backend:/app/backend
+      - ./runtime:/app/runtime
+      - ./examples:/app/examples
       - backend_venv:/app/backend/.venv
     command: uv run uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 
@@ -44,12 +64,22 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-knowbase}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}@postgres:5432/${POSTGRES_DB:-knowbase}
       REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.compose}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?Set CORS_ALLOW_ORIGINS in .env.compose}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:?Set SILICONFLOW_API_KEY in .env.compose}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./backend:/app/backend
+      - ./runtime:/app/runtime
+      - ./examples:/app/examples
       - backend_venv:/app/backend/.venv
     command: uv run python -m src.jobs.worker
 
@@ -59,12 +89,12 @@ services:
       dockerfile: docker/Dockerfile.frontend
     working_dir: /app/frontend
     environment:
-      VITE_API_BASE_URL: http://localhost:8000
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
       VITE_API_PROXY_TARGET: http://backend:8000
     depends_on:
       - backend
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     volumes:
       - ./frontend:/app/frontend
       - frontend_node_modules:/app/frontend/node_modules
