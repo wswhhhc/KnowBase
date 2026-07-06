@@ -29,7 +29,7 @@ import { toast as sonnerToast } from 'sonner'
 vi.mock('lucide-react', () => {
   const icons: Record<string, string> = {
     MessageSquare: 'MessageSquare', Plus: 'Plus', Trash2: 'Trash2',
-    BookOpen: 'BookOpen', BarChart3: 'BarChart3', PanelRightClose: 'PanelRightClose',
+    BookOpen: 'BookOpen', ClipboardList: 'ClipboardList', BarChart3: 'BarChart3', PanelRightClose: 'PanelRightClose',
     Pencil: 'Pencil', Check: 'Check', X: 'X', Upload: 'Upload', Globe: 'Globe',
     FileText: 'FileText', Loader2: 'Loader2', Sun: 'Sun', Moon: 'Moon', Settings: 'Settings',
     Bookmark: 'Bookmark', Search: 'Search', Tag: 'Tag',

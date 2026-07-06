@@ -3,7 +3,7 @@ import React from 'react'
 import { Button, ScrollArea, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Input, ConfirmDialog } from '@/components/ui'
 import {
   MessageSquare, FileText, Bookmark,
-  PanelRightClose, BookOpen, BarChart3, Settings, Plus, Trash2, Sun, Moon,
+  PanelRightClose, BookOpen, BarChart3, Settings, Plus, Trash2, Sun, Moon, ClipboardList,
 } from 'lucide-react'
 import { useConversations, useSources, useWorkspaces } from '@/hooks/useData'
 import { useTheme } from '@/hooks/useTheme'
@@ -239,6 +239,14 @@ export default function Sidebar({
           />
         ) : activeView === 'dashboard' ? (
           <DashboardSummary key={`dashboard-summary-${workspaceScopeKey}`} />
+        ) : activeView === 'jobs' ? (
+          <div className="rounded-lg border border-dashed border-border/60 bg-surface/20 p-4 text-xs text-muted-foreground/70">
+            <div className="mb-2 flex items-center gap-2 font-medium text-foreground/80">
+              <ClipboardList className="h-3.5 w-3.5 text-primary" />
+              任务中心
+            </div>
+            <p>导入、清空和重建索引等后台任务会在主面板中展示状态。</p>
+          </div>
         ) : (
           <div className="rounded-lg border border-dashed border-border/60 bg-surface/20 p-4 text-xs text-muted-foreground/70">
             <p className="font-medium text-foreground/80">设置项将在主面板中编辑</p>
