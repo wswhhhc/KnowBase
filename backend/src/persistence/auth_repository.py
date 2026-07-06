@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
-from src.persistence.schema import refresh_tokens, users, workspace_members
+from src.persistence.schema import jobs, refresh_tokens, users, workspace_members
 
 
 SessionFactory = sessionmaker[Session]
@@ -71,6 +71,14 @@ def list_users_with_session(session_factory: SessionFactory) -> list[dict]:
     return [_public_user(_user_from_mapping(row)) for row in rows]
 
 
+def count_active_admins_with_session(session_factory: SessionFactory) -> int:
+    with session_factory() as session:
+        count = session.execute(
+            select(func.count()).select_from(users).where(users.c.role == "admin", users.c.is_active.is_(True))
+        ).scalar_one()
+    return int(count)
+
+
 def update_user_with_session(
     session_factory: SessionFactory,
     user_id: str,
@@ -100,6 +108,9 @@ def update_user_with_session(
 
 def delete_user_with_session(session_factory: SessionFactory, user_id: str) -> bool:
     with session_factory.begin() as session:
+        session.execute(delete(refresh_tokens).where(refresh_tokens.c.user_id == user_id))
+        session.execute(delete(workspace_members).where(workspace_members.c.user_id == user_id))
+        session.execute(update(jobs).where(jobs.c.created_by_user_id == user_id).values(created_by_user_id=None))
         result = session.execute(delete(users).where(users.c.id == user_id))
     return result.rowcount > 0
 
@@ -226,3 +237,13 @@ def revoke_refresh_token_with_session(session_factory: SessionFactory, token_has
             .values(revoked_at=datetime.now(UTC).isoformat())
         )
     return result.rowcount > 0
+
+
+def revoke_refresh_tokens_for_user_with_session(session_factory: SessionFactory, user_id: str) -> int:
+    with session_factory.begin() as session:
+        result = session.execute(
+            update(refresh_tokens)
+            .where(refresh_tokens.c.user_id == user_id, refresh_tokens.c.revoked_at.is_(None))
+            .values(revoked_at=datetime.now(UTC).isoformat())
+        )
+    return int(result.rowcount or 0)

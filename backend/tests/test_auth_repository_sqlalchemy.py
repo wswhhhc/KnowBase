@@ -3,12 +3,15 @@ from __future__ import annotations
 from sqlalchemy.orm import sessionmaker
 
 from src.persistence.auth_repository import (
+    count_active_admins_with_session,
     create_refresh_token_with_session,
     create_user_with_session,
     get_refresh_token_with_session,
     get_user_by_id_with_session,
     get_user_by_username_with_session,
+    list_workspace_memberships_for_user_with_session,
     list_users_with_session,
+    revoke_refresh_tokens_for_user_with_session,
     revoke_refresh_token_with_session,
     update_user_with_session,
     delete_user_with_session,
@@ -93,6 +96,74 @@ def test_sqlalchemy_list_update_and_delete_user():
     assert stored["is_active"] is False
     assert deleted is True
     assert get_user_by_id_with_session(session_factory, user["id"]) is None
+
+
+def test_sqlalchemy_counts_only_active_admin_users():
+    session_factory = _session_factory()
+    create_user_with_session(session_factory, username="admin", password_hash="hash", role="admin")
+    create_user_with_session(
+        session_factory,
+        username="disabled-admin",
+        password_hash="hash",
+        role="admin",
+        is_active=False,
+    )
+    create_user_with_session(session_factory, username="editor", password_hash="hash", role="editor")
+
+    assert count_active_admins_with_session(session_factory) == 1
+
+
+def test_sqlalchemy_revoke_refresh_tokens_for_user_only_revokes_target_user():
+    session_factory = _session_factory()
+    viewer = create_user_with_session(session_factory, username="viewer", password_hash="hash")
+    editor = create_user_with_session(session_factory, username="editor", password_hash="hash", role="editor")
+    create_refresh_token_with_session(
+        session_factory,
+        user_id=viewer["id"],
+        token_hash="viewer-token-a",
+        expires_at="2099-01-01T00:00:00+00:00",
+    )
+    create_refresh_token_with_session(
+        session_factory,
+        user_id=viewer["id"],
+        token_hash="viewer-token-b",
+        expires_at="2099-01-01T00:00:00+00:00",
+    )
+    create_refresh_token_with_session(
+        session_factory,
+        user_id=editor["id"],
+        token_hash="editor-token",
+        expires_at="2099-01-01T00:00:00+00:00",
+    )
+
+    revoked = revoke_refresh_tokens_for_user_with_session(session_factory, viewer["id"])
+
+    assert revoked == 2
+    assert get_refresh_token_with_session(session_factory, "viewer-token-a")["revoked_at"] is not None
+    assert get_refresh_token_with_session(session_factory, "viewer-token-b")["revoked_at"] is not None
+    assert get_refresh_token_with_session(session_factory, "editor-token")["revoked_at"] is None
+
+
+def test_sqlalchemy_delete_user_cleans_memberships_and_refresh_tokens():
+    session_factory = _session_factory()
+    viewer = create_user_with_session(session_factory, username="viewer", password_hash="hash")
+    create_refresh_token_with_session(
+        session_factory,
+        user_id=viewer["id"],
+        token_hash="viewer-token",
+        expires_at="2099-01-01T00:00:00+00:00",
+    )
+    replace_workspace_members_with_session(
+        session_factory,
+        workspace_id="ws-a",
+        members=[{"user_id": viewer["id"], "role": "viewer"}],
+    )
+
+    deleted = delete_user_with_session(session_factory, viewer["id"])
+
+    assert deleted is True
+    assert get_refresh_token_with_session(session_factory, "viewer-token") is None
+    assert list_workspace_memberships_for_user_with_session(session_factory, viewer["id"]) == []
 
 
 def test_sqlalchemy_replace_and_list_workspace_members():

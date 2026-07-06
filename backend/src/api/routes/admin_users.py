@@ -13,6 +13,27 @@ from src.persistence import audit_store, auth_store
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 
+def _reject_if_removing_last_active_admin(
+    target_user: dict,
+    updates: dict | None = None,
+    *,
+    deleting: bool = False,
+) -> None:
+    if target_user.get("role") != "admin" or not target_user.get("is_active"):
+        return
+    if deleting:
+        if auth_store.count_active_admins() <= 1:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="至少需要保留一个启用的管理员")
+        return
+    updates = updates or {}
+    next_role = updates.get("role", target_user.get("role"))
+    next_is_active = updates.get("is_active", target_user.get("is_active"))
+    if next_role == "admin" and next_is_active:
+        return
+    if auth_store.count_active_admins() <= 1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="至少需要保留一个启用的管理员")
+
+
 @router.get("/users")
 async def list_users() -> list[UserOut]:
     return [UserOut(**user) for user in auth_store.list_users()]
@@ -45,14 +66,20 @@ async def create_user(body: AdminUserCreate, current_user: dict = Depends(requir
 
 @router.patch("/users/{user_id}")
 async def update_user(user_id: str, body: AdminUserUpdate, current_user: dict = Depends(require_admin)) -> UserOut:
+    target_user = auth_store.get_user_by_id(user_id)
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
     updates = body.model_dump(exclude_unset=True)
     password = updates.pop("password", None)
     changed_fields = sorted([*updates.keys(), *(["password"] if password is not None else [])])
     if password is not None:
         updates["password_hash"] = hash_password(password)
+    _reject_if_removing_last_active_admin(target_user, updates)
     user = auth_store.update_user(user_id, **updates)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    if {"password", "role", "is_active"}.intersection(changed_fields):
+        auth_store.revoke_refresh_tokens_for_user(user_id)
     audit_store.record_event(
         action="admin.user_updated",
         actor_user_id=current_user.get("id"),
@@ -69,6 +96,9 @@ async def update_user(user_id: str, body: AdminUserUpdate, current_user: dict = 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(require_admin)) -> dict:
     user = auth_store.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    _reject_if_removing_last_active_admin(user, deleting=True)
     if not auth_store.delete_user(user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
     audit_store.record_event(

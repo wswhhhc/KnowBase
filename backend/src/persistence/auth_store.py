@@ -35,6 +35,10 @@ def list_users() -> list[dict]:
     return auth_repository.list_users_with_session(_session_factory())
 
 
+def count_active_admins() -> int:
+    return auth_repository.count_active_admins_with_session(_session_factory())
+
+
 def update_user(
     user_id: str,
     *,
@@ -97,3 +101,7 @@ def get_refresh_token(token_hash: str) -> dict | None:
 
 def revoke_refresh_token(token_hash: str) -> bool:
     return auth_repository.revoke_refresh_token_with_session(_session_factory(), token_hash)
+
+
+def revoke_refresh_tokens_for_user(user_id: str) -> int:
+    return auth_repository.revoke_refresh_tokens_for_user_with_session(_session_factory(), user_id)

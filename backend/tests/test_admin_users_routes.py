@@ -89,3 +89,44 @@ def test_admin_create_user_rejects_short_password(monkeypatch, tmp_path):
     )
 
     assert response.status_code == 422
+
+
+def test_last_active_admin_cannot_be_disabled_demoted_or_deleted(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+    admin = auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")
+    client = TestClient(app)
+    admin_token = _login(client, "admin", "admin-pass")
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    disable = client.patch(f"/api/admin/users/{admin['id']}", json={"is_active": False}, headers=headers)
+    demote = client.patch(f"/api/admin/users/{admin['id']}", json={"role": "viewer"}, headers=headers)
+    delete = client.delete(f"/api/admin/users/{admin['id']}", headers=headers)
+
+    assert disable.status_code == 409
+    assert demote.status_code == 409
+    assert delete.status_code == 409
+    stored = auth_store.get_user_by_id(admin["id"])
+    assert stored is not None
+    assert stored["role"] == "admin"
+    assert stored["is_active"] is True
+
+
+def test_admin_password_update_revokes_existing_refresh_tokens(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+    auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")
+    viewer = auth_store.create_user(username="viewer", password_hash=hash_password("viewer-pass"), role="viewer")
+    client = TestClient(app)
+    admin_token = _login(client, "admin", "admin-pass")
+    viewer_login = client.post("/api/auth/login", json={"username": "viewer", "password": "viewer-pass"})
+    assert viewer_login.status_code == 200
+    refresh_token = viewer_login.json()["refresh_token"]
+
+    updated = client.patch(
+        f"/api/admin/users/{viewer['id']}",
+        json={"password": "new-viewer-pass"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    refresh = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+
+    assert updated.status_code == 200
+    assert refresh.status_code == 401
