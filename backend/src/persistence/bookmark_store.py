@@ -57,6 +57,12 @@ def list_bookmarks(workspace_id: str | None = None, search: str | None = None) -
     return bookmark_repository.list_bookmarks(get_connection, workspace_id, search)
 
 
+def get_bookmark(bm_id: int) -> dict | None:
+    if _use_sqlalchemy():
+        return bookmark_repository.get_bookmark_with_session(_session_factory(), bm_id)
+    return bookmark_repository.get_bookmark(get_connection, bm_id)
+
+
 def update_bookmark(bm_id: int, **kwargs) -> dict | None:
     if _use_sqlalchemy():
         return bookmark_repository.update_bookmark_with_session(_session_factory(), bm_id, **kwargs)
