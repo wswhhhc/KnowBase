@@ -184,6 +184,18 @@ class SaveUploadedFileTests(unittest.TestCase):
             validate_upload(mock_file)
         self.assertIn("文件类型", str(ctx.exception))
 
+    def test_validate_upload_rejects_missing_content_type_for_api_upload(self):
+        """FastAPI uploads must include MIME so extension and type are both checked."""
+        mock_file = self._make_unnamed_file(
+            filename="report.pdf",
+            size=100,
+            content_type=None,
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            validate_upload(mock_file)
+        self.assertIn("MIME", str(ctx.exception))
+
     @patch("pathlib.Path.mkdir")
     @patch("builtins.open", new_callable=MagicMock)
     @patch("src.utils.tempfile.gettempdir")

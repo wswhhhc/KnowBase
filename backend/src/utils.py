@@ -45,8 +45,10 @@ def validate_upload(uploaded_file, max_upload_mb: int = MAX_UPLOAD_MB) -> str:
     ext = Path(safe_name).suffix.lower()
     if ext not in ALLOWED_UPLOAD_EXTENSIONS:
         raise ValueError("仅支持 .txt、.md、.pdf、.docx、.html 文件。")
-    content_type = getattr(uploaded_file, "content_type", None)
-    if content_type:
+    if hasattr(uploaded_file, "content_type"):
+        content_type = getattr(uploaded_file, "content_type", None)
+        if not content_type:
+            raise ValueError("上传文件缺少 MIME 类型，无法完成扩展名和 MIME 双校验。")
         normalized_content_type = str(content_type).split(";", 1)[0].strip().lower()
         if normalized_content_type not in ALLOWED_UPLOAD_MIME_TYPES[ext]:
             raise ValueError("文件类型与扩展名不匹配或不受支持。")

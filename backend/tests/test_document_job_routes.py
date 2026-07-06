@@ -3,9 +3,6 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
-
-from src.api.main import app
 from tests.helpers import setup_test_env, teardown_test_env
 
 
@@ -88,6 +85,22 @@ def test_upload_existing_source_probe_does_not_enqueue_job_and_removes_temp_file
     assert response.status_code == 200
     assert response.json()["existing_version"] is True
     assert response.json()["chunk_count"] == 0
+    mock_enqueue.assert_not_called()
+
+
+def test_upload_missing_mime_rejected_before_enqueue():
+    _fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
+    try:
+        with patch("src.api.routes.documents.enqueue_tracked_job") as mock_enqueue:
+            response = client.post(
+                "/api/documents/upload?workspace_id=ws-a",
+                files={"file": ("upload.txt", b"hello", "")},
+            )
+    finally:
+        teardown_test_env(tmp_dir, orig_db, patchers)
+
+    assert response.status_code == 400
+    assert "MIME" in response.json()["detail"]
     mock_enqueue.assert_not_called()
 
 
