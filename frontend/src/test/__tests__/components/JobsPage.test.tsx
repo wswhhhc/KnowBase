@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import JobsPage from '@/pages/jobs/JobsPage'
 import * as api from '@/shared/api'
@@ -33,6 +33,10 @@ describe('JobsPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('renders queued and failed jobs with progress and errors', async () => {
@@ -171,5 +175,37 @@ describe('JobsPage', () => {
 
     expect(await screen.findByText('任务已开始，无法取消')).toBeInTheDocument()
     expect(screen.getByText('排队中')).toBeInTheDocument()
+  })
+
+  it('auto refreshes while jobs are still active', async () => {
+    vi.useFakeTimers()
+    vi.mocked(api.listJobs)
+      .mockResolvedValueOnce([
+        job({
+          id: 'job-auto-1',
+          status: 'running',
+          progress: { phase: 'embedding', percent: 45, message: '正在向量化' },
+        }),
+      ])
+      .mockResolvedValueOnce([
+        job({
+          id: 'job-auto-1',
+          status: 'succeeded',
+          progress: { phase: 'done', percent: 100, message: '完成' },
+        }),
+      ])
+
+    render(<JobsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getByText('正在向量化')).toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000)
+    })
+
+    expect(screen.getByText('已完成')).toBeInTheDocument()
+    expect(api.listJobs).toHaveBeenCalledTimes(2)
   })
 })
