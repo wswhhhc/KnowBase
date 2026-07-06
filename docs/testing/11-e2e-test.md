@@ -1,122 +1,72 @@
 # E2E 测试文档
 
-## 1. 概述
+## 1. 当前状态
 
-**目标**: 使用 Playwright 在真实浏览器中模拟用户操作，端到端验证 KnowBase 系统的完整功能是否正常工作。
+仓库现在已经接入 Playwright 基础设施，并落地了第一条真实可执行的 E2E 权限流：
 
-**测试范围**: 6 个核心 E2E 用户流程场景
+- 未登录访问根页面时展示登录页
+- `admin` 登录后可进入设置页并看到“用户管理 / 审计日志”
+- `viewer` 登录后不会显示“设置 / 指标”导航
+- `viewer` 直接请求 `/api/settings` 会收到 `403`
 
-**前置条件**:
-- 前端已启动（`npm run dev`，默认端口 5173）
-- 后端已启动（`uvicorn src.api.main:app --port 8000`）
-- 知识库包含预设文档
-- Playwright 已安装（`npx playwright install chromium`）
-- `.env` 配置了有效的 API Key
+当前测试文件：
 
----
+- `frontend/e2e/auth-rbac.spec.ts`
 
-## 2. E2E 测试场景
+## 2. 测试环境
 
-### 场景 1: 完整聊天流程
+Playwright 会自动启动两类本地服务，不需要手动先开前后端：
 
-| 字段 | 内容 |
-|------|------|
-| **描述** | 用户发送问题，验证 SSE 流式加载和最终回答展示 |
-| **步骤** | 1. 打开首页 → 2. 输入问题 → 3. 点击发送 → 4. 观察 SSE 节点动画 → 5. 等待回答完成 |
-| **验证点** | 输入框中文本存在、发送按钮可点击、SSE 节点提示出现、回答内容非空、引用编号 [1] 被渲染为可交互标签 |
-| **通过标准** | 最终消息元素包含 `.prose` 内容且非空 |
+- 后端：`frontend/scripts/e2e/start-backend.mjs`
+- 前端：`frontend/scripts/e2e/start-frontend.mjs`
 
-### 场景 2: 知识库浏览
+后端启动前会执行：
 
-| 字段 | 内容 |
-|------|------|
-| **描述** | 用户切换到知识库浏览页，查看文档片段 |
-| **步骤** | 1. 点击"知识库"导航按钮 → 2. 等待片段列表加载 → 3. 点击来源过滤按钮 → 4. 翻页（如有多页） |
-| **验证点** | 片段卡片渲染、来源按钮切换、分页按钮状态 |
-| **通过标准** | 页面显示 chunk 卡片网格，来源过滤后列表变化 |
+- `backend/scripts/prepare_e2e_env.py`
 
-### 场景 3: 对话管理
+这个脚本会重置 `runtime/e2e/`，初始化 SQLite E2E 数据库，并种入：
 
-| 字段 | 内容 |
-|------|------|
-| **描述** | 用户创建、重命名和删除对话 |
-| **步骤** | 1. 点击"新对话" → 2. 发送一条消息 → 3. 重命名对话 → 4. 删除对话 |
-| **验证点** | 新对话出现在侧栏、标题更新、对话被删除后列表刷新 |
-| **通过标准** | 对话列表在重命名后更新内容，删除后条目消失 |
+- `admin / admin-pass`
+- `editor / editor-pass`
+- `viewer / viewer-pass`
 
-### 场景 4: 指标面板
+其中 `editor` 和 `viewer` 会被授予默认工作区成员关系，便于后续补工作区与知识库相关 E2E。
 
-| 字段 | 内容 |
-|------|------|
-| **描述** | 用户查看系统运行指标 |
-| **步骤** | 1. 点击"指标"导航按钮 → 2. 查看统计卡片 → 3. 切换时间范围 → 4. 展开日志表格 |
-| **验证点** | 统计卡片数字非负、柱状图渲染、日志列表展开/收起 |
-| **通过标准** | 统计卡片正确渲染，时间范围切换后数据刷新 |
-
-### 场景 5: 主题切换
-
-| 字段 | 内容 |
-|------|------|
-| **描述** | 用户切换浅色/深色模式 |
-| **步骤** | 1. 点击主题切换按钮 → 2. 观察 HTML class 变化 → 3. 刷新页面 → 4. 验证主题保持 |
-| **验证点** | `<html>` 元素的 `class` 包含 `dark` 或移除 |
-| **通过标准** | 切换后 class 正确更新，刷新后保持 |
-
-### 场景 6: 搜索策略切换
-
-| 字段 | 内容 |
-|------|------|
-| **描述** | 用户在聊天界面切换搜索策略 |
-| **步骤** | 1. 打开聊天界面 → 2. 点击搜索策略按钮 → 3. 观察 active 状态变化 → 4. 发送消息使用新策略 |
-| **验证点** | 策略按钮 active 样式切换（`bg-primary`）、禁用状态下不可点击 |
-| **通过标准** | 点击"深度"或"快速"策略后，对应按钮高亮 |
-
----
-
-## 3. Playwright 测试配置
-
-```typescript
-// frontend/e2e/playwright.config.ts
-import { defineConfig } from '@playwright/test'
-
-export default defineConfig({
-  testDir: './e2e',
-  fullyParallel: false,
-  retries: 1,
-  use: {
-    baseURL: 'http://localhost:5173',
-    trace: 'on-first-retry',
-  },
-  webServer: [
-    { command: 'cd backend && uv run uvicorn src.api.main:app --port 8000', port: 8000 },
-    { command: 'cd frontend && npm run dev', port: 5173 },
-  ],
-})
-```
-
----
-
-## 4. 执行方式
+## 3. 执行方式
 
 ```bash
-# 安装 Playwright 浏览器
-npx playwright install chromium
-
-# 运行所有 E2E 测试
-cd frontend && npx playwright test
-
-# 运行单个场景
-npx playwright test e2e/chat.spec.ts
-
-# 带 UI 模式运行（调试）
-npx playwright test --ui
+cd frontend
+npm run e2e:install
+npm run e2e
 ```
 
----
+带界面调试：
 
-## 5. 通过标准
+```bash
+cd frontend
+npm run e2e:headed
+```
 
-- 所有 6 个 E2E 场景 100% 通过
-- 无浏览器 console error
-- SSE 流式响应在 30s 内完成
-- 无视觉布局断裂
+只跑当前权限流：
+
+```bash
+cd frontend
+npx playwright test e2e/auth-rbac.spec.ts
+```
+
+## 4. 关键配置
+
+- Playwright 配置文件：`frontend/playwright.config.ts`
+- 默认前端端口：`4173`
+- 默认后端端口：`8001`
+- E2E 运行数据目录：`runtime/e2e/`
+- 报告输出目录：`output/playwright/`
+
+## 5. 后续扩展
+
+当前基础设施已经够支撑后续场景继续增量补齐，优先顺序建议是：
+
+1. `editor` 导入文档并在任务中心观察后台任务状态
+2. `viewer` 浏览知识库但无法删除来源
+3. `admin` 创建用户和工作区，再授权成员
+4. 登录态刷新与未登录重定向的跨刷新持久化验证
