@@ -115,6 +115,29 @@ def test_replace_workspace_members_rejects_duplicate_users(monkeypatch, tmp_path
     assert response.status_code == 422
 
 
+def test_replace_workspace_members_rejects_inactive_users(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+    auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")
+    inactive_user = auth_store.create_user(
+        username="inactive-viewer",
+        password_hash=hash_password("viewer-pass"),
+        role="viewer",
+        is_active=False,
+    )
+    workspace = workspace_store.create_workspace("团队空间")
+    client = TestClient(app)
+    token = _login(client, "admin", "admin-pass")
+
+    response = client.put(
+        f"/api/workspaces/{workspace['id']}/members",
+        json={"members": [{"user_id": inactive_user["id"], "role": "viewer"}]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422
+    assert auth_store.list_workspace_members(workspace["id"]) == []
+
+
 def test_replace_workspace_members_rejects_unknown_workspace(monkeypatch, tmp_path):
     _configure_auth_database(monkeypatch, tmp_path)
     auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")

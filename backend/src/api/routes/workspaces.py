@@ -134,9 +134,13 @@ async def replace_members(
     user_ids = [member.user_id for member in body.members]
     if len(user_ids) != len(set(user_ids)):
         raise HTTPException(422, "工作区成员不能重复")
-    missing_user_ids = [user_id for user_id in user_ids if auth_store.get_user_by_id(user_id) is None]
+    users_by_id = {user_id: auth_store.get_user_by_id(user_id) for user_id in user_ids}
+    missing_user_ids = [user_id for user_id, user in users_by_id.items() if user is None]
     if missing_user_ids:
         raise HTTPException(404, "用户不存在")
+    inactive_user_ids = [user_id for user_id, user in users_by_id.items() if user and not user.get("is_active")]
+    if inactive_user_ids:
+        raise HTTPException(422, "停用用户不能加入工作区")
     members = auth_store.replace_workspace_members(
         workspace_id=ws_id,
         members=[member.model_dump() for member in body.members],
