@@ -6,17 +6,16 @@ import json
 
 from src.api.models import DebugInfo
 from src.chat_utils import generate_title
-from src.persistence import conversation_repository, message_repository, pin_state_repository
+from src.persistence import conversation_store, message_store, pin_state_repository
 from src.persistence.database import get_connection
 
 
 def get_conversation_by_thread(thread_id: str) -> dict | None:
-    return conversation_repository.get_conversation_by_thread(get_connection, thread_id)
+    return conversation_store.get_conversation_by_thread(thread_id)
 
 
 def create_conversation(title: str, *, thread_id: str | None = None, workspace_id: str = "") -> dict:
-    return conversation_repository.create_conversation(
-        get_connection,
+    return conversation_store.create_conversation(
         title,
         thread_id=thread_id,
         workspace_id=workspace_id,
@@ -46,8 +45,7 @@ def add_message(
     quality_reason: str = "",
     debug_info: str = "{}",
 ) -> int:
-    return message_repository.add_message(
-        get_connection,
+    return message_store.add_message(
         conv_id,
         role,
         content,
