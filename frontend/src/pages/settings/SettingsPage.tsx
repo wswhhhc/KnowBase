@@ -6,6 +6,7 @@ import * as api from '@/shared/api'
 import { MASKED_SECRET_VALUE } from '@/shared/api'
 import type { RuntimeSettings } from '@/shared/api'
 import type { ViewType } from '@/app/navigation'
+import AdminUsersPanel from '@/pages/settings/AdminUsersPanel'
 
 interface SettingsPageProps {
   onOpenSidebar: () => void
@@ -148,6 +149,8 @@ export default function SettingsPage({ onOpenSidebar, sidebarOpen }: SettingsPag
               </div>
             </div>
           )}
+
+          <AdminUsersPanel />
 
           {GROUP_ORDER.map((group) => (
             <div key={group.title}>

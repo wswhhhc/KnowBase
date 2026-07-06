@@ -15,6 +15,7 @@ vi.mock('lucide-react', () => {
     AlertTriangle: 'AlertTriangle',
     Check: 'Check',
     Loader2: 'Loader2',
+    X: 'X',
   }
   return Object.fromEntries(
     Object.keys(icons).map((name) => [name, () => <span>{name}</span>]),
@@ -28,6 +29,10 @@ vi.mock('@/shared/api', async () => {
     MASKED_SECRET_VALUE: '__KEEP_EXISTING_SECRET__',
     getSettings: vi.fn(),
     updateSettings: vi.fn(),
+    listAdminUsers: vi.fn(),
+    createAdminUser: vi.fn(),
+    updateAdminUser: vi.fn(),
+    deleteAdminUser: vi.fn(),
   }
 })
 
@@ -51,6 +56,33 @@ describe('SettingsPage', () => {
       enable_contextual_retrieval: true,
     } as any)
     vi.mocked(api.updateSettings).mockResolvedValue({ updated: true, warnings: [], message: '' })
+    vi.mocked(api.listAdminUsers).mockResolvedValue([
+      {
+        id: 'user-1',
+        username: 'admin',
+        role: 'admin',
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ])
+    vi.mocked(api.createAdminUser).mockResolvedValue({
+      id: 'user-2',
+      username: 'editor',
+      role: 'editor',
+      is_active: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    })
+    vi.mocked(api.updateAdminUser).mockImplementation(async (_token, userId, body) => ({
+      id: userId,
+      username: 'admin',
+      role: body.role ?? 'admin',
+      is_active: body.is_active ?? true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }))
+    vi.mocked(api.deleteAdminUser).mockResolvedValue({} as any)
   })
 
   it('shows provider information derived from current model settings', async () => {
@@ -149,6 +181,44 @@ describe('SettingsPage', () => {
 
     await waitFor(() => {
       expect(localStorage.getItem('knowbase_api_key')).toBe('existing-local-key')
+    })
+  })
+
+  it('loads and creates admin-managed users', async () => {
+    render(<SettingsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(api.listAdminUsers).toHaveBeenCalled()
+      expect(screen.getByText('admin')).toBeInTheDocument()
+    })
+
+    await userEvent.type(screen.getByLabelText('新用户用户名'), 'editor')
+    await userEvent.type(screen.getByLabelText('新用户密码'), 'initial-pass')
+    await userEvent.selectOptions(screen.getByLabelText('新用户角色'), 'editor')
+    await userEvent.click(screen.getByRole('button', { name: '创建用户' }))
+
+    await waitFor(() => {
+      expect(api.createAdminUser).toHaveBeenCalledWith(undefined, {
+        username: 'editor',
+        password: 'initial-pass',
+        role: 'editor',
+        is_active: true,
+      })
+      expect(screen.getByText('editor')).toBeInTheDocument()
+    })
+  })
+
+  it('updates a user role inline', async () => {
+    render(<SettingsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('admin 角色')).toBeInTheDocument()
+    })
+
+    await userEvent.selectOptions(screen.getByLabelText('admin 角色'), 'viewer')
+
+    await waitFor(() => {
+      expect(api.updateAdminUser).toHaveBeenCalledWith(undefined, 'user-1', { role: 'viewer' })
     })
   })
 })
