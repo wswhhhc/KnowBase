@@ -6,8 +6,7 @@ import json
 
 from src.api.models import DebugInfo
 from src.chat_utils import generate_title
-from src.persistence import conversation_store, message_store, pin_state_repository
-from src.persistence.database import get_connection
+from src.persistence import conversation_store, message_store, pin_state_store
 
 
 def get_conversation_by_thread(thread_id: str) -> dict | None:
@@ -28,8 +27,7 @@ def replace_pin_state(
     pinned_chunk_ids: list[str] | None = None,
     excluded_chunk_ids: list[str] | None = None,
 ) -> None:
-    pin_state_repository.replace_pin_state(
-        get_connection,
+    pin_state_store.replace_pin_state(
         thread_id,
         pinned_chunk_ids=pinned_chunk_ids,
         excluded_chunk_ids=excluded_chunk_ids,
