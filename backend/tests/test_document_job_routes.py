@@ -303,6 +303,32 @@ def test_ingest_url_stream_enqueues_job_and_streams_job_status_without_running_k
     }
 
 
+def test_delete_url_source_audit_redacts_query_and_fragment():
+    fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
+    try:
+        with patch.object(fake_kb, "delete_source", return_value=1):
+            with patch("src.api.routes.documents.audit_store.record_event") as mock_audit:
+                response = client.delete(
+                    "/api/documents/source/https%3A%2F%2Fexample.com%2Fpage%3Ftoken%3Dprivate%23frag"
+                    "?workspace_id=ws-a"
+                )
+    finally:
+        teardown_test_env(tmp_dir, orig_db, patchers)
+
+    assert response.status_code == 200
+    mock_audit.assert_called_once()
+    audit_kwargs = mock_audit.call_args.kwargs
+    assert audit_kwargs["action"] == "document.source_deleted"
+    assert audit_kwargs["target_id"] == "https://example.com/page"
+    assert audit_kwargs["metadata"] == {
+        "workspace_id": "ws-a",
+        "source_name": "https://example.com/page",
+        "source_scheme": "https",
+        "source_host": "example.com",
+        "removed_chunks": 1,
+    }
+
+
 def test_clear_workspace_returns_queued_job_without_running_kb_clear():
     fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
     queued_job = _job_payload("job-clear-1")

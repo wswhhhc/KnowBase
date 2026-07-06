@@ -147,6 +147,18 @@ def _audit_file_import_queued(
     )
 
 
+def _source_audit_identity(source_name: str) -> tuple[str, dict]:
+    parsed = urlsplit(source_name)
+    if parsed.scheme in {"http", "https"} and parsed.hostname:
+        redacted = _redacted_url_for_audit(source_name)
+        return redacted["url"], {
+            "source_name": redacted["url"],
+            "source_scheme": redacted["scheme"],
+            "source_host": redacted["host"],
+        }
+    return source_name, {"source_name": source_name}
+
+
 def _job_event_source(job_id: str, *, fallback_done: dict) -> EventSourceResponse:
     """Stream progress for an already queued import job."""
 
@@ -460,13 +472,25 @@ async def import_demo_documents(
             if chunk_count > 0
             else "示例资料已在当前工作区就绪"
         )
-        return DemoImportResponse(
+        response = DemoImportResponse(
             chunk_count=chunk_count,
             total_docs=kb.document_count_for_workspace(workspace_id),
             message=message,
             imported_sources=imported_sources,
             suggested_questions=suggested,
         )
+        audit_store.record_event(
+            action="document.demo_imported",
+            actor_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+            target_type="workspace",
+            target_id=workspace_id,
+            metadata={
+                "workspace_id": workspace_id,
+                "imported_sources": imported_sources,
+                "chunk_count": chunk_count,
+            },
+        )
+        return response
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -481,6 +505,18 @@ async def delete_source(
     removed = kb.delete_source(source_name, workspace_id=workspace_id)
     if removed == 0:
         raise HTTPException(404, "来源不存在")
+    target_id, source_metadata = _source_audit_identity(source_name)
+    audit_store.record_event(
+        action="document.source_deleted",
+        actor_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
+        target_type="source",
+        target_id=target_id,
+        metadata={
+            "workspace_id": workspace_id,
+            **source_metadata,
+            "removed_chunks": removed,
+        },
+    )
     return IngestResponse(
         chunk_count=removed, total_docs=kb.document_count_for_workspace(workspace_id),
         message=f"已删除 {source_name}（{removed} 个段落）",
