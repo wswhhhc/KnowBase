@@ -22,7 +22,18 @@ from urllib3.connection import HTTPConnection, HTTPSConnection
 from urllib3.poolmanager import PoolManager
 
 
+from src.config.constants import MAX_UPLOAD_MB
 from src.rag.models import normalize_source
+
+
+MAX_URL_RESPONSE_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+ALLOWED_URL_CONTENT_TYPES = {
+    "text/html",
+    "application/xhtml+xml",
+    "text/plain",
+    "text/markdown",
+    "text/x-markdown",
+}
 
 
 def load_document(file_path: str, source_name: str | None = None) -> List[Document]:
@@ -227,6 +238,50 @@ class _PinnedIPAdapter(HTTPAdapter):
         )
 
 
+def _normalize_content_type(value: str | None) -> str:
+    return (value or "").split(";", 1)[0].strip().lower()
+
+
+def _validate_url_response_headers(resp: requests.Response, *, enforce_content_type: bool) -> None:
+    content_length = resp.headers.get("Content-Length")
+    if content_length:
+        try:
+            length = int(content_length)
+        except ValueError:
+            length = 0
+        if length > MAX_URL_RESPONSE_BYTES:
+            raise ValueError("URL 响应体过大，已拒绝导入。")
+
+    if enforce_content_type:
+        content_type = _normalize_content_type(resp.headers.get("Content-Type"))
+        if content_type not in ALLOWED_URL_CONTENT_TYPES:
+            raise ValueError("URL 响应 Content-Type 不受支持，仅允许 HTML 或纯文本内容。")
+
+
+def _buffer_url_response_body(resp: requests.Response) -> None:
+    body = bytearray()
+    try:
+        for chunk in resp.iter_content(chunk_size=8192):
+            if not chunk:
+                continue
+            body.extend(chunk)
+            if len(body) > MAX_URL_RESPONSE_BYTES:
+                resp.close()
+                raise ValueError("URL 响应体过大，已拒绝导入。")
+    except ValueError:
+        raise
+
+    resp._content = bytes(body)
+    resp._content_consumed = True
+
+
+def _prepare_url_response(resp: requests.Response) -> requests.Response:
+    is_redirect = 300 <= resp.status_code < 400
+    _validate_url_response_headers(resp, enforce_content_type=not is_redirect)
+    _buffer_url_response_body(resp)
+    return resp
+
+
 def _make_pinned_request(url: str, headers: dict, pin_ip: str) -> requests.Response:
     """用自定义 Adapter 将请求 pin 到指定 IP。
 
@@ -237,7 +292,8 @@ def _make_pinned_request(url: str, headers: dict, pin_ip: str) -> requests.Respo
         adapter = _PinnedIPAdapter(pinned_ip=pin_ip)
         session.mount("https://", adapter)
         session.mount("http://", adapter)
-        return session.get(url, headers=headers, timeout=30, allow_redirects=False)
+        resp = session.get(url, headers=headers, timeout=30, allow_redirects=False, stream=True)
+        return _prepare_url_response(resp)
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +322,8 @@ def load_url(url: str, source_name: str | None = None) -> List[Document]:
         pin_ip = _validate_url(target_url)
         if pin_ip is not None:
             return _make_pinned_request(target_url, headers, pin_ip)
-        return requests.get(target_url, headers=headers, timeout=30, allow_redirects=False)
+        resp = requests.get(target_url, headers=headers, timeout=30, allow_redirects=False, stream=True)
+        return _prepare_url_response(resp)
 
     # 逐跳跟随重定向，每跳都做 IP pin
     target = url
