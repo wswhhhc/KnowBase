@@ -42,3 +42,31 @@ def get_job(job_id: str) -> dict | None:
 
 def cancel_job(job_id: str) -> dict | None:
     return job_repository.cancel_job_with_session(_session_factory(), job_id)
+
+
+def update_job_progress(job_id: str, *, progress: dict) -> dict | None:
+    return job_repository.update_job_progress_with_session(
+        _session_factory(),
+        job_id,
+        progress=progress,
+    )
+
+
+def mark_job_running(job_id: str) -> dict | None:
+    return job_repository.mark_job_running_with_session(_session_factory(), job_id)
+
+
+def mark_job_succeeded(job_id: str, *, progress: dict | None = None) -> dict | None:
+    return job_repository.mark_job_succeeded_with_session(
+        _session_factory(),
+        job_id,
+        progress=progress,
+    )
+
+
+def mark_job_failed(job_id: str, *, error: str) -> dict | None:
+    return job_repository.mark_job_failed_with_session(
+        _session_factory(),
+        job_id,
+        error=error,
+    )

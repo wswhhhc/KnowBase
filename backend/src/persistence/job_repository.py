@@ -110,3 +110,80 @@ def cancel_job_with_session(session_factory: SessionFactory, job_id: str) -> dic
             )
             row = session.execute(select(jobs).where(jobs.c.id == job_id)).mappings().first()
     return _job_from_mapping(row) if row else None
+
+
+def update_job_progress_with_session(
+    session_factory: SessionFactory,
+    job_id: str,
+    *,
+    progress: dict,
+) -> dict | None:
+    with session_factory.begin() as session:
+        session.execute(
+            update(jobs)
+            .where(jobs.c.id == job_id)
+            .values(progress_json=_progress_to_json(progress), updated_at=_now())
+        )
+        row = session.execute(select(jobs).where(jobs.c.id == job_id)).mappings().first()
+    return _job_from_mapping(row) if row else None
+
+
+def mark_job_running_with_session(session_factory: SessionFactory, job_id: str) -> dict | None:
+    now = _now()
+    with session_factory.begin() as session:
+        row = session.execute(select(jobs).where(jobs.c.id == job_id)).mappings().first()
+        if row is None:
+            return None
+        if row["status"] in {"succeeded", "failed", "canceled"}:
+            return _job_from_mapping(row)
+        session.execute(
+            update(jobs)
+            .where(jobs.c.id == job_id)
+            .values(
+                status="running",
+                attempts=int(row["attempts"] or 0) + 1,
+                updated_at=now,
+                started_at=row["started_at"] or now,
+                finished_at=None,
+                error="",
+            )
+        )
+        row = session.execute(select(jobs).where(jobs.c.id == job_id)).mappings().first()
+    return _job_from_mapping(row) if row else None
+
+
+def mark_job_succeeded_with_session(
+    session_factory: SessionFactory,
+    job_id: str,
+    *,
+    progress: dict | None = None,
+) -> dict | None:
+    values: dict[str, object] = {
+        "status": "succeeded",
+        "updated_at": _now(),
+        "finished_at": _now(),
+        "error": "",
+    }
+    if progress is not None:
+        values["progress_json"] = _progress_to_json(progress)
+    with session_factory.begin() as session:
+        session.execute(update(jobs).where(jobs.c.id == job_id).values(**values))
+        row = session.execute(select(jobs).where(jobs.c.id == job_id)).mappings().first()
+    return _job_from_mapping(row) if row else None
+
+
+def mark_job_failed_with_session(
+    session_factory: SessionFactory,
+    job_id: str,
+    *,
+    error: str,
+) -> dict | None:
+    now = _now()
+    with session_factory.begin() as session:
+        session.execute(
+            update(jobs)
+            .where(jobs.c.id == job_id)
+            .values(status="failed", updated_at=now, finished_at=now, error=error)
+        )
+        row = session.execute(select(jobs).where(jobs.c.id == job_id)).mappings().first()
+    return _job_from_mapping(row) if row else None
