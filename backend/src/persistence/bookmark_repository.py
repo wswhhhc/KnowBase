@@ -102,6 +102,12 @@ def list_bookmarks_with_session(
     return [_bookmark_from_mapping(row) for row in rows]
 
 
+def get_bookmark_with_session(session_factory: SessionFactory, bm_id: int) -> dict | None:
+    with session_factory() as session:
+        row = session.execute(select(bookmarks).where(bookmarks.c.id == bm_id)).mappings().first()
+    return _bookmark_from_mapping(row) if row else None
+
+
 def update_bookmark_with_session(session_factory: SessionFactory, bm_id: int, **kwargs) -> dict | None:
     allowed = {"note", "tags"}
     updates = {key: value for key, value in kwargs.items() if key in allowed}
@@ -173,6 +179,16 @@ def list_bookmarks(get_conn: ConnectionFactory, workspace_id: str | None = None,
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def get_bookmark(get_conn: ConnectionFactory, bm_id: int) -> dict | None:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT id, workspace_id, conversation_id, message_id, chunk_id, note, content, source, tags, created_at FROM bookmarks WHERE id = ?",
+        (bm_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def update_bookmark(get_conn: ConnectionFactory, bm_id: int, **kwargs) -> dict | None:
