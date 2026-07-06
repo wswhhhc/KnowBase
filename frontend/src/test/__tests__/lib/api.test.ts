@@ -213,6 +213,42 @@ describe('Documents API', () => {
   })
 })
 
+describe('Jobs API', () => {
+  it('listJobs calls the jobs endpoint', async () => {
+    const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]), text: () => Promise.resolve('[]'), headers: new Headers() })
+    vi.stubGlobal('fetch', fn)
+    await api.listJobs()
+    expect(fn).toHaveBeenCalledWith('/api/jobs', expect.any(Object))
+    vi.unstubAllGlobals()
+  })
+
+  it('getJob encodes the job id in the path', async () => {
+    const fn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id: 'job/1', job_type: 'ingest_file', status: 'queued', workspace_id: '', error: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }),
+      text: () => Promise.resolve('{}'),
+      headers: new Headers(),
+    })
+    vi.stubGlobal('fetch', fn)
+    await api.getJob('job/1')
+    expect(fn).toHaveBeenCalledWith('/api/jobs/job%2F1', expect.any(Object))
+    vi.unstubAllGlobals()
+  })
+
+  it('cancelJob sends POST to the cancel endpoint', async () => {
+    const fn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id: 'job-1', job_type: 'ingest_file', status: 'canceled', workspace_id: '', error: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }),
+      text: () => Promise.resolve('{}'),
+      headers: new Headers(),
+    })
+    vi.stubGlobal('fetch', fn)
+    await api.cancelJob('job-1')
+    expect(fn).toHaveBeenCalledWith('/api/jobs/job-1/cancel', expect.objectContaining({ method: 'POST' }))
+    vi.unstubAllGlobals()
+  })
+})
+
 describe('Knowledge Base API', () => {
   it('getKBChunks builds query params', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }), text: () => Promise.resolve('{}'), headers: new Headers() })
