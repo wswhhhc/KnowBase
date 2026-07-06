@@ -85,7 +85,23 @@ def enqueue_tracked_job(
     return job_store.get_job(job["id"]) or job
 
 
-def retry_tracked_job(job_id: str, *, queue: Queue | None = None) -> dict:
+_ACTOR_UNSET = object()
+
+
+def _audit_actor(actor_user_id: object, fallback_user_id: str | None) -> str | None:
+    if actor_user_id is _ACTOR_UNSET:
+        return fallback_user_id
+    if actor_user_id is None or isinstance(actor_user_id, str):
+        return actor_user_id
+    return fallback_user_id
+
+
+def retry_tracked_job(
+    job_id: str,
+    *,
+    actor_user_id: str | None | object = _ACTOR_UNSET,
+    queue: Queue | None = None,
+) -> dict:
     job = job_store.get_job(job_id)
     if job is None:
         raise ValueError("任务不存在")
@@ -104,7 +120,7 @@ def retry_tracked_job(job_id: str, *, queue: Queue | None = None) -> dict:
 
     audit_store.record_event(
         action="job.retried",
-        actor_user_id=retried.get("created_by_user_id"),
+        actor_user_id=_audit_actor(actor_user_id, retried.get("created_by_user_id")),
         target_type="job",
         target_id=job_id,
         metadata={"job_type": retried["job_type"], "workspace_id": retried.get("workspace_id", "")},
@@ -115,7 +131,7 @@ def retry_tracked_job(job_id: str, *, queue: Queue | None = None) -> dict:
         job_store.mark_job_failed(job_id, error=str(exc))
         audit_store.record_event(
             action="job.retry_failed",
-            actor_user_id=retried.get("created_by_user_id"),
+            actor_user_id=_audit_actor(actor_user_id, retried.get("created_by_user_id")),
             target_type="job",
             target_id=job_id,
             metadata={

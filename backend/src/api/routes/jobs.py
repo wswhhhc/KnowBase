@@ -133,7 +133,10 @@ async def retry_job(
     job = _visible_job_or_404(job_id, current_user)
     _authorize_job_workspace(job, current_user, "editor")
     try:
-        retried = retry_tracked_job(job_id)
+        retried = retry_tracked_job(
+            job_id,
+            actor_user_id=current_user.get("id") if current_user else None,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except Exception as exc:

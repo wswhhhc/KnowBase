@@ -359,6 +359,41 @@ def test_user_can_retry_own_failed_url_job(isolated_jobs_database):
     )
 
 
+def test_admin_retry_records_admin_as_audit_actor(isolated_jobs_database):
+    users = _seed_users()
+    failed_job = job_store.create_job(
+        job_type="ingest_url",
+        created_by_user_id=users["editor"]["id"],
+        workspace_id="ws-a",
+        status="failed",
+        progress={
+            "_retry": {
+                "target_path": "src.jobs.document_tasks:ingest_url_document",
+                "args": [],
+                "kwargs": {"url": "https://example.com/doc", "version_mode": "replace", "workspace_id": "ws-a"},
+                "inject_job_id": True,
+            }
+        },
+    )
+    fake_queue = FakeQueue()
+    client = TestClient(app)
+    admin_token = _login(client, "admin", "admin-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        with patch("src.jobs.enqueue.create_queue", return_value=fake_queue):
+            response = client.post(
+                f"/api/jobs/{failed_job['id']}/retry",
+                headers={"Authorization": f"Bearer {admin_token}"},
+            )
+
+    assert response.status_code == 200
+    admin_events = audit_store.list_events(actor_user_id=users["admin"]["id"])
+    retry_event = next(event for event in admin_events if event["action"] == "job.retried")
+    assert retry_event["target_id"] == failed_job["id"]
+    editor_events = audit_store.list_events(actor_user_id=users["editor"]["id"])
+    assert not [event for event in editor_events if event["action"] == "job.retried"]
+
+
 def test_user_cannot_retry_own_job_without_current_workspace_editor_role(isolated_jobs_database):
     users = _seed_users()
     failed_job = job_store.create_job(
