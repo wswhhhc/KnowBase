@@ -61,6 +61,10 @@ def list_workspace_members(workspace_id: str) -> list[dict]:
     return auth_repository.list_workspace_members_with_session(_session_factory(), workspace_id)
 
 
+def list_workspace_memberships_for_user(user_id: str) -> list[dict]:
+    return auth_repository.list_workspace_memberships_for_user_with_session(_session_factory(), user_id)
+
+
 def get_workspace_member_role(*, workspace_id: str, user_id: str) -> str | None:
     return auth_repository.get_workspace_member_role_with_session(
         _session_factory(),
