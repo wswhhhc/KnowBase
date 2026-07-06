@@ -92,6 +92,12 @@ class JobQueueSettings(BaseModel):
     queue_name: str
 
 
+class ApiSettings(BaseModel):
+    """Layered view for HTTP API security and browser integration."""
+
+    cors_allow_origins: list[str]
+
+
 class Settings(BaseSettings):
     """Runtime settings loaded from environment variables and .env."""
 
@@ -164,6 +170,10 @@ class Settings(BaseSettings):
     document_import_rate_limit_per_minute: int = Field(
         default=6,
         validation_alias="DOCUMENT_IMPORT_RATE_LIMIT_PER_MINUTE",
+    )
+    cors_allow_origins: str = Field(
+        default="http://localhost:5173,http://localhost:3000",
+        validation_alias="CORS_ALLOW_ORIGINS",
     )
 
     checkpoint_db_path: str = Field(
@@ -287,6 +297,15 @@ class Settings(BaseSettings):
     @property
     def job_queue(self) -> JobQueueSettings:
         return JobQueueSettings(redis_url=self.redis_url, queue_name=self.job_queue_name)
+
+    @property
+    def api(self) -> ApiSettings:
+        origins = [
+            origin.strip()
+            for origin in self.cors_allow_origins.split(",")
+            if origin.strip()
+        ]
+        return ApiSettings(cors_allow_origins=origins)
 
 
 settings = Settings()
