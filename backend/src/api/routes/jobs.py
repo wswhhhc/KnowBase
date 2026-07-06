@@ -24,7 +24,24 @@ def _visible_job_or_404(job_id: str, current_user: dict | None) -> dict:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
     if not _is_admin_or_legacy(current_user) and job.get("created_by_user_id") != current_user.get("id"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    _authorize_job_workspace(job, current_user, "viewer")
     return job
+
+
+def _authorize_job_workspace(job: dict, current_user: dict | None, minimum_role: str) -> None:
+    workspace_id = str(job.get("workspace_id") or "")
+    if workspace_id and not _is_admin_or_legacy(current_user):
+        authorize_workspace_role(current_user, workspace_id, minimum_role)
+
+
+def _is_job_visible_in_current_workspace(job: dict, current_user: dict | None) -> bool:
+    if _is_admin_or_legacy(current_user):
+        return True
+    try:
+        _authorize_job_workspace(job, current_user, "viewer")
+    except HTTPException:
+        return False
+    return True
 
 
 def _invalidate_kb_cache_after_successful_mutation(job: dict) -> None:
@@ -37,7 +54,8 @@ async def list_jobs(
     current_user: dict | None = Depends(get_current_user_or_legacy_api_key),
 ) -> list[JobOut]:
     owner_id = None if _is_admin_or_legacy(current_user) else str(current_user.get("id") or "")
-    return [JobOut(**job) for job in job_store.list_jobs(created_by_user_id=owner_id)]
+    jobs = job_store.list_jobs(created_by_user_id=owner_id)
+    return [JobOut(**job) for job in jobs if _is_job_visible_in_current_workspace(job, current_user)]
 
 
 @router.get("/{job_id}")
@@ -56,9 +74,7 @@ async def cancel_job(
     current_user: dict | None = Depends(get_current_user_or_legacy_api_key),
 ) -> JobOut:
     job = _visible_job_or_404(job_id, current_user)
-    workspace_id = str(job.get("workspace_id") or "")
-    if workspace_id and not _is_admin_or_legacy(current_user):
-        authorize_workspace_role(current_user, workspace_id, "editor")
+    _authorize_job_workspace(job, current_user, "editor")
     if job["status"] not in {"queued", "running", "canceled"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="任务已结束，无法取消")
     canceled = job_store.cancel_job(job_id)
@@ -84,9 +100,7 @@ async def retry_job(
     current_user: dict | None = Depends(get_current_user_or_legacy_api_key),
 ) -> JobOut:
     job = _visible_job_or_404(job_id, current_user)
-    workspace_id = str(job.get("workspace_id") or "")
-    if workspace_id and not _is_admin_or_legacy(current_user):
-        authorize_workspace_role(current_user, workspace_id, "editor")
+    _authorize_job_workspace(job, current_user, "editor")
     try:
         retried = retry_tracked_job(job_id)
     except ValueError as exc:

@@ -52,6 +52,10 @@ def _seed_users() -> dict[str, dict]:
 
 def test_admin_lists_all_jobs_and_user_lists_only_own_jobs(isolated_jobs_database):
     users = _seed_users()
+    auth_store.replace_workspace_members(
+        workspace_id="ws-a",
+        members=[{"user_id": users["editor"]["id"], "role": "viewer"}],
+    )
     editor_job = job_store.create_job(
         job_type="ingest_url",
         created_by_user_id=users["editor"]["id"],
@@ -74,6 +78,29 @@ def test_admin_lists_all_jobs_and_user_lists_only_own_jobs(isolated_jobs_databas
     assert {job["id"] for job in admin_response.json()} == {editor_job["id"], viewer_job["id"]}
     assert editor_response.status_code == 200
     assert [job["id"] for job in editor_response.json()] == [editor_job["id"]]
+
+
+def test_user_job_list_hides_workspace_jobs_without_current_access(isolated_jobs_database):
+    users = _seed_users()
+    accessible_job = job_store.create_job(
+        job_type="ingest_url",
+        created_by_user_id=users["editor"]["id"],
+        workspace_id="",
+    )
+    hidden_job = job_store.create_job(
+        job_type="clear_workspace",
+        created_by_user_id=users["editor"]["id"],
+        workspace_id="ws-a",
+    )
+    client = TestClient(app)
+    editor_token = _login(client, "editor", "editor-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        response = client.get("/api/jobs", headers={"Authorization": f"Bearer {editor_token}"})
+
+    assert response.status_code == 200
+    assert [job["id"] for job in response.json()] == [accessible_job["id"]]
+    assert hidden_job["id"] not in {job["id"] for job in response.json()}
 
 
 def test_jobs_require_auth_when_api_key_configured(isolated_jobs_database):
@@ -121,6 +148,25 @@ def test_user_cannot_get_another_users_job(isolated_jobs_database):
         )
 
     assert response.status_code == 404
+
+
+def test_user_cannot_get_own_workspace_job_without_current_access(isolated_jobs_database):
+    users = _seed_users()
+    editor_job = job_store.create_job(
+        job_type="ingest_url",
+        created_by_user_id=users["editor"]["id"],
+        workspace_id="ws-a",
+    )
+    client = TestClient(app)
+    editor_token = _login(client, "editor", "editor-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        response = client.get(
+            f"/api/jobs/{editor_job['id']}",
+            headers={"Authorization": f"Bearer {editor_token}"},
+        )
+
+    assert response.status_code == 403
 
 
 def test_user_can_cancel_own_queued_job(isolated_jobs_database):
@@ -296,6 +342,10 @@ def test_user_cannot_retry_another_users_job(isolated_jobs_database):
 
 def test_get_succeeded_kb_mutation_job_invalidates_knowledge_base_cache(isolated_jobs_database):
     users = _seed_users()
+    auth_store.replace_workspace_members(
+        workspace_id="ws-a",
+        members=[{"user_id": users["editor"]["id"], "role": "viewer"}],
+    )
     job = job_store.create_job(
         job_type="ingest_file",
         created_by_user_id=users["editor"]["id"],
