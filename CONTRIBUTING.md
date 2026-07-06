@@ -95,6 +95,14 @@ cd frontend
 npm test
 ```
 
+### E2E
+
+```bash
+cd frontend
+npm run e2e:install
+npm run e2e
+```
+
 ### 构建检查
 
 ```bash
@@ -175,6 +183,7 @@ npm run gen-api-types
 
 - 改动目标和原因清晰。
 - 后端 + 前端测试已在本地通过。
+- 如果你改动的是认证、权限、导航或关键用户流，Playwright E2E 已在本地通过。
 - `npm run build` 无报错。
 - 如果接口或 OpenAPI 变更，`scripts/export_openapi.py` 与 `npm run gen-api-types` 已执行并提交生成物。
 - `npm run check-api-types` 通过。

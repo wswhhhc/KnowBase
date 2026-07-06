@@ -152,6 +152,7 @@ GitHub Actions 当前会执行：
 - 前端 `npm test`
 - 前端 `npm run build`
 - 前端生成类型漂移检查 `npm run check-api-types`
+- Playwright E2E `cd frontend && npm run e2e`
 
 ## 契约与类型同步
 

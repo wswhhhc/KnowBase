@@ -18,6 +18,7 @@ frontend/tsconfig.tsbuildinfo
 chroma_demo.py
 runtime/local/*
 !runtime/local/.gitkeep
+runtime/e2e/*
 runtime/quickstart/*
 !runtime/quickstart/.gitkeep
 runtime/archive/*
