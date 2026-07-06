@@ -171,6 +171,10 @@ class Settings(BaseSettings):
         default=6,
         validation_alias="DOCUMENT_IMPORT_RATE_LIMIT_PER_MINUTE",
     )
+    auth_login_rate_limit_per_minute: int = Field(
+        default=5,
+        validation_alias="AUTH_LOGIN_RATE_LIMIT_PER_MINUTE",
+    )
     cors_allow_origins: str = Field(
         default="http://localhost:5173,http://localhost:3000",
         validation_alias="CORS_ALLOW_ORIGINS",
@@ -215,6 +219,7 @@ class Settings(BaseSettings):
         "max_upload_mb",
         "chat_stream_rate_limit_per_minute",
         "document_import_rate_limit_per_minute",
+        "auth_login_rate_limit_per_minute",
         "access_token_minutes",
         "refresh_token_days",
     )

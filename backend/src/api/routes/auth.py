@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.api.auth_tokens import (
     create_access_token,
@@ -14,6 +14,7 @@ from src.api.auth_tokens import (
 )
 from src.api.deps import get_current_user
 from src.api.models import AuthSessionOut, LoginRequest, LogoutRequest, RefreshRequest, UserOut
+from src.api.rate_limit import enforce_auth_login_rate_limit
 from src.config.settings import settings
 from src.persistence import audit_store, auth_store
 
@@ -47,7 +48,8 @@ def _new_session_for_user(user: dict) -> AuthSessionOut:
 
 
 @router.post("/login")
-async def login(body: LoginRequest) -> AuthSessionOut:
+async def login(body: LoginRequest, request: Request) -> AuthSessionOut:
+    enforce_auth_login_rate_limit(request, body.username)
     user = auth_store.get_user_by_username(body.username)
     if not user or not user.get("is_active") or not verify_password(body.password, user["password_hash"]):
         audit_store.record_event(

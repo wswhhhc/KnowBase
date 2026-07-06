@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from unittest.mock import patch
 
 from src.api.auth_tokens import hash_password
 from src.api.main import app
@@ -70,6 +71,24 @@ def test_login_rejects_bad_password(monkeypatch, tmp_path):
     assert audit_events[0]["action"] == "auth.login_failed"
     assert audit_events[0]["target_id"] == "admin"
     assert "password" not in audit_events[0]["metadata"]
+
+
+def test_login_is_rate_limited_by_ip_and_username(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+    auth_store.create_user(username="admin", password_hash=hash_password("pw"), role="admin")
+
+    client = TestClient(app)
+    with patch(
+        "src.api.rate_limit.get_runtime_setting",
+        side_effect=lambda key, default=None: 1 if key == "auth_login_rate_limit_per_minute" else default,
+    ):
+        first = client.post("/api/auth/login", json={"username": "admin", "password": "bad"})
+        second = client.post("/api/auth/login", json={"username": "admin", "password": "bad"})
+
+    assert first.status_code == 401
+    assert second.status_code == 429
+    assert "请求过于频繁" in second.json()["detail"]
+    assert int(second.headers["Retry-After"]) >= 1
 
 
 def test_me_requires_valid_access_token(monkeypatch, tmp_path):

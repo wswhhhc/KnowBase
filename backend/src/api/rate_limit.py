@@ -14,6 +14,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from redis import Redis
 
+from src.api.auth_tokens import decode_jwt
 from src.api.deps import _security
 from src.config.runtime_overrides import get_runtime_setting
 from src.config.settings import settings
@@ -113,14 +114,7 @@ class RedisRateLimiter:
             )
 
 
-def _resolve_request_identity(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None,
-) -> str:
-    if credentials and credentials.credentials:
-        token_hash = hashlib.sha256(credentials.credentials.encode("utf-8")).hexdigest()[:16]
-        return f"token:{token_hash}"
-
+def _resolve_request_ip(request: Request) -> str:
     forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
     if forwarded_for:
         return f"ip:{forwarded_for}"
@@ -129,8 +123,60 @@ def _resolve_request_identity(
     return f"ip:{host}"
 
 
+def _hash_identity(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+
+def _resolve_request_identity(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None,
+) -> str:
+    if credentials and credentials.credentials:
+        try:
+            payload = decode_jwt(credentials.credentials, settings.auth.jwt_secret)
+            user_id = str(payload.get("sub") or "").strip()
+            if user_id:
+                return f"user:{_hash_identity(user_id)}"
+        except HTTPException:
+            pass
+
+        token_hash = _hash_identity(credentials.credentials)
+        return f"token:{token_hash}"
+
+    return _resolve_request_ip(request)
+
+
 def _rate_limit_message(retry_after: int) -> str:
     return f"请求过于频繁，请在 {retry_after} 秒后重试。"
+
+
+def enforce_rate_limit(
+    request: Request,
+    scope: str,
+    identity: str,
+    *,
+    setting_key: str,
+    default_limit: int,
+    window_seconds: int = 60,
+) -> None:
+    limit = int(get_runtime_setting(setting_key, default_limit))
+    if limit <= 0:
+        return
+
+    limiter: InMemoryRateLimiter = request.app.state.rate_limiter
+    retry_after = limiter.hit(
+        f"{scope}:{identity}",
+        limit=limit,
+        window_seconds=window_seconds,
+    )
+    if retry_after is None:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=_rate_limit_message(retry_after),
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 def create_rate_limit_dependency(
@@ -144,27 +190,32 @@ def create_rate_limit_dependency(
         request: Request,
         credentials: HTTPAuthorizationCredentials | None = Depends(_security),
     ) -> None:
-        limit = int(get_runtime_setting(setting_key, default_limit))
-        if limit <= 0:
-            return
-
-        limiter: InMemoryRateLimiter = request.app.state.rate_limiter
         identity = _resolve_request_identity(request, credentials)
-        retry_after = limiter.hit(
-            f"{scope}:{identity}",
-            limit=limit,
+        enforce_rate_limit(
+            request,
+            scope,
+            identity,
+            setting_key=setting_key,
+            default_limit=default_limit,
             window_seconds=window_seconds,
-        )
-        if retry_after is None:
-            return
-
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=_rate_limit_message(retry_after),
-            headers={"Retry-After": str(retry_after)},
         )
 
     return _dependency
+
+
+def enforce_auth_login_rate_limit(request: Request, username: str) -> None:
+    normalized_username = username.strip().lower()
+    identities = [_resolve_request_ip(request)]
+    if normalized_username:
+        identities.append(f"user:{_hash_identity(normalized_username)}")
+    for identity in identities:
+        enforce_rate_limit(
+            request,
+            "auth-login",
+            identity,
+            setting_key="auth_login_rate_limit_per_minute",
+            default_limit=5,
+        )
 
 
 enforce_chat_stream_rate_limit = create_rate_limit_dependency(
