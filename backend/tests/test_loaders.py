@@ -144,13 +144,27 @@ class LoaderTests(unittest.TestCase):
 
     # ── load_url 功能测试（mock Session 绕过网络）──
 
-    def _make_ok_response(self, text: str):
+    def _make_ok_response(
+        self,
+        text: str,
+        *,
+        content_type: str = "text/html",
+        content_length: str | None = None,
+        chunks: list[bytes] | None = None,
+    ):
         import requests as req
         r = Mock(status_code=200)
         r.text = text
+        body = text.encode("utf-8")
+        r.content = body
         r.apparent_encoding = "utf-8"
         r.raise_for_status = Mock()
-        r.headers = req.structures.CaseInsensitiveDict({"Content-Type": "text/html"})
+        headers = {"Content-Type": content_type}
+        if content_length is not None:
+            headers["Content-Length"] = content_length
+        r.headers = req.structures.CaseInsensitiveDict(headers)
+        r.iter_content.return_value = chunks if chunks is not None else [body]
+        r.close = Mock()
         return r
 
     @patch("requests.Session")
@@ -202,6 +216,8 @@ class LoaderTests(unittest.TestCase):
         login_url = "https://accounts.feishu.cn/accounts/page/login?redirect_uri=xxx"
         redir = Mock(status_code=302, headers={"Location": login_url})
         redir.raise_for_status = Mock()
+        redir.iter_content.return_value = []
+        redir.close = Mock()
         mock_session.get.side_effect = [
             redir,  # 第一次请求返回 302
             self._make_ok_response("<html><body>login page</body></html>"),  # 第二次获取登录页
@@ -219,6 +235,52 @@ class LoaderTests(unittest.TestCase):
         mock_session.get.return_value = self._make_ok_response("<html><body><p>ok</p></body></html>")
         docs = load_url("https://example.com/page")
         self.assertEqual(docs[0].metadata["url"], "https://example.com/page")
+
+    @patch("requests.Session")
+    @patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("1.2.3.4", 0))])
+    def test_load_url_rejects_unsupported_content_type(self, mock_addrinfo, mock_session_cls):
+        """非 HTML/纯文本响应不进入正文提取。"""
+        mock_session = Mock()
+        mock_session_cls.return_value.__enter__.return_value = mock_session
+        mock_session.get.return_value = self._make_ok_response(
+            "%PDF-1.7",
+            content_type="application/pdf",
+        )
+
+        with self.assertRaisesRegex(ValueError, "Content-Type"):
+            load_url("https://example.com/file.pdf")
+
+    @patch("requests.Session")
+    @patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("1.2.3.4", 0))])
+    def test_load_url_rejects_large_content_length_before_read(self, mock_addrinfo, mock_session_cls):
+        """Content-Length 超限时不读取响应体。"""
+        mock_session = Mock()
+        mock_session_cls.return_value.__enter__.return_value = mock_session
+        response = self._make_ok_response(
+            "<html><body>large</body></html>",
+            content_length="11",
+        )
+        response.iter_content.side_effect = AssertionError("body should not be read")
+        mock_session.get.return_value = response
+
+        with patch("src.rag.loaders.MAX_URL_RESPONSE_BYTES", 10):
+            with self.assertRaisesRegex(ValueError, "响应体过大"):
+                load_url("https://example.com/large")
+
+    @patch("requests.Session")
+    @patch("socket.getaddrinfo", return_value=[(2, 1, 6, "", ("1.2.3.4", 0))])
+    def test_load_url_rejects_large_streamed_body(self, mock_addrinfo, mock_session_cls):
+        """无 Content-Length 时仍按实际读取字节数限制响应体。"""
+        mock_session = Mock()
+        mock_session_cls.return_value.__enter__.return_value = mock_session
+        mock_session.get.return_value = self._make_ok_response(
+            "<html><body>large</body></html>",
+            chunks=[b"12345", b"678901"],
+        )
+
+        with patch("src.rag.loaders.MAX_URL_RESPONSE_BYTES", 10):
+            with self.assertRaisesRegex(ValueError, "响应体过大"):
+                load_url("https://example.com/large")
 
     # ── SSRF 拒绝测试 ──
 
