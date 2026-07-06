@@ -302,6 +302,19 @@ describe('Jobs API', () => {
     vi.unstubAllGlobals()
   })
 
+  it('retryJob sends POST to the retry endpoint', async () => {
+    const fn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ ...queuedJob, status: 'queued' }),
+      text: () => Promise.resolve('{}'),
+      headers: new Headers(),
+    })
+    vi.stubGlobal('fetch', fn)
+    await api.retryJob('job/1')
+    expect(fn).toHaveBeenCalledWith('/api/jobs/job%2F1/retry', expect.objectContaining({ method: 'POST' }))
+    vi.unstubAllGlobals()
+  })
+
   it('detects terminal job statuses', () => {
     expect(api.isTerminalJob({ status: 'queued' })).toBe(false)
     expect(api.isTerminalJob({ status: 'running' })).toBe(false)

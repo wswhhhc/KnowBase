@@ -11,6 +11,9 @@ export const getJob = (jobId: string) =>
 export const cancelJob = (jobId: string) =>
   req<Job>(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' })
 
+export const retryJob = (jobId: string) =>
+  req<Job>(`/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' })
+
 export function isTerminalJob(job: Pick<Job, 'status'>): boolean {
   return TERMINAL_JOB_STATUSES.has(job.status)
 }

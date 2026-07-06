@@ -100,3 +100,34 @@ def test_sqlalchemy_job_lifecycle_updates_status_progress_and_error():
     assert failed is not None
     assert failed["status"] == "failed"
     assert failed["error"] == "boom"
+
+
+def test_sqlalchemy_progress_updates_preserve_retry_payload():
+    session_factory = _session_factory()
+    user = create_user_with_session(session_factory, username="editor", password_hash="hash", role="editor")
+    job = create_job_with_session(
+        session_factory,
+        job_type="ingest_url",
+        created_by_user_id=user["id"],
+        progress={
+            "phase": "queued",
+            "percent": 0,
+            "_retry": {
+                "target_path": "src.jobs.document_tasks:ingest_url_document",
+                "args": [],
+                "kwargs": {"url": "https://example.com"},
+                "inject_job_id": True,
+            },
+        },
+    )
+
+    progressed = update_job_progress_with_session(
+        session_factory,
+        job["id"],
+        progress={"phase": "fetching", "percent": 25},
+    )
+
+    assert progressed is not None
+    assert progressed["progress"]["phase"] == "fetching"
+    assert progressed["progress"]["percent"] == 25
+    assert progressed["progress"]["_retry"]["kwargs"] == {"url": "https://example.com"}

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from src.api.auth_tokens import hash_password
 from src.api.main import app
+from src.jobs.tasks import run_tracked_job
 from src.persistence import auth_store, job_store
 from src.persistence.schema import metadata
 from src.persistence.sqlalchemy_database import create_engine_for_url
@@ -23,6 +24,15 @@ def _api_key_runtime_setting(key, default=None):
     if key == "api_key":
         return "test-api-key"
     return default
+
+
+class FakeQueue:
+    def __init__(self):
+        self.calls = []
+
+    def enqueue(self, func, *args, **kwargs):
+        self.calls.append({"func": func, "args": args, "kwargs": kwargs})
+        return None
 
 
 @pytest.fixture()
@@ -150,3 +160,93 @@ def test_cancel_finished_job_returns_conflict(isolated_jobs_database):
         )
 
     assert response.status_code == 409
+
+
+def test_user_can_retry_own_failed_url_job(isolated_jobs_database):
+    users = _seed_users()
+    failed_job = job_store.create_job(
+        job_type="ingest_url",
+        created_by_user_id=users["editor"]["id"],
+        workspace_id="ws-a",
+        status="failed",
+        progress={
+            "phase": "fetching",
+            "percent": 25,
+            "message": "URL 下载失败",
+            "_retry": {
+                "target_path": "src.jobs.document_tasks:ingest_url_document",
+                "args": [],
+                "kwargs": {"url": "https://example.com/doc", "version_mode": "replace", "workspace_id": "ws-a"},
+                "inject_job_id": True,
+            },
+        },
+    )
+    fake_queue = FakeQueue()
+    client = TestClient(app)
+    editor_token = _login(client, "editor", "editor-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        with patch("src.jobs.enqueue.create_queue", return_value=fake_queue):
+            response = client.post(
+                f"/api/jobs/{failed_job['id']}/retry",
+                headers={"Authorization": f"Bearer {editor_token}"},
+            )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "queued"
+    assert body["error"] == ""
+    assert body["progress"] == {"phase": "queued", "percent": 0, "message": "任务已重新排队"}
+    assert fake_queue.calls[0]["func"] is run_tracked_job
+    assert fake_queue.calls[0]["args"] == (
+        failed_job["id"],
+        "src.jobs.document_tasks:ingest_url_document",
+        [],
+        {
+            "url": "https://example.com/doc",
+            "version_mode": "replace",
+            "workspace_id": "ws-a",
+            "job_id": failed_job["id"],
+        },
+    )
+
+
+def test_user_cannot_retry_another_users_job(isolated_jobs_database):
+    users = _seed_users()
+    failed_job = job_store.create_job(
+        job_type="ingest_url",
+        created_by_user_id=users["editor"]["id"],
+        status="failed",
+        progress={"_retry": {"target_path": "tests.test_job_tasks:sample_task", "args": [1, 2], "kwargs": {}}},
+    )
+    client = TestClient(app)
+    viewer_token = _login(client, "viewer", "viewer-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        response = client.post(
+            f"/api/jobs/{failed_job['id']}/retry",
+            headers={"Authorization": f"Bearer {viewer_token}"},
+        )
+
+    assert response.status_code == 404
+
+
+def test_retry_file_upload_job_returns_conflict(isolated_jobs_database):
+    users = _seed_users()
+    failed_job = job_store.create_job(
+        job_type="ingest_file",
+        created_by_user_id=users["editor"]["id"],
+        status="failed",
+        progress={"_retry": {"target_path": "src.jobs.document_tasks:ingest_file_document", "args": [], "kwargs": {}}},
+    )
+    client = TestClient(app)
+    editor_token = _login(client, "editor", "editor-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        response = client.post(
+            f"/api/jobs/{failed_job['id']}/retry",
+            headers={"Authorization": f"Bearer {editor_token}"},
+        )
+
+    assert response.status_code == 409
+    assert "重新上传文件" in response.json()["detail"]

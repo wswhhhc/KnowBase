@@ -119,10 +119,38 @@ def update_job_progress_with_session(
     progress: dict,
 ) -> dict | None:
     with session_factory.begin() as session:
+        row = session.execute(select(jobs).where(jobs.c.id == job_id)).mappings().first()
+        if row is None:
+            return None
+        current_progress = _job_from_mapping(row)["progress"]
+        current_progress.update(progress)
         session.execute(
             update(jobs)
             .where(jobs.c.id == job_id)
-            .values(progress_json=_progress_to_json(progress), updated_at=_now())
+            .values(progress_json=_progress_to_json(current_progress), updated_at=_now())
+        )
+        row = session.execute(select(jobs).where(jobs.c.id == job_id)).mappings().first()
+    return _job_from_mapping(row) if row else None
+
+
+def mark_job_queued_for_retry_with_session(session_factory: SessionFactory, job_id: str) -> dict | None:
+    now = _now()
+    with session_factory.begin() as session:
+        row = session.execute(select(jobs).where(jobs.c.id == job_id)).mappings().first()
+        if row is None:
+            return None
+        progress = _job_from_mapping(row)["progress"]
+        progress.update({"phase": "queued", "percent": 0, "message": "任务已重新排队"})
+        session.execute(
+            update(jobs)
+            .where(jobs.c.id == job_id)
+            .values(
+                status="queued",
+                progress_json=_progress_to_json(progress),
+                error="",
+                updated_at=now,
+                finished_at=None,
+            )
         )
         row = session.execute(select(jobs).where(jobs.c.id == job_id)).mappings().first()
     return _job_from_mapping(row) if row else None

@@ -26,6 +26,7 @@ export default function JobsPage({ onOpenSidebar, sidebarOpen, onNavigate }: Job
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [cancelingJobId, setCancelingJobId] = useState<string | null>(null)
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null)
   const [jobErrors, setJobErrors] = useState<Record<string, string>>({})
 
   const activeCount = useMemo(
@@ -70,6 +71,22 @@ export default function JobsPage({ onOpenSidebar, sidebarOpen, onNavigate }: Job
       }))
     } finally {
       setCancelingJobId(null)
+    }
+  }
+
+  const handleRetryJob = async (jobId: string) => {
+    setRetryingJobId(jobId)
+    setJobErrors((current) => ({ ...current, [jobId]: '' }))
+    try {
+      const retried = await api.retryJob(jobId)
+      setJobs((current) => current.map((job) => job.id === jobId ? retried : job))
+    } catch (err) {
+      setJobErrors((current) => ({
+        ...current,
+        [jobId]: err instanceof Error ? err.message : '重试任务失败',
+      }))
+    } finally {
+      setRetryingJobId(null)
     }
   }
 
@@ -131,8 +148,10 @@ export default function JobsPage({ onOpenSidebar, sidebarOpen, onNavigate }: Job
                   key={job.id}
                   job={job}
                   canceling={cancelingJobId === job.id}
+                  retrying={retryingJobId === job.id}
                   cancelError={jobErrors[job.id] || ''}
                   onCancel={() => void handleCancelJob(job.id)}
+                  onRetry={() => void handleRetryJob(job.id)}
                 />
               ))}
             </div>
@@ -146,19 +165,24 @@ export default function JobsPage({ onOpenSidebar, sidebarOpen, onNavigate }: Job
 function JobRow({
   job,
   canceling,
+  retrying,
   cancelError,
   onCancel,
+  onRetry,
 }: {
   job: Job
   canceling: boolean
+  retrying: boolean
   cancelError: string
   onCancel: () => void
+  onRetry: () => void
 }) {
   const status = STATUS_COPY[job.status] ?? { label: job.status, className: 'text-muted-foreground bg-muted/40 border-border', icon: CircleDashed }
   const StatusIcon = status.icon
   const percent = clampPercent(job.progress?.percent)
   const phase = job.progress?.message || job.progress?.phase || '等待 worker 更新进度'
   const canCancel = job.status === 'queued' || job.status === 'running'
+  const canRetry = job.status === 'failed'
 
   return (
     <article className="rounded-lg border border-border bg-surface/30 p-4">
@@ -188,6 +212,19 @@ function JobRow({
               className="mt-3 h-7 px-2 text-2xs font-sans"
             >
               {canceling ? '取消中' : '取消任务'}
+            </Button>
+          )}
+          {canRetry && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onRetry}
+              disabled={retrying}
+              aria-label={`重试任务 ${job.id}`}
+              className="mt-3 h-7 px-2 text-2xs font-sans"
+            >
+              {retrying ? '重试中' : '重试任务'}
             </Button>
           )}
         </div>

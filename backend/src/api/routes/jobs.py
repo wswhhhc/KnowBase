@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.api.deps import get_current_user_or_legacy_api_key
 from src.api.models import JobOut
+from src.jobs.enqueue import retry_tracked_job
 from src.persistence import job_store
 
 
@@ -53,3 +54,18 @@ async def cancel_job(
     if canceled is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
     return JobOut(**canceled)
+
+
+@router.post("/{job_id}/retry")
+async def retry_job(
+    job_id: str,
+    current_user: dict | None = Depends(get_current_user_or_legacy_api_key),
+) -> JobOut:
+    _visible_job_or_404(job_id, current_user)
+    try:
+        retried = retry_tracked_job(job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="任务队列不可用") from exc
+    return JobOut(**retried)

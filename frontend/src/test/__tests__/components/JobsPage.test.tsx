@@ -12,6 +12,7 @@ vi.mock('@/shared/api', async () => {
     ...actual,
     listJobs: vi.fn(),
     cancelJob: vi.fn(),
+    retryJob: vi.fn(),
   }
 })
 
@@ -175,6 +176,52 @@ describe('JobsPage', () => {
 
     expect(await screen.findByText('任务已开始，无法取消')).toBeInTheDocument()
     expect(screen.getByText('排队中')).toBeInTheDocument()
+  })
+
+  it('retries failed jobs and updates the rendered status', async () => {
+    vi.mocked(api.listJobs).mockResolvedValue([
+      job({
+        id: 'job-retry-1',
+        job_type: 'ingest_url',
+        status: 'failed',
+        progress: { phase: 'fetching', percent: 25, message: 'URL 下载失败' },
+        error: 'URL 下载失败',
+      }),
+    ])
+    vi.mocked(api.retryJob).mockResolvedValue(job({
+      id: 'job-retry-1',
+      job_type: 'ingest_url',
+      status: 'queued',
+      progress: { phase: 'queued', percent: 0, message: '任务已重新排队' },
+      error: '',
+    }))
+
+    render(<JobsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: '重试任务 job-retry-1' }))
+
+    expect(api.retryJob).toHaveBeenCalledWith('job-retry-1')
+    expect(await screen.findByText('任务已重新排队')).toBeInTheDocument()
+    expect(screen.getByText('排队中')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重试任务 job-retry-1' })).not.toBeInTheDocument()
+  })
+
+  it('shows a row-level error when retrying fails', async () => {
+    vi.mocked(api.listJobs).mockResolvedValue([
+      job({
+        id: 'job-retry-fail',
+        status: 'failed',
+        error: 'URL 下载失败',
+      }),
+    ])
+    vi.mocked(api.retryJob).mockRejectedValue(new Error('文件导入任务无法直接重试'))
+
+    render(<JobsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: '重试任务 job-retry-fail' }))
+
+    expect(await screen.findByText('文件导入任务无法直接重试')).toBeInTheDocument()
+    expect(screen.getByText('失败')).toBeInTheDocument()
   })
 
   it('auto refreshes while jobs are still active', async () => {

@@ -52,6 +52,10 @@ def update_job_progress(job_id: str, *, progress: dict) -> dict | None:
     )
 
 
+def mark_job_queued_for_retry(job_id: str) -> dict | None:
+    return job_repository.mark_job_queued_for_retry_with_session(_session_factory(), job_id)
+
+
 def mark_job_running(job_id: str) -> dict | None:
     return job_repository.mark_job_running_with_session(_session_factory(), job_id)
 
