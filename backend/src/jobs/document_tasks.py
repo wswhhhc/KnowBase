@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from src.chat_utils import generate_suggested_questions
-from src.persistence import job_store
+from src.persistence import audit_store, job_store
 from src.rag.knowledge_base import KnowledgeBase
 
 
@@ -32,6 +33,46 @@ def collect_suggested_questions(
     return generate_suggested_questions(docs_text) if docs_text else []
 
 
+def _redacted_url_for_audit(raw_url: str) -> dict:
+    parsed = urlsplit(raw_url)
+    host = parsed.hostname or ""
+    netloc_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    netloc = f"{netloc_host}:{port}" if port is not None else netloc_host
+    return {
+        "scheme": parsed.scheme,
+        "host": host,
+        "url": urlunsplit((parsed.scheme, netloc, parsed.path, "", "")),
+    }
+
+
+def _audit_url_import_rejected(
+    *,
+    job_id: str | None,
+    url: str,
+    workspace_id: str,
+    error: str,
+) -> None:
+    if not job_id:
+        return
+    job = job_store.get_job(job_id)
+    audit_store.record_event(
+        action="url_import.rejected",
+        actor_user_id=job.get("created_by_user_id") if job else None,
+        target_type="job",
+        target_id=job_id,
+        metadata={
+            "workspace_id": workspace_id,
+            "job_type": "ingest_url",
+            "error": error,
+            **_redacted_url_for_audit(url),
+        },
+    )
+
+
 def ingest_url_document(
     *,
     url: str,
@@ -49,12 +90,21 @@ def ingest_url_document(
                 progress={"phase": phase, "percent": percent},
             )
 
-    chunk_count = knowledge_base.ingest_url(
-        url,
-        version_mode=version_mode,
-        progress_callback=_progress,
-        workspace_id=workspace_id,
-    )
+    try:
+        chunk_count = knowledge_base.ingest_url(
+            url,
+            version_mode=version_mode,
+            progress_callback=_progress,
+            workspace_id=workspace_id,
+        )
+    except ValueError as exc:
+        _audit_url_import_rejected(
+            job_id=job_id,
+            url=url,
+            workspace_id=workspace_id,
+            error=str(exc),
+        )
+        raise
     suggested = collect_suggested_questions(knowledge_base, [url], workspace_id=workspace_id)
     message = f"已添加 {chunk_count} 个新段落" if chunk_count else "URL 内容已存在"
     result = {

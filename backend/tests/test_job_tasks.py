@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from src.api.auth_tokens import hash_password
-from src.jobs.document_tasks import clear_workspace_documents, rebuild_index_documents
+from src.jobs.document_tasks import clear_workspace_documents, ingest_url_document, rebuild_index_documents
 from src.jobs.enqueue import enqueue_tracked_job
 from src.jobs.tasks import run_tracked_job
 from src.persistence import audit_store, auth_store, job_store
@@ -61,6 +61,11 @@ class FakeRebuildKnowledgeBase:
     def rebuild_index(self, workspace_id: str = "") -> int:
         self.rebuild_calls.append(workspace_id)
         return 7
+
+
+class RejectingUrlKnowledgeBase:
+    def ingest_url(self, *_args, **_kwargs) -> int:
+        raise ValueError("URL 响应 Content-Type 不受支持，仅允许 HTML 或纯文本内容。")
 
 
 @pytest.fixture()
@@ -244,6 +249,36 @@ def test_clear_workspace_documents_builds_catalog_only_kb_when_none_is_provided(
 
     assert init_calls == [False]
     assert result["message"] == "知识库已清空"
+
+
+def test_ingest_url_document_records_rejected_audit_without_query_or_fragment(isolated_jobs_database):
+    actor_user_id = "user-editor"
+    job = job_store.create_job(
+        job_type="ingest_url",
+        created_by_user_id=actor_user_id,
+        workspace_id="ws-a",
+    )
+
+    with pytest.raises(ValueError, match="Content-Type"):
+        ingest_url_document(
+            url="https://example.com/private/page?credential=private-value#frag",
+            workspace_id="ws-a",
+            job_id=job["id"],
+            kb=RejectingUrlKnowledgeBase(),
+        )
+
+    audit_events = audit_store.list_events(actor_user_id=actor_user_id)
+    rejected = next(event for event in audit_events if event["action"] == "url_import.rejected")
+    assert rejected["target_type"] == "job"
+    assert rejected["target_id"] == job["id"]
+    assert rejected["metadata"] == {
+        "workspace_id": "ws-a",
+        "job_type": "ingest_url",
+        "error": "URL 响应 Content-Type 不受支持，仅允许 HTML 或纯文本内容。",
+        "scheme": "https",
+        "host": "example.com",
+        "url": "https://example.com/private/page",
+    }
 
 
 def test_rebuild_index_documents_rebuilds_workspace_index_and_returns_result():
