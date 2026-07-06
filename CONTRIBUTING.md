@@ -60,12 +60,11 @@ npm run dev
 Docker 自托管环境：
 
 ```bash
-cp backend/.env.example backend/.env
 cp .env.compose.example .env.compose
 docker compose --env-file .env.compose up --build
 ```
 
-Compose 使用镜像内构建结果运行 backend/frontend，不挂载源码。日常本地开发仍建议使用 `scripts/dev.sh` 或分别启动 backend/frontend dev server。
+Compose 使用镜像内构建结果运行 backend/frontend，不挂载源码，也不依赖本地开发用的 `backend/.env`。日常本地开发仍建议使用 `scripts/dev.sh` 或分别启动 backend/frontend dev server。
 
 或使用辅助脚本：
 

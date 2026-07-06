@@ -92,7 +92,6 @@ npm run dev
 Docker 自托管环境：
 
 ```bash
-cp backend/.env.example backend/.env
 cp .env.compose.example .env.compose
 # 填写至少 POSTGRES_PASSWORD、JWT_SECRET、CORS_ALLOW_ORIGINS、SILICONFLOW_API_KEY
 docker compose --env-file .env.compose up --build
@@ -123,7 +122,7 @@ CORS_ALLOW_ORIGINS=https://knowbase.internal
 
 生产模式启动时会拒绝弱 `JWT_SECRET`、SQLite `DATABASE_URL`、通配/localhost CORS，以及 legacy `API_KEY`。生产请求必须使用账号密码登录后的 JWT。
 
-如果使用 Compose 部署，推荐直接复制根目录的 `.env.compose.example` 为 `.env.compose`，再通过 `docker compose --env-file .env.compose up --build` 启动。`backend/.env` 继续承担非敏感默认项；Compose 会基于 `.env.compose` 中的 Postgres/Redis/JWT/CORS 变量计算并注入容器内的 `DATABASE_URL`、`REDIS_URL` 等运行环境。
+如果使用 Compose 部署，推荐直接复制根目录的 `.env.compose.example` 为 `.env.compose`，再通过 `docker compose --env-file .env.compose up --build` 启动。Compose 不依赖本地开发用的 `backend/.env`；Postgres/Redis/JWT/CORS 等变量都来自 `.env.compose`，并会显式注入 backend 与 worker 容器。
 
 `.env.compose.example` 默认按内网自托管准生产场景给出 `APP_ENV=production`，因此 `CORS_ALLOW_ORIGINS` 不能填 `localhost`。如果你只是本机联调，可以把 `APP_ENV` 改回 `development` 后再启动。
 

@@ -32,8 +32,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile.backend
     working_dir: /app/backend
-    env_file:
-      - ./backend/.env
     environment:
       APP_ENV: ${APP_ENV:-production}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-knowbase}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}@postgres:5432/${POSTGRES_DB:-knowbase}
@@ -59,8 +57,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile.backend
     working_dir: /app/backend
-    env_file:
-      - ./backend/.env
     environment:
       APP_ENV: ${APP_ENV:-production}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-knowbase}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.compose}@postgres:5432/${POSTGRES_DB:-knowbase}
