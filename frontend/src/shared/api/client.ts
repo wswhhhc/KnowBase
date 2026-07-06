@@ -1,3 +1,5 @@
+import { getStoredAccessToken } from '@/shared/api/session'
+
 export class ApiError extends Error {
   status: number
   retryAfter?: number
@@ -13,6 +15,8 @@ export class ApiError extends Error {
 const BASE = '/api'
 
 export function authHeaders(): Record<string, string> {
+  const accessToken = getStoredAccessToken()
+  if (accessToken) return { Authorization: `Bearer ${accessToken}` }
   const key = localStorage.getItem('knowbase_api_key')
   return key ? { Authorization: `Bearer ${key}` } : {}
 }
