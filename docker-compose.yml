@@ -50,11 +50,9 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app/backend
       - ./runtime:/app/runtime
       - ./examples:/app/examples
-      - backend_venv:/app/backend/.venv
-    command: uv run uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+    command: uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 
   worker:
     build:
@@ -77,10 +75,8 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app/backend
       - ./runtime:/app/runtime
       - ./examples:/app/examples
-      - backend_venv:/app/backend/.venv
     command: uv run python -m src.jobs.worker
 
   frontend:
@@ -89,19 +85,13 @@ services:
       dockerfile: docker/Dockerfile.frontend
     working_dir: /app/frontend
     environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
       VITE_API_PROXY_TARGET: http://backend:8000
     depends_on:
       - backend
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
-    volumes:
-      - ./frontend:/app/frontend
-      - frontend_node_modules:/app/frontend/node_modules
-    command: npm run dev -- --host 0.0.0.0 --port 5173
+    command: npm run preview -- --host 0.0.0.0 --port 5173
 
 volumes:
   postgres_data:
   redis_data:
-  backend_venv:
-  frontend_node_modules:

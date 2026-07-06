@@ -9,7 +9,11 @@ FRONTEND_PID=""
 
 if [ "${1:-}" = "--docker" ]; then
   cd "$ROOT"
-  exec docker compose up --build
+  if [ ! -f ".env.compose" ]; then
+    echo "缺少 .env.compose。请先执行：cp .env.compose.example .env.compose，并填写必填密钥。"
+    exit 1
+  fi
+  exec docker compose --env-file .env.compose up --build
 fi
 
 kill_port() {

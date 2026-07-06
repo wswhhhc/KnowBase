@@ -24,6 +24,15 @@ export default defineConfig(() => {
         },
       },
     },
+    preview: {
+      port: 5173,
+      proxy: {
+        '/api': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
+      },
+    },
     test: {
       globals: true,
       environment: 'jsdom',

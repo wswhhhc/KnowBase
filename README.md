@@ -86,7 +86,7 @@ npm install
 npm run dev
 ```
 
-Docker 开发环境：
+Docker 自托管环境：
 
 ```bash
 cp backend/.env.example backend/.env
@@ -96,6 +96,7 @@ docker compose --env-file .env.compose up --build
 ```
 
 Compose 会同时启动 Postgres、Redis、backend、worker 和 frontend，并把容器内 `DATABASE_URL` 显式绑定到 compose 中的 Postgres 服务。根目录 `runtime/` 与 `examples/` 会挂载到容器内，避免 Chroma、本地运行时覆盖和示例文档只存在于容器临时层。
+backend 镜像以非热重载方式运行 FastAPI，frontend 镜像会先构建静态产物再通过 Vite preview 服务，并把 `/api` 请求代理到 backend；源码不会被挂载覆盖镜像内容。
 
 启动前建议先做静态检查：
 

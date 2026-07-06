@@ -57,7 +57,7 @@ cd frontend
 npm run dev
 ```
 
-Docker 开发环境：
+Docker 自托管环境：
 
 ```bash
 cp backend/.env.example backend/.env
@@ -65,11 +65,15 @@ cp .env.compose.example .env.compose
 docker compose --env-file .env.compose up --build
 ```
 
-或：
+Compose 使用镜像内构建结果运行 backend/frontend，不挂载源码。日常本地开发仍建议使用 `scripts/dev.sh` 或分别启动 backend/frontend dev server。
+
+或使用辅助脚本：
 
 ```bash
 bash scripts/dev.sh --docker
 ```
+
+`--docker` 会使用 `.env.compose`，如果文件不存在会直接退出，避免误用默认环境变量启动准生产 Compose。
 
 如果改了 Compose、端口映射或环境变量约定，至少补一遍：
 

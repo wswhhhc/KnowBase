@@ -103,12 +103,47 @@ def _check_active_docs_do_not_reference_legacy_paths() -> list[str]:
     return violations
 
 
+def _check_compose_uses_production_commands() -> list[str]:
+    violations: list[str] = []
+    compose_path = ROOT / "docker-compose.yml"
+    backend_dockerfile = ROOT / "docker" / "Dockerfile.backend"
+    frontend_dockerfile = ROOT / "docker" / "Dockerfile.frontend"
+
+    compose = _read(compose_path)
+    backend = _read(backend_dockerfile)
+    frontend = _read(frontend_dockerfile)
+
+    forbidden = [
+        ("--reload", "准生产 Compose/Dockerfile 不能启用后端热重载"),
+        ("npm run dev", "准生产 Compose/Dockerfile 不能启动 Vite dev server"),
+        ("./backend:/app/backend", "准生产 Compose 不应挂载 backend 源码覆盖镜像"),
+        ("./frontend:/app/frontend", "准生产 Compose 不应挂载 frontend 源码覆盖镜像"),
+    ]
+    combined = {
+        compose_path: compose,
+        backend_dockerfile: backend,
+        frontend_dockerfile: frontend,
+    }
+    for path, source in combined.items():
+        for marker, message in forbidden:
+            if marker in source:
+                violations.append(f"{message}: {path.relative_to(ROOT)}")
+
+    if "preview" not in frontend:
+        violations.append("frontend 镜像应运行已构建产物: docker/Dockerfile.frontend")
+    if "RUN npm run build" not in frontend:
+        violations.append("frontend 镜像应在构建阶段执行 npm run build: docker/Dockerfile.frontend")
+
+    return violations
+
+
 def main() -> int:
     violations = [
         *_check_forbidden_imports(),
         *_check_pages_are_real_containers(),
         *_check_component_page_shells(),
         *_check_active_docs_do_not_reference_legacy_paths(),
+        *_check_compose_uses_production_commands(),
     ]
     if not violations:
         print("结构守卫通过。")
