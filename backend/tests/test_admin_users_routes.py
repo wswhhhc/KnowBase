@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from src.api.auth_tokens import hash_password
 from src.api.main import app
-from src.persistence import auth_store
+from src.persistence import audit_store, auth_store
 from tests.test_auth_routes import _configure_auth_database
 
 
@@ -47,6 +47,22 @@ def test_admin_can_create_list_update_and_delete_users(monkeypatch, tmp_path):
     deleted = client.delete(f"/api/admin/users/{created_body['id']}", headers=headers)
     assert deleted.status_code == 200
     assert deleted.json() == {"ok": True}
+
+    audit_events = audit_store.list_events(actor_user_id=auth_store.get_user_by_username("admin")["id"], limit=10)
+    admin_events = [event for event in audit_events if event["action"].startswith("admin.user_")]
+    assert [event["action"] for event in admin_events] == [
+        "admin.user_deleted",
+        "admin.user_updated",
+        "admin.user_created",
+    ]
+    assert admin_events[0]["target_type"] == "user"
+    assert admin_events[0]["target_id"] == created_body["id"]
+    assert admin_events[0]["metadata"] == {"username": "viewer", "role": "editor", "is_active": False}
+    assert admin_events[1]["metadata"] == {
+        "username": "viewer",
+        "changed_fields": ["is_active", "role"],
+    }
+    assert admin_events[2]["metadata"] == {"username": "viewer", "role": "viewer", "is_active": True}
 
 
 def test_viewer_cannot_manage_users(monkeypatch, tmp_path):
