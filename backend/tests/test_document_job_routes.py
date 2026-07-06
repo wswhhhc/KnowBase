@@ -324,6 +324,6 @@ def test_rebuild_index_returns_queued_job_without_running_kb_rebuild():
         target_path="src.jobs.document_tasks:rebuild_index_documents",
         created_by_user_id=None,
         workspace_id="ws-a",
-        kwargs={},
+        kwargs={"workspace_id": "ws-a"},
         inject_job_id=True,
     )

@@ -56,10 +56,10 @@ class FakeClearKnowledgeBase:
 
 class FakeRebuildKnowledgeBase:
     def __init__(self):
-        self.rebuild_calls = 0
+        self.rebuild_calls: list[str] = []
 
-    def rebuild_index(self) -> int:
-        self.rebuild_calls += 1
+    def rebuild_index(self, workspace_id: str = "") -> int:
+        self.rebuild_calls.append(workspace_id)
         return 7
 
 
@@ -246,12 +246,12 @@ def test_clear_workspace_documents_builds_catalog_only_kb_when_none_is_provided(
     assert result["message"] == "知识库已清空"
 
 
-def test_rebuild_index_documents_rebuilds_index_and_returns_result():
+def test_rebuild_index_documents_rebuilds_workspace_index_and_returns_result():
     kb = FakeRebuildKnowledgeBase()
 
-    result = rebuild_index_documents(kb=kb)
+    result = rebuild_index_documents(workspace_id="ws-a", kb=kb)
 
-    assert kb.rebuild_calls == 1
+    assert kb.rebuild_calls == ["ws-a"]
     assert result == {
         "total_docs": 7,
         "message": "索引已重建",

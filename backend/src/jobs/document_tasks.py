@@ -140,6 +140,7 @@ def clear_workspace_documents(
 
 def rebuild_index_documents(
     *,
+    workspace_id: str = "",
     job_id: str | None = None,
     kb: KnowledgeBase | None = None,
 ) -> dict:
@@ -150,7 +151,7 @@ def rebuild_index_documents(
             progress={"phase": "rebuilding", "percent": 50, "message": "正在重建索引"},
         )
 
-    total_docs = knowledge_base.rebuild_index()
+    total_docs = knowledge_base.rebuild_index(workspace_id=workspace_id)
     return {
         "total_docs": total_docs,
         "message": "索引已重建",

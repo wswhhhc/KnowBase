@@ -475,7 +475,7 @@ async def rebuild_index(
             target_path="src.jobs.document_tasks:rebuild_index_documents",
             created_by_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
             workspace_id=workspace_id,
-            kwargs={},
+            kwargs={"workspace_id": workspace_id},
             inject_job_id=True,
         )
         return JobCreateResponse(job_id=job["id"], job=job)
