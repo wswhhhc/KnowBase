@@ -12,7 +12,7 @@ from typing import Callable
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 
-from src.api.deps import _security, verify_api_key
+from src.api.deps import _security
 from src.config.runtime_overrides import get_runtime_setting
 
 
@@ -75,9 +75,6 @@ def create_rate_limit_dependency(
         request: Request,
         credentials: HTTPAuthorizationCredentials | None = Depends(_security),
     ) -> None:
-        # Preserve the existing auth behavior and return 401 before 429 for bad tokens.
-        verify_api_key(credentials)
-
         limit = int(get_runtime_setting(setting_key, default_limit))
         if limit <= 0:
             return

@@ -56,6 +56,8 @@ def get_current_user_or_legacy_api_key(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     if api_key and credentials.credentials == api_key:
         return None
+    if api_key and not settings.auth.jwt_secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key")
     return _current_user_from_access_token(credentials.credentials)
 
 
@@ -75,7 +77,8 @@ def require_admin_or_legacy_api_key(
     return current_user
 
 
-def _require_workspace_role(current_user: dict | None, workspace_id: str, minimum_role: str) -> dict | None:
+def authorize_workspace_role(current_user: dict | None, workspace_id: str, minimum_role: str) -> dict | None:
+    """Require a workspace role for JWT users; allow legacy API-key/local-dev callers."""
     if current_user is None:
         return None
     if current_user.get("role") == "admin":
@@ -93,14 +96,14 @@ def require_workspace_viewer(
     current_user: Annotated[dict | None, Depends(get_current_user_or_legacy_api_key)],
     workspace_id: str = "",
 ) -> dict | None:
-    return _require_workspace_role(current_user, workspace_id, "viewer")
+    return authorize_workspace_role(current_user, workspace_id, "viewer")
 
 
 def require_workspace_editor(
     current_user: Annotated[dict | None, Depends(get_current_user_or_legacy_api_key)],
     workspace_id: str = "",
 ) -> dict | None:
-    return _require_workspace_role(current_user, workspace_id, "editor")
+    return authorize_workspace_role(current_user, workspace_id, "editor")
 
 
 @lru_cache(maxsize=1)
