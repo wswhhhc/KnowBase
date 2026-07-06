@@ -1,5 +1,7 @@
 import { req } from '@/shared/api/client'
-import type { Workspace } from '@/shared/api/types'
+import type { Workspace, WorkspaceMember, WorkspaceMembersUpdate } from '@/shared/api/types'
+
+const authHeader = (accessToken: string) => ({ Authorization: `Bearer ${accessToken}` })
 
 export const getWorkspaces = () => req<Workspace[]>('/workspaces')
 
@@ -17,3 +19,19 @@ export const renameWorkspace = (id: string, name: string) =>
 
 export const deleteWorkspace = (id: string) =>
   req(`/workspaces/${id}`, { method: 'DELETE' })
+
+export const getWorkspaceMembers = (accessToken: string, workspaceId: string) =>
+  req<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`, {
+    headers: authHeader(accessToken),
+  })
+
+export const replaceWorkspaceMembers = (
+  accessToken: string,
+  workspaceId: string,
+  body: WorkspaceMembersUpdate,
+) =>
+  req<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`, {
+    method: 'PUT',
+    headers: authHeader(accessToken),
+    body: JSON.stringify(body),
+  })

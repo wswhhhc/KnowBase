@@ -12,6 +12,9 @@ from src.persistence.auth_repository import (
     revoke_refresh_token_with_session,
     update_user_with_session,
     delete_user_with_session,
+    get_workspace_member_role_with_session,
+    list_workspace_members_with_session,
+    replace_workspace_members_with_session,
 )
 from src.persistence.schema import metadata
 from src.persistence.sqlalchemy_database import create_engine_for_url
@@ -90,3 +93,37 @@ def test_sqlalchemy_list_update_and_delete_user():
     assert stored["is_active"] is False
     assert deleted is True
     assert get_user_by_id_with_session(session_factory, user["id"]) is None
+
+
+def test_sqlalchemy_replace_and_list_workspace_members():
+    session_factory = _session_factory()
+    editor = create_user_with_session(session_factory, username="editor", password_hash="hash", role="editor")
+    viewer = create_user_with_session(session_factory, username="viewer", password_hash="hash", role="viewer")
+
+    members = replace_workspace_members_with_session(
+        session_factory,
+        workspace_id="ws-a",
+        members=[
+            {"user_id": editor["id"], "role": "editor"},
+            {"user_id": viewer["id"], "role": "viewer"},
+        ],
+    )
+    role = get_workspace_member_role_with_session(
+        session_factory,
+        workspace_id="ws-a",
+        user_id=editor["id"],
+    )
+
+    assert [member["username"] for member in members] == ["editor", "viewer"]
+    assert [member["role"] for member in members] == ["editor", "viewer"]
+    assert role == "editor"
+
+    replaced = replace_workspace_members_with_session(
+        session_factory,
+        workspace_id="ws-a",
+        members=[{"user_id": viewer["id"], "role": "editor"}],
+    )
+
+    assert replaced == list_workspace_members_with_session(session_factory, "ws-a")
+    assert len(replaced) == 1
+    assert replaced[0]["user_id"] == viewer["id"]

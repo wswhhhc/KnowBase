@@ -57,6 +57,26 @@ def delete_user(user_id: str) -> bool:
     return auth_repository.delete_user_with_session(_session_factory(), user_id)
 
 
+def list_workspace_members(workspace_id: str) -> list[dict]:
+    return auth_repository.list_workspace_members_with_session(_session_factory(), workspace_id)
+
+
+def get_workspace_member_role(*, workspace_id: str, user_id: str) -> str | None:
+    return auth_repository.get_workspace_member_role_with_session(
+        _session_factory(),
+        workspace_id=workspace_id,
+        user_id=user_id,
+    )
+
+
+def replace_workspace_members(*, workspace_id: str, members: list[dict]) -> list[dict]:
+    return auth_repository.replace_workspace_members_with_session(
+        _session_factory(),
+        workspace_id=workspace_id,
+        members=members,
+    )
+
+
 def create_refresh_token(*, user_id: str, token_hash: str) -> dict:
     expires_at = (datetime.now(UTC) + timedelta(days=settings.auth.refresh_token_days)).isoformat()
     return auth_repository.create_refresh_token_with_session(

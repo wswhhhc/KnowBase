@@ -60,6 +60,24 @@ class AdminUserUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class WorkspaceMemberIn(BaseModel):
+    user_id: str = Field(..., min_length=1)
+    role: str = Field(..., pattern="^(admin|editor|viewer)$")
+
+
+class WorkspaceMembersUpdate(BaseModel):
+    members: list[WorkspaceMemberIn] = Field(default_factory=list)
+
+
+class WorkspaceMemberOut(BaseModel):
+    id: int
+    workspace_id: str
+    user_id: str
+    username: str
+    role: str
+    created_at: str
+
+
 class ChatSource(BaseModel):
     source: str
     chunk_id: str | None = None
