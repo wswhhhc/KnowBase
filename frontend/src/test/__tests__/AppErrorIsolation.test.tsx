@@ -43,6 +43,8 @@ vi.mock('@/hooks/useChat', () => ({
 describe('App error isolation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    localStorage.setItem('knowbase_api_key', 'legacy-key')
     window.matchMedia = ((query: string) => ({
       matches: query === '(max-width: 767px)',
       media: query,

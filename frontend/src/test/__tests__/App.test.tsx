@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import App from '@/app/App'
 
+const mockLogin = vi.fn()
+
 const mockChat = {
   messages: [],
   isStreaming: false,
@@ -72,10 +74,14 @@ vi.mock('@/hooks/useData', () => ({
 vi.mock('@/hooks/useTheme', () => ({
   useTheme: () => ({ theme: 'dark', toggle: vi.fn() }),
 }))
+vi.mock('@/shared/api/auth', () => ({
+  login: (...args: unknown[]) => mockLogin(...args),
+}))
 
 describe('App component', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     sessionStorage.clear()
     mockChat.workspaceId = ''
     Object.defineProperty(window, 'matchMedia', {
@@ -93,13 +99,49 @@ describe('App component', () => {
     })
   })
 
-  it('renders Sidebar and ChatArea by default', async () => {
+  it('shows login page when no JWT session or legacy API key exists', () => {
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: 'KnowBase' })).toBeInTheDocument()
+    expect(screen.getByLabelText('用户名')).toBeInTheDocument()
+    expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument()
+  })
+
+  it('logs in and renders the workspace shell', async () => {
+    mockLogin.mockResolvedValue({
+      access_token: 'access-token',
+      refresh_token: 'refresh-token',
+      token_type: 'bearer',
+      expires_in: 1800,
+      user: {
+        id: 'user-1',
+        username: 'admin',
+        role: 'admin',
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    })
+
+    render(<App />)
+
+    await userEvent.type(screen.getByLabelText('用户名'), 'admin')
+    await userEvent.type(screen.getByLabelText('密码'), 'admin-pass')
+    await userEvent.click(screen.getByRole('button', { name: '登录' }))
+
+    expect(await screen.findByTestId('sidebar')).toBeInTheDocument()
+    expect(localStorage.getItem('knowbase_access_token')).toBe('access-token')
+  })
+
+  it('renders Sidebar and ChatArea when a legacy API key is configured', async () => {
+    localStorage.setItem('knowbase_api_key', 'legacy-key')
     render(<App />)
     expect(screen.getByTestId('sidebar')).toBeInTheDocument()
     expect(await screen.findByTestId('chatarea')).toBeInTheDocument()
   })
 
   it('clears chat state and refreshes workspace-scoped props when the workspace changes', async () => {
+    localStorage.setItem('knowbase_api_key', 'legacy-key')
     render(<App />)
 
     expect(await screen.findByTestId('chatarea')).toBeInTheDocument()
@@ -116,6 +158,7 @@ describe('App component', () => {
   })
 
   it('dispatches the upload trigger when the mobile FAB is clicked on the browser view', async () => {
+    localStorage.setItem('knowbase_api_key', 'legacy-key')
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       value: (query: string) => ({
@@ -144,6 +187,7 @@ describe('App component', () => {
   })
 
   it('hides the mobile upload FAB outside the browser view', async () => {
+    localStorage.setItem('knowbase_api_key', 'legacy-key')
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       value: (query: string) => ({
@@ -162,5 +206,26 @@ describe('App component', () => {
 
     expect(await screen.findByTestId('chatarea')).toBeInTheDocument()
     expect(screen.queryByTitle('上传文档')).not.toBeInTheDocument()
+  })
+
+  it('logs out and returns to the login page', async () => {
+    localStorage.setItem('knowbase_access_token', 'access-token')
+    localStorage.setItem('knowbase_refresh_token', 'refresh-token')
+    localStorage.setItem('knowbase_auth_user', JSON.stringify({
+      id: 'user-1',
+      username: 'admin',
+      role: 'admin',
+      is_active: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }))
+
+    render(<App />)
+
+    expect(await screen.findByTestId('sidebar')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '退出登录' }))
+
+    expect(screen.getByLabelText('用户名')).toBeInTheDocument()
+    expect(localStorage.getItem('knowbase_access_token')).toBeNull()
   })
 })
