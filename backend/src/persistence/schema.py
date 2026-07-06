@@ -122,3 +122,26 @@ audit_logs = Table(
     Index("idx_audit_logs_actor_created", "actor_user_id", "created_at"),
 )
 
+jobs = Table(
+    "jobs",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("job_type", Text, nullable=False),
+    Column("status", Text, nullable=False),
+    Column("created_by_user_id", Text, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+    Column("workspace_id", Text, server_default=""),
+    Column("progress_json", Text, server_default="{}"),
+    Column("error", Text, server_default=""),
+    Column("attempts", Integer, server_default="0"),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    Column("started_at", Text, nullable=True),
+    Column("finished_at", Text, nullable=True),
+    CheckConstraint(
+        "status IN ('queued', 'running', 'succeeded', 'failed', 'canceled')",
+        name="ck_jobs_status",
+    ),
+    Index("idx_jobs_owner_created", "created_by_user_id", "created_at"),
+    Index("idx_jobs_status_created", "status", "created_at"),
+)
+
