@@ -33,6 +33,9 @@ vi.mock('@/shared/api', async () => {
     createAdminUser: vi.fn(),
     updateAdminUser: vi.fn(),
     deleteAdminUser: vi.fn(),
+    getWorkspaces: vi.fn(),
+    getWorkspaceMembers: vi.fn(),
+    replaceWorkspaceMembers: vi.fn(),
   }
 })
 
@@ -65,9 +68,17 @@ describe('SettingsPage', () => {
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
       },
+      {
+        id: 'user-2',
+        username: 'viewer',
+        role: 'viewer',
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
     ])
     vi.mocked(api.createAdminUser).mockResolvedValue({
-      id: 'user-2',
+      id: 'user-3',
       username: 'editor',
       role: 'editor',
       is_active: true,
@@ -83,6 +94,20 @@ describe('SettingsPage', () => {
       updated_at: '2026-01-01T00:00:00Z',
     }))
     vi.mocked(api.deleteAdminUser).mockResolvedValue({} as any)
+    vi.mocked(api.getWorkspaces).mockResolvedValue([
+      { id: 'ws-1', name: 'Alpha', description: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+    ])
+    vi.mocked(api.getWorkspaceMembers).mockResolvedValue([])
+    vi.mocked(api.replaceWorkspaceMembers).mockImplementation(async (_token, workspaceId, body) =>
+      (body.members ?? []).map((member, index) => ({
+        id: index + 1,
+        workspace_id: workspaceId,
+        user_id: member.user_id,
+        username: member.user_id === 'user-2' ? 'viewer' : 'admin',
+        role: member.role,
+        created_at: '2026-01-01T00:00:00Z',
+      })),
+    )
   })
 
   it('shows provider information derived from current model settings', async () => {
@@ -189,7 +214,7 @@ describe('SettingsPage', () => {
 
     await waitFor(() => {
       expect(api.listAdminUsers).toHaveBeenCalled()
-      expect(screen.getByText('admin')).toBeInTheDocument()
+      expect(screen.getAllByText('admin').length).toBeGreaterThan(0)
     })
 
     await userEvent.type(screen.getByLabelText('新用户用户名'), 'editor')
@@ -219,6 +244,26 @@ describe('SettingsPage', () => {
 
     await waitFor(() => {
       expect(api.updateAdminUser).toHaveBeenCalledWith(undefined, 'user-1', { role: 'viewer' })
+    })
+  })
+
+  it('adds and saves workspace members', async () => {
+    render(<SettingsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(api.getWorkspaceMembers).toHaveBeenCalledWith(undefined, 'ws-1')
+      expect(screen.getByText('当前工作区暂无授权成员')).toBeInTheDocument()
+    })
+
+    await userEvent.selectOptions(screen.getByLabelText('添加工作区成员'), 'user-2')
+    await userEvent.click(screen.getByRole('button', { name: '添加成员' }))
+    await userEvent.selectOptions(screen.getByLabelText('viewer 工作区角色'), 'editor')
+    await userEvent.click(screen.getByRole('button', { name: '保存授权' }))
+
+    await waitFor(() => {
+      expect(api.replaceWorkspaceMembers).toHaveBeenCalledWith(undefined, 'ws-1', {
+        members: [{ user_id: 'user-2', role: 'editor' }],
+      })
     })
   })
 })
