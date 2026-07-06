@@ -76,6 +76,7 @@ class AuthSettings(BaseModel):
 class StorageSettings(BaseModel):
     """Layered view for local persistence paths."""
 
+    database_url: str
     chroma_persist_dir: Path
     data_dir: Path
     checkpoint_db_path: str
@@ -109,6 +110,10 @@ class Settings(BaseSettings):
         validation_alias="CHROMA_PERSIST_DIR",
     )
     data_dir: Path = Field(default=LOCAL_RUNTIME_DIR, validation_alias="DATA_DIR")
+    database_url: str = Field(
+        default=f"sqlite:///{LOCAL_RUNTIME_DIR / 'conversations.db'}",
+        validation_alias="DATABASE_URL",
+    )
 
     enable_contextual_retrieval: bool = Field(default=True, validation_alias="ENABLE_CONTEXTUAL_RETRIEVAL")
     chunk_size: int = Field(default=1500, validation_alias="CHUNK_SIZE")
@@ -162,6 +167,18 @@ class Settings(BaseSettings):
         path = Path(value)
         resolved = path if path.is_absolute() else ROOT_DIR / path
         return str(resolved)
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _resolve_database_url(cls, value: str) -> str:
+        if not value.startswith("sqlite:///"):
+            return value
+        sqlite_path = value.removeprefix("sqlite:///")
+        if sqlite_path == ":memory:":
+            return value
+        path = Path(sqlite_path)
+        resolved = path if path.is_absolute() else ROOT_DIR / path
+        return f"sqlite:///{resolved}"
 
     @field_validator(
         "chunk_size",
@@ -238,6 +255,7 @@ class Settings(BaseSettings):
     @property
     def storage(self) -> StorageSettings:
         return StorageSettings(
+            database_url=self.database_url,
             chroma_persist_dir=self.chroma_persist_dir,
             data_dir=self.data_dir,
             checkpoint_db_path=self.checkpoint_db_path,

@@ -1,20 +1,20 @@
-"""Alembic environment config for conversations.db (raw SQL, no SQLAlchemy models)."""
+"""Alembic environment config for KnowBase persistence."""
 
 from logging.config import fileConfig
-from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from src.config.settings import settings
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-if not config.get_main_option("sqlalchemy.url"):
-    repo_root = Path(__file__).resolve().parents[2]
-    default_db_path = repo_root / "runtime" / "local" / "conversations.db"
-    config.set_main_option("sqlalchemy.url", f"sqlite:///{default_db_path}")
+configured_url = config.get_main_option("sqlalchemy.url")
+if not configured_url or configured_url == "sqlite:///../runtime/local/conversations.db":
+    config.set_main_option("sqlalchemy.url", settings.storage.database_url)
 
 target_metadata = None
 
