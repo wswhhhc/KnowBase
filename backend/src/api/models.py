@@ -78,6 +78,27 @@ class WorkspaceMemberOut(BaseModel):
     created_at: str
 
 
+class JobProgress(BaseModel):
+    phase: str = ""
+    percent: int = Field(default=0, ge=0, le=100)
+    message: str = ""
+
+
+class JobOut(BaseModel):
+    id: str
+    job_type: str
+    status: str = Field(..., pattern="^(queued|running|succeeded|failed|canceled)$")
+    created_by_user_id: str | None = None
+    workspace_id: str = ""
+    progress: JobProgress = Field(default_factory=JobProgress)
+    error: str = ""
+    attempts: int = 0
+    created_at: str
+    updated_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
 class ChatSource(BaseModel):
     source: str
     chunk_id: str | None = None
