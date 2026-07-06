@@ -103,19 +103,21 @@ class SaveUploadedFileTests(unittest.TestCase):
 
     def _make_fastapi_file(self):
         """Create a mock FastAPI UploadFile (has .file.read(), no getbuffer)."""
-        m = MagicMock(spec=["file", "filename", "size"])
+        m = MagicMock(spec=["file", "filename", "size", "content_type"])
         m.file = MagicMock()
         m.file.read.side_effect = [b"fastapi content", b""]  # streaming read
         m.filename = "doc.md"
         m.size = 200
+        m.content_type = "text/markdown"
         return m
 
-    def _make_unnamed_file(self, filename="virus.exe", size=100):
+    def _make_unnamed_file(self, filename="virus.exe", size=100, content_type=None):
         """Create a mock file with no getbuffer (for validation-only tests)."""
-        m = MagicMock(spec=["filename", "size", "file"])
+        m = MagicMock(spec=["filename", "size", "file", "content_type"])
         m.filename = filename
         m.size = size
         m.file = MagicMock()
+        m.content_type = content_type
         return m
 
     @patch("pathlib.Path.mkdir")
@@ -159,6 +161,28 @@ class SaveUploadedFileTests(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             save_uploaded_file(mock_file)
         self.assertIn("仅支持", str(ctx.exception))
+
+    def test_validate_upload_accepts_matching_content_type(self):
+        """Matching extension and MIME type pass upload validation."""
+        mock_file = self._make_unnamed_file(
+            filename="report.pdf",
+            size=100,
+            content_type="application/pdf; charset=binary",
+        )
+
+        self.assertEqual(validate_upload(mock_file), "report.pdf")
+
+    def test_validate_upload_rejects_mismatched_content_type(self):
+        """Mismatched extension and MIME type are rejected."""
+        mock_file = self._make_unnamed_file(
+            filename="report.pdf",
+            size=100,
+            content_type="text/plain",
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            validate_upload(mock_file)
+        self.assertIn("文件类型", str(ctx.exception))
 
     @patch("pathlib.Path.mkdir")
     @patch("builtins.open", new_callable=MagicMock)
