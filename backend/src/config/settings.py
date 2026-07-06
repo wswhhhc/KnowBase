@@ -85,6 +85,13 @@ class StorageSettings(BaseModel):
     checkpoint_db_path: str
 
 
+class JobQueueSettings(BaseModel):
+    """Layered view for Redis/RQ background job configuration."""
+
+    redis_url: str
+    queue_name: str
+
+
 class Settings(BaseSettings):
     """Runtime settings loaded from environment variables and .env."""
 
@@ -146,6 +153,9 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(default="", validation_alias="JWT_SECRET")
     access_token_minutes: int = Field(default=15, validation_alias="ACCESS_TOKEN_MINUTES")
     refresh_token_days: int = Field(default=14, validation_alias="REFRESH_TOKEN_DAYS")
+
+    redis_url: str = Field(default="redis://localhost:6379/0", validation_alias="REDIS_URL")
+    job_queue_name: str = Field(default="knowbase", validation_alias="JOB_QUEUE_NAME")
 
     chat_stream_rate_limit_per_minute: int = Field(
         default=12,
@@ -273,6 +283,10 @@ class Settings(BaseSettings):
             data_dir=self.data_dir,
             checkpoint_db_path=self.checkpoint_db_path,
         )
+
+    @property
+    def job_queue(self) -> JobQueueSettings:
+        return JobQueueSettings(redis_url=self.redis_url, queue_name=self.job_queue_name)
 
 
 settings = Settings()
