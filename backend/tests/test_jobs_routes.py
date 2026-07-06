@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -196,6 +198,73 @@ def test_user_can_cancel_own_queued_job(isolated_jobs_database):
     cancel_event = next(event for event in audit_events if event["action"] == "job.canceled")
     assert cancel_event["target_id"] == editor_job["id"]
     assert cancel_event["metadata"] == {"job_type": "ingest_url", "workspace_id": "ws-a"}
+
+
+def test_cancel_queued_file_upload_job_removes_upload_temp_file(isolated_jobs_database):
+    users = _seed_users()
+    auth_store.replace_workspace_members(
+        workspace_id="ws-a",
+        members=[{"user_id": users["editor"]["id"], "role": "editor"}],
+    )
+    upload_dir = Path(tempfile.gettempdir()) / "knowbase_uploads"
+    upload_dir.mkdir(exist_ok=True)
+    upload_path = upload_dir / "queued-cancel-upload.txt"
+    upload_path.write_text("pending upload", encoding="utf-8")
+    editor_job = job_store.create_job(
+        job_type="ingest_file",
+        created_by_user_id=users["editor"]["id"],
+        workspace_id="ws-a",
+        progress={
+            "_retry": {
+                "target_path": "src.jobs.document_tasks:ingest_file_document",
+                "kwargs": {"file_path": str(upload_path)},
+            }
+        },
+    )
+    client = TestClient(app)
+    editor_token = _login(client, "editor", "editor-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        response = client.post(
+            f"/api/jobs/{editor_job['id']}/cancel",
+            headers={"Authorization": f"Bearer {editor_token}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "canceled"
+    assert not upload_path.exists()
+
+
+def test_cancel_file_upload_job_does_not_remove_paths_outside_upload_temp(isolated_jobs_database, tmp_path):
+    users = _seed_users()
+    auth_store.replace_workspace_members(
+        workspace_id="ws-a",
+        members=[{"user_id": users["editor"]["id"], "role": "editor"}],
+    )
+    unrelated_path = tmp_path / "must-stay.txt"
+    unrelated_path.write_text("not an upload temp file", encoding="utf-8")
+    editor_job = job_store.create_job(
+        job_type="ingest_file",
+        created_by_user_id=users["editor"]["id"],
+        workspace_id="ws-a",
+        progress={
+            "_retry": {
+                "target_path": "src.jobs.document_tasks:ingest_file_document",
+                "kwargs": {"file_path": str(unrelated_path)},
+            }
+        },
+    )
+    client = TestClient(app)
+    editor_token = _login(client, "editor", "editor-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        response = client.post(
+            f"/api/jobs/{editor_job['id']}/cancel",
+            headers={"Authorization": f"Bearer {editor_token}"},
+        )
+
+    assert response.status_code == 200
+    assert unrelated_path.exists()
 
 
 def test_cancel_finished_job_returns_conflict(isolated_jobs_database):

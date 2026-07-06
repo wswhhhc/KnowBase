@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.api.deps import authorize_workspace_role, get_current_user_or_legacy_api_key, get_knowledge_base
@@ -12,6 +15,7 @@ from src.persistence import audit_store, job_store
 
 router = APIRouter()
 _KB_MUTATION_JOB_TYPES = {"ingest_file", "ingest_url", "clear_workspace", "rebuild_index"}
+_UPLOAD_TEMP_DIR = Path(tempfile.gettempdir()) / "knowbase_uploads"
 
 
 def _is_admin_or_legacy(current_user: dict | None) -> bool:
@@ -49,6 +53,31 @@ def _invalidate_kb_cache_after_successful_mutation(job: dict) -> None:
         get_knowledge_base.cache_clear()
 
 
+def _cleanup_queued_upload_temp_file(job: dict) -> None:
+    if job.get("status") != "queued" or job.get("job_type") != "ingest_file":
+        return
+    retry_payload = job.get("progress", {}).get("_retry")
+    if not isinstance(retry_payload, dict):
+        return
+    kwargs = retry_payload.get("kwargs")
+    if not isinstance(kwargs, dict):
+        return
+    raw_file_path = kwargs.get("file_path")
+    if not isinstance(raw_file_path, str) or not raw_file_path.strip():
+        return
+    try:
+        upload_root = _UPLOAD_TEMP_DIR.resolve()
+        file_path = Path(raw_file_path).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return
+    if upload_root != file_path and upload_root not in file_path.parents:
+        return
+    try:
+        file_path.unlink(missing_ok=True)
+    except OSError:
+        return
+
+
 @router.get("")
 async def list_jobs(
     current_user: dict | None = Depends(get_current_user_or_legacy_api_key),
@@ -80,6 +109,8 @@ async def cancel_job(
     canceled = job_store.cancel_job(job_id)
     if canceled is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    if canceled.get("status") == "canceled":
+        _cleanup_queued_upload_temp_file(job)
     if job["status"] != "canceled":
         audit_store.record_event(
             action="job.canceled",
