@@ -56,6 +56,9 @@ async def cancel_job(
     current_user: dict | None = Depends(get_current_user_or_legacy_api_key),
 ) -> JobOut:
     job = _visible_job_or_404(job_id, current_user)
+    workspace_id = str(job.get("workspace_id") or "")
+    if workspace_id and not _is_admin_or_legacy(current_user):
+        authorize_workspace_role(current_user, workspace_id, "editor")
     if job["status"] not in {"queued", "running", "canceled"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="任务已结束，无法取消")
     canceled = job_store.cancel_job(job_id)

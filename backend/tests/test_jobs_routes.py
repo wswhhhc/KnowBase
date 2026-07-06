@@ -125,6 +125,10 @@ def test_user_cannot_get_another_users_job(isolated_jobs_database):
 
 def test_user_can_cancel_own_queued_job(isolated_jobs_database):
     users = _seed_users()
+    auth_store.replace_workspace_members(
+        workspace_id="ws-a",
+        members=[{"user_id": users["editor"]["id"], "role": "editor"}],
+    )
     editor_job = job_store.create_job(
         job_type="ingest_url",
         created_by_user_id=users["editor"]["id"],
@@ -165,6 +169,26 @@ def test_cancel_finished_job_returns_conflict(isolated_jobs_database):
         )
 
     assert response.status_code == 409
+
+
+def test_user_cannot_cancel_own_workspace_job_without_current_editor_role(isolated_jobs_database):
+    users = _seed_users()
+    editor_job = job_store.create_job(
+        job_type="clear_workspace",
+        created_by_user_id=users["editor"]["id"],
+        workspace_id="ws-a",
+    )
+    client = TestClient(app)
+    editor_token = _login(client, "editor", "editor-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        response = client.post(
+            f"/api/jobs/{editor_job['id']}/cancel",
+            headers={"Authorization": f"Bearer {editor_token}"},
+        )
+
+    assert response.status_code == 403
+    assert job_store.get_job(editor_job["id"])["status"] == "queued"
 
 
 def test_user_can_retry_own_failed_url_job(isolated_jobs_database):
