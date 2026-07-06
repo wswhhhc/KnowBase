@@ -92,6 +92,8 @@ Docker 开发环境：
 docker compose up --build
 ```
 
+Compose 会同时启动一个本地 Postgres 服务，供准生产团队版迁移使用；当前默认业务数据仍写入 `runtime/local/conversations.db`，直到 repository 层迁移完成并显式设置 `DATABASE_URL`。
+
 前端默认地址为 [http://localhost:5173](http://localhost:5173)。
 
 ## 质量门禁

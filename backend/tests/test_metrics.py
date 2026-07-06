@@ -50,7 +50,7 @@ class MetricsDashboardTests(unittest.TestCase):
         self.assertEqual(metrics.quality_fail_rate(df, recent_n=2), 0.0)
         self.assertEqual(metrics.quality_fail_rate(df, recent_n=3), 33.333333333333336)
 
-    @patch("src.api.routes.metrics.message_repository.list_assistant_debug_pairs")
+    @patch("src.api.routes.metrics.message_store.list_assistant_debug_pairs")
     def test_apply_debug_web_search_flags_overrides_stale_log_values(self, mock_pairs):
         records = [
             QueryLogEntry(

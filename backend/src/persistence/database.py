@@ -7,7 +7,9 @@ import sqlite3
 from pathlib import Path
 
 from src.config.constants import DATA_DIR
+from src.config.settings import settings
 from src.persistence import workspace_repository
+from src.persistence.sqlalchemy_database import get_session_factory, is_postgres_url
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,7 @@ def run_migrations() -> None:
 
     try:
         alembic_cfg = Config(str(ini_path))
-        alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{current_db}")
+        alembic_cfg.set_main_option("sqlalchemy.url", settings.storage.database_url)
         command.upgrade(alembic_cfg, "head")
     except Exception as exc:
         logger.warning("Alembic migration failed: %s", exc)
@@ -67,6 +69,12 @@ def run_migrations() -> None:
 def init_db() -> None:
     """Create tables if they don't exist, then ensure default workspace."""
     run_migrations()
+    if is_postgres_url(settings.storage.database_url):
+        workspace_repository.ensure_default_workspace_with_session(
+            get_session_factory(settings.storage.database_url)
+        )
+        return
+
     conn = get_connection()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS workspaces (

@@ -7,10 +7,154 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Callable
 
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session, sessionmaker
+
+from src.persistence.schema import conversations, messages
+
 
 ConnectionFactory = Callable[[], sqlite3.Connection]
 ConversationGetter = Callable[[str], dict | None]
 MessageGetter = Callable[[str], list[dict]]
+SessionFactory = sessionmaker[Session]
+
+
+def _parse_message_mapping(row) -> dict:
+    msg = dict(row)
+    try:
+        raw = json.loads(msg["sources"]) if msg["sources"] else []
+        for source in raw:
+            for key in ("chunk_index", "page", "score"):
+                if key in source and source[key] == "":
+                    source[key] = None
+        msg["sources"] = raw
+    except (json.JSONDecodeError, TypeError):
+        msg["sources"] = []
+    try:
+        msg["debug_info"] = json.loads(msg.get("debug_info", "{}"))
+    except (json.JSONDecodeError, TypeError):
+        msg["debug_info"] = {}
+    return msg
+
+
+def add_message_with_session(
+    session_factory: SessionFactory,
+    conv_id: str,
+    role: str,
+    content: str,
+    sources: list | None = None,
+    quality_reason: str = "",
+    debug_info: str = "{}",
+) -> int:
+    now = datetime.now(UTC).isoformat()
+    with session_factory.begin() as session:
+        result = session.execute(
+            messages.insert().values(
+                conversation_id=conv_id,
+                role=role,
+                content=content,
+                sources=json.dumps(sources or [], ensure_ascii=False),
+                quality_reason=quality_reason,
+                debug_info=debug_info,
+                created_at=now,
+            )
+        )
+        session.execute(
+            update(conversations)
+            .where(conversations.c.id == conv_id)
+            .values(updated_at=now)
+        )
+    return int(result.inserted_primary_key[0])
+
+
+def get_messages_with_session(session_factory: SessionFactory, conv_id: str) -> list[dict]:
+    with session_factory() as session:
+        rows = session.execute(
+            select(
+                messages.c.id,
+                messages.c.role,
+                messages.c.content,
+                messages.c.sources,
+                messages.c.quality_reason,
+                messages.c.debug_info,
+                messages.c.feedback,
+                messages.c.created_at,
+            )
+            .where(messages.c.conversation_id == conv_id)
+            .order_by(messages.c.id)
+        ).mappings().all()
+    return [_parse_message_mapping(row) for row in rows]
+
+
+def list_assistant_debug_pairs_with_session(session_factory: SessionFactory) -> list[dict]:
+    with session_factory() as session:
+        rows = session.execute(
+            select(
+                conversations.c.thread_id,
+                messages.c.role,
+                messages.c.content,
+                messages.c.debug_info,
+                messages.c.created_at,
+            )
+            .select_from(messages.join(conversations, conversations.c.id == messages.c.conversation_id))
+            .order_by(conversations.c.thread_id, messages.c.id)
+        ).mappings().all()
+
+    pairs: list[dict] = []
+    pending_user_by_thread: dict[str, str | None] = {}
+    for row in rows:
+        thread_id = row["thread_id"]
+        role = row["role"]
+        if role == "user":
+            pending_user_by_thread[thread_id] = row["content"]
+            continue
+        if role != "assistant":
+            continue
+
+        question = pending_user_by_thread.get(thread_id)
+        if question is None:
+            continue
+
+        try:
+            debug_info = json.loads(row["debug_info"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            debug_info = {}
+
+        pairs.append({
+            "thread_id": thread_id,
+            "question": question[:100],
+            "debug_info": debug_info,
+            "created_at": row["created_at"],
+        })
+        pending_user_by_thread[thread_id] = None
+
+    return pairs
+
+
+def update_feedback_with_session(
+    session_factory: SessionFactory,
+    msg_row_id: int,
+    feedback: str,
+    conv_id: str | None = None,
+    category: str | None = None,
+    detail: str | None = None,
+) -> bool:
+    with session_factory.begin() as session:
+        if conv_id:
+            row = session.execute(
+                select(messages.c.id).where(
+                    messages.c.id == msg_row_id,
+                    messages.c.conversation_id == conv_id,
+                )
+            ).first()
+            if not row:
+                return False
+        result = session.execute(
+            update(messages)
+            .where(messages.c.id == msg_row_id)
+            .values(feedback=feedback, feedback_category=category, feedback_detail=detail)
+        )
+    return result.rowcount > 0
 
 
 def add_message(
@@ -48,21 +192,7 @@ def get_messages(get_conn: ConnectionFactory, conv_id: str) -> list[dict]:
     conn.close()
     result = []
     for r in rows:
-        msg = dict(r)
-        try:
-            raw = json.loads(msg["sources"]) if msg["sources"] else []
-            for source in raw:
-                for key in ("chunk_index", "page", "score"):
-                    if key in source and source[key] == "":
-                        source[key] = None
-            msg["sources"] = raw
-        except (json.JSONDecodeError, TypeError):
-            msg["sources"] = []
-        try:
-            msg["debug_info"] = json.loads(msg.get("debug_info", "{}"))
-        except (json.JSONDecodeError, TypeError):
-            msg["debug_info"] = {}
-        result.append(msg)
+        result.append(_parse_message_mapping(r))
     return result
 
 

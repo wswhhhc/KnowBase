@@ -16,10 +16,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("PRAGMA foreign_keys=OFF;")
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        op.execute("PRAGMA foreign_keys=OFF;")
 
     op.create_table("workspaces",
-        sa.Column("id", sa.Text(), nullable=False),
+        sa.Column("id", sa.Text(), primary_key=True, nullable=False),
         sa.Column("name", sa.Text(), nullable=False),
         sa.Column("description", sa.Text(), server_default=sa.text("''")),
         sa.Column("created_at", sa.Text(), nullable=False),
@@ -38,7 +40,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.Text(), nullable=False),
     )
     op.create_table("conversations",
-        sa.Column("id", sa.Text(), nullable=False),
+        sa.Column("id", sa.Text(), primary_key=True, nullable=False),
         sa.Column("thread_id", sa.Text(), nullable=False),
         sa.Column("title", sa.Text(), server_default=sa.text("'新对话'")),
         sa.Column("workspace_id", sa.Text(), server_default=sa.text("''")),
@@ -68,15 +70,19 @@ def upgrade() -> None:
     )
     op.create_index("idx_pinned_sources_thread", "pinned_sources", ["thread_id", "chunk_id"])
 
-    op.execute("PRAGMA foreign_keys=ON;")
+    if bind.dialect.name == "sqlite":
+        op.execute("PRAGMA foreign_keys=ON;")
 
 
 def downgrade() -> None:
-    op.execute("PRAGMA foreign_keys=OFF;")
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        op.execute("PRAGMA foreign_keys=OFF;")
     op.drop_table("pinned_sources")
     op.drop_index("idx_messages_conv", table_name="messages")
     op.drop_table("messages")
     op.drop_table("conversations")
     op.drop_table("bookmarks")
     op.drop_table("workspaces")
-    op.execute("PRAGMA foreign_keys=ON;")
+    if bind.dialect.name == "sqlite":
+        op.execute("PRAGMA foreign_keys=ON;")

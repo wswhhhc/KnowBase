@@ -12,8 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from src.api.deps import verify_api_key
 from src.api.models import QueryLogEntry, QueryLogsResponse
 from src.config.constants import DATA_DIR
-from src.persistence import message_repository
-from src.persistence.database import get_connection
+from src.persistence import message_store
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 _LOG_DIR = Path(DATA_DIR) / "rag_logs"
@@ -34,7 +33,7 @@ def _apply_debug_web_search_flags(records: list[QueryLogEntry]) -> list[QueryLog
         return records
 
     flags_by_key: dict[tuple[str, str], deque[bool]] = defaultdict(deque)
-    pairs = message_repository.list_assistant_debug_pairs(get_connection)
+    pairs = message_store.list_assistant_debug_pairs()
     for pair in sorted(pairs, key=lambda item: item["created_at"]):
         key = (pair["thread_id"], pair["question"])
         flags_by_key[key].append(bool(pair["debug_info"].get("used_web_search", False)))
