@@ -1,11 +1,24 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from src.api.main import app
 from tests.helpers import setup_test_env, teardown_test_env
+
+
+def _parse_sse_events(text: str) -> list[dict]:
+    events = []
+    current_event = "message"
+    for line in text.splitlines():
+        if line.startswith("event: "):
+            current_event = line[7:].strip()
+        elif line.startswith("data: "):
+            events.append({"event": current_event, "data": json.loads(line[6:])})
+            current_event = "message"
+    return events
 
 
 def _job_payload(job_id: str = "job-url-1") -> dict:
@@ -78,6 +91,62 @@ def test_upload_existing_source_probe_does_not_enqueue_job_and_removes_temp_file
     mock_enqueue.assert_not_called()
 
 
+def test_upload_stream_enqueues_job_and_streams_job_status_without_running_kb_import():
+    fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
+    queued_job = _job_payload("job-upload-stream-1")
+    queued_job["job_type"] = "ingest_file"
+    queued_job["workspace_id"] = "ws-a"
+    running_job = {**queued_job, "status": "running", "progress": {"phase": "embedding", "percent": 60}}
+    succeeded_job = {
+        **queued_job,
+        "status": "succeeded",
+        "progress": {
+            "phase": "done",
+            "percent": 100,
+            "result": {
+                "chunk_count": 2,
+                "total_docs": 5,
+                "message": "已添加 2 个新段落",
+                "suggested_questions": ["可以问什么？"],
+                "existing_version": False,
+            },
+        },
+    }
+    uploaded_path = None
+    try:
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
+            with patch("src.api.routes.documents.job_store.get_job", side_effect=[running_job, succeeded_job]):
+                with patch.object(fake_kb, "source_counts", return_value=[("upload.txt", 1)]):
+                    with patch.object(fake_kb, "ingest_file") as mock_ingest_file:
+                        response = client.post(
+                            "/api/documents/upload-stream?workspace_id=ws-a&version_mode=append",
+                            files={"file": ("upload.txt", b"hello", "text/plain")},
+                        )
+        call_kwargs = mock_enqueue.call_args.kwargs
+        uploaded_path = call_kwargs["kwargs"]["file_path"]
+    finally:
+        if uploaded_path:
+            from pathlib import Path
+            Path(uploaded_path).unlink(missing_ok=True)
+        teardown_test_env(tmp_dir, orig_db, patchers)
+
+    assert response.status_code == 200
+    events = _parse_sse_events(response.text)
+    assert events[0] == {"event": "progress", "data": {"phase": "embedding", "percent": 60}}
+    assert events[-1]["event"] == "done"
+    assert events[-1]["data"]["job_id"] == "job-upload-stream-1"
+    assert events[-1]["data"]["chunk_count"] == 2
+    assert events[-1]["data"]["suggested_questions"] == ["可以问什么？"]
+    assert events[-1]["data"]["existing_version"] is True
+    mock_ingest_file.assert_not_called()
+    assert call_kwargs["job_type"] == "ingest_file"
+    assert call_kwargs["target_path"] == "src.jobs.document_tasks:ingest_file_document"
+    assert call_kwargs["workspace_id"] == "ws-a"
+    assert call_kwargs["kwargs"]["source_name"] == "upload.txt"
+    assert call_kwargs["kwargs"]["version_mode"] == "append"
+    assert call_kwargs["inject_job_id"] is True
+
+
 def test_ingest_url_returns_queued_job_without_running_kb_import():
     fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
     try:
@@ -125,3 +194,54 @@ def test_ingest_url_existing_source_probe_does_not_enqueue_job():
     assert response.json()["existing_version"] is True
     assert response.json()["chunk_count"] == 0
     mock_enqueue.assert_not_called()
+
+
+def test_ingest_url_stream_enqueues_job_and_streams_job_status_without_running_kb_import():
+    fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
+    queued_job = _job_payload("job-url-stream-1")
+    running_job = {**queued_job, "status": "running", "progress": {"phase": "loading", "percent": 25}}
+    succeeded_job = {
+        **queued_job,
+        "status": "succeeded",
+        "progress": {
+            "phase": "done",
+            "percent": 100,
+            "result": {
+                "chunk_count": 1,
+                "total_docs": 3,
+                "message": "已添加 1 个新段落",
+                "suggested_questions": [],
+                "existing_version": False,
+            },
+        },
+    }
+    try:
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
+            with patch("src.api.routes.documents.job_store.get_job", side_effect=[running_job, succeeded_job]):
+                with patch.object(fake_kb, "ingest_url") as mock_ingest_url:
+                    response = client.post(
+                        "/api/documents/ingest-url-stream?workspace_id=ws-a&version_mode=append",
+                        json={"url": "https://example.com/page"},
+                    )
+    finally:
+        teardown_test_env(tmp_dir, orig_db, patchers)
+
+    assert response.status_code == 200
+    events = _parse_sse_events(response.text)
+    assert events[0] == {"event": "progress", "data": {"phase": "loading", "percent": 25}}
+    assert events[-1]["event"] == "done"
+    assert events[-1]["data"]["job_id"] == "job-url-stream-1"
+    assert events[-1]["data"]["chunk_count"] == 1
+    mock_ingest_url.assert_not_called()
+    mock_enqueue.assert_called_once_with(
+        job_type="ingest_url",
+        target_path="src.jobs.document_tasks:ingest_url_document",
+        created_by_user_id=None,
+        workspace_id="ws-a",
+        kwargs={
+            "url": "https://example.com/page",
+            "version_mode": "append",
+            "workspace_id": "ws-a",
+        },
+        inject_job_id=True,
+    )

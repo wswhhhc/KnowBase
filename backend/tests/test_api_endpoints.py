@@ -33,6 +33,23 @@ def _parse_sse_events(text: str) -> list[dict]:
     return events
 
 
+def _queued_job(job_id: str, job_type: str = "ingest_file") -> dict:
+    return {
+        "id": job_id,
+        "job_type": job_type,
+        "status": "queued",
+        "created_by_user_id": None,
+        "workspace_id": "",
+        "progress": {"phase": "queued", "percent": 0},
+        "error": "",
+        "attempts": 0,
+        "created_at": "2026-07-06T00:00:00+00:00",
+        "updated_at": "2026-07-06T00:00:00+00:00",
+        "started_at": None,
+        "finished_at": None,
+    }
+
+
 class FakeKnowledgeBase:
     """Minimal KB stub — no real Chroma/embeddings."""
 
@@ -532,19 +549,43 @@ class APIEndpointTests(unittest.TestCase):
         self.assertTrue(events[-1]["data"]["existing_version"])
 
     def test_upload_stream_returns_progress_and_done_events(self):
-        resp = self.client.post(
-            "/api/documents/upload-stream",
-            files={"file": ("fresh.txt", b"hello world", "text/plain")},
-        )
+        queued_job = _queued_job("job-upload-stream")
+        succeeded_job = {
+            **queued_job,
+            "status": "succeeded",
+            "progress": {
+                "phase": "done",
+                "percent": 100,
+                "result": {"chunk_count": 2, "total_docs": 2, "message": "已添加 2 个新段落"},
+            },
+        }
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job):
+            with patch("src.api.routes.documents.job_store.get_job", return_value=succeeded_job):
+                resp = self.client.post(
+                    "/api/documents/upload-stream",
+                    files={"file": ("fresh.txt", b"hello world", "text/plain")},
+                )
         self.assertEqual(resp.status_code, 200)
         self.assertIn("event: progress", resp.text)
         self.assertIn("event: done", resp.text)
 
     def test_upload_stream_emits_terminal_done_progress_before_done_event(self):
-        resp = self.client.post(
-            "/api/documents/upload-stream",
-            files={"file": ("fresh.txt", b"hello world", "text/plain")},
-        )
+        queued_job = _queued_job("job-upload-stream")
+        succeeded_job = {
+            **queued_job,
+            "status": "succeeded",
+            "progress": {
+                "phase": "done",
+                "percent": 100,
+                "result": {"chunk_count": 2, "total_docs": 2, "message": "已添加 2 个新段落"},
+            },
+        }
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job):
+            with patch("src.api.routes.documents.job_store.get_job", return_value=succeeded_job):
+                resp = self.client.post(
+                    "/api/documents/upload-stream",
+                    files={"file": ("fresh.txt", b"hello world", "text/plain")},
+                )
         self.assertEqual(resp.status_code, 200)
 
         events = _parse_sse_events(resp.text)
@@ -555,24 +596,27 @@ class APIEndpointTests(unittest.TestCase):
         self.assertEqual(events[-1]["event"], "done")
 
     def test_ingest_url_stream_passes_version_mode_to_backend(self):
-        calls: list[dict] = []
-
-        def _record_ingest(url, version_mode="replace", progress_callback=None, workspace_id=""):
-            calls.append({"url": url, "version_mode": version_mode})
-            if progress_callback:
-                progress_callback("loading", 25)
-                progress_callback("splitting", 50)
-                progress_callback("embedding", 75)
-            return 1
-
-        with patch.object(self.fake_kb, "ingest_url", side_effect=_record_ingest):
-            resp = self.client.post(
-                "/api/documents/ingest-url-stream?version_mode=append",
-                json={"url": "https://example.com/page"},
-            )
+        queued_job = _queued_job("job-url-stream", job_type="ingest_url")
+        succeeded_job = {
+            **queued_job,
+            "status": "succeeded",
+            "progress": {
+                "phase": "done",
+                "percent": 100,
+                "result": {"chunk_count": 1, "total_docs": 2, "message": "已添加 1 个新段落"},
+            },
+        }
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
+            with patch("src.api.routes.documents.job_store.get_job", return_value=succeeded_job):
+                with patch.object(self.fake_kb, "ingest_url") as mock_ingest_url:
+                    resp = self.client.post(
+                        "/api/documents/ingest-url-stream?version_mode=append",
+                        json={"url": "https://example.com/page"},
+                    )
 
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(calls, [{"url": "https://example.com/page", "version_mode": "append"}])
+        mock_ingest_url.assert_not_called()
+        self.assertEqual(mock_enqueue.call_args.kwargs["kwargs"]["version_mode"], "append")
 
     def test_delete_source_happy_path(self):
         resp = self.client.delete("/api/documents/source/existing.txt")
