@@ -77,9 +77,10 @@ export function isPermissionError(value: unknown): boolean {
 }
 
 export async function req<T>(url: string, init?: RequestInit): Promise<T> {
+  const { headers: initHeaders, ...restInit } = init ?? {}
   const res = await fetch(`${BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...init?.headers },
-    ...init,
+    ...restInit,
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...initHeaders },
   })
   if (!res.ok) {
     throw await createApiErrorFromResponse(res)

@@ -158,6 +158,12 @@ describe('ChatArea', () => {
     expect(screen.getByText('知识库')).toBeInTheDocument()
   })
 
+  it('hides the dashboard navigation pill when app management is unavailable', () => {
+    render(<ChatArea {...defaultProps} canManageApp={false} />)
+
+    expect(screen.queryByText('指标')).not.toBeInTheDocument()
+  })
+
   it('shows the current workspace summary in the header', () => {
     render(<ChatArea {...defaultProps} />)
 

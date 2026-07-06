@@ -24,6 +24,28 @@ describe('req helper (tested through public functions)', () => {
     expect(api.authHeaders()).toEqual({ Authorization: 'Bearer legacy-key' })
   })
 
+  it('req preserves computed auth headers when a wrapper passes headers: undefined', async () => {
+    localStorage.clear()
+    localStorage.setItem('knowbase_access_token', 'jwt-token')
+    const fn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+      text: () => Promise.resolve('[]'),
+      headers: new Headers(),
+    })
+    vi.stubGlobal('fetch', fn)
+
+    await api.listAdminUsers(undefined)
+
+    expect(fn).toHaveBeenCalledWith(
+      '/api/admin/users',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer jwt-token' }),
+      }),
+    )
+    vi.unstubAllGlobals()
+  })
+
   it('persists and clears auth session tokens', () => {
     localStorage.clear()
 

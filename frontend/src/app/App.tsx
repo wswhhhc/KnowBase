@@ -131,6 +131,7 @@ export default function App() {
           setSidebarOpen={setSidebarOpen}
           sidebarOpen={sidebarOpen}
           workspaceSummary={workspaceSummary}
+          canManageApp={capabilities.canManageApp}
           canManageKnowledgeBase={capabilities.canManageKnowledgeBase}
         />
 

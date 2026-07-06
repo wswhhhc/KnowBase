@@ -55,6 +55,7 @@ interface AppViewRendererProps {
   setSidebarOpen: (open: boolean) => void
   sidebarOpen: boolean
   workspaceSummary: WorkspaceSummary
+  canManageApp?: boolean
   canManageKnowledgeBase?: boolean
 }
 
@@ -80,6 +81,7 @@ export default function AppViewRenderer({
   setSidebarOpen,
   sidebarOpen,
   workspaceSummary,
+  canManageApp = true,
   canManageKnowledgeBase = true,
 }: AppViewRendererProps) {
   useEffect(() => {
@@ -117,6 +119,7 @@ export default function AppViewRenderer({
               onSendQuestion={handleSendQuestion}
               workspaceSummary={workspaceSummary}
               isMobile={isMobile}
+              canManageApp={canManageApp}
             />
           </Suspense>
         </ErrorBoundary>

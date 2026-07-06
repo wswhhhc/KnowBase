@@ -21,6 +21,7 @@ interface ChatPageProps {
   onSendQuestion?: (q: string) => void
   workspaceSummary: WorkspaceSummary
   isMobile?: boolean
+  canManageApp?: boolean
 }
 
 const STRATEGIES = [
@@ -43,7 +44,7 @@ const STRATEGY_DESC: Record<string, string> = {
   deep: '深度检索：扩检索+综合回答。需要全面覆盖时使用',
 }
 
-export default function ChatPage({ chat, onOpenSidebar, sidebarOpen, onNavigate, isLoadingMessages, onCitationClick, onSendQuestion, workspaceSummary, isMobile = false }: ChatPageProps) {
+export default function ChatPage({ chat, onOpenSidebar, sidebarOpen, onNavigate, isLoadingMessages, onCitationClick, onSendQuestion, workspaceSummary, isMobile = false, canManageApp = true }: ChatPageProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const strategyRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -175,10 +176,12 @@ export default function ChatPage({ chat, onOpenSidebar, sidebarOpen, onNavigate,
                 className="flex items-center gap-1 rounded-sm px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
                 <BookOpen className="h-3 w-3" />知识库
               </button>
-              <button onClick={() => onNavigate('dashboard')}
-                className="flex items-center gap-1 rounded-sm px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
-                <BarChart3 className="h-3 w-3" />指标
-              </button>
+              {canManageApp && (
+                <button onClick={() => onNavigate('dashboard')}
+                  className="flex items-center gap-1 rounded-sm px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+                  <BarChart3 className="h-3 w-3" />指标
+                </button>
+              )}
             </div>
 
           <div className="h-4 w-px bg-border hidden md:block" />
