@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.rate_limit import InMemoryRateLimiter
-from src.api.routes import auth, chat, conversations, documents, knowledge_base, metrics, workspaces, bookmarks, settings as settings_router
+from src.api.routes import admin_users, auth, chat, conversations, documents, knowledge_base, metrics, workspaces, bookmarks, settings as settings_router
 from src.api.deps import get_knowledge_base
 from src.config.runtime_overrides import _is_configured_api_key, get_runtime_setting
 from src.config.settings import settings
@@ -42,6 +42,7 @@ app.add_middleware(
 
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(admin_users.router, prefix="/api/admin", tags=["admin"])
 app.include_router(conversations.router, prefix="/api/conversations", tags=["conversations"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 app.include_router(knowledge_base.router, prefix="/api/knowledge-base", tags=["knowledge-base"])
