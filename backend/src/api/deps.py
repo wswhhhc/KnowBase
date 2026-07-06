@@ -15,7 +15,7 @@ from src.config.settings import settings
 from src.persistence import auth_store
 
 _security = HTTPBearer(auto_error=False)
-_WORKSPACE_ROLE_RANK = {"viewer": 1, "editor": 2, "admin": 3}
+_WORKSPACE_ROLE_RANK = {"viewer": 1, "editor": 2}
 
 
 def verify_api_key(credentials: HTTPAuthorizationCredentials | None = Depends(_security)) -> None:

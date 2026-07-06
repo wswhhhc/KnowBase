@@ -12,6 +12,7 @@ from src.persistence.schema import jobs, refresh_tokens, users, workspace_member
 
 
 SessionFactory = sessionmaker[Session]
+VALID_WORKSPACE_MEMBER_ROLES = {"editor", "viewer"}
 
 
 def _user_from_mapping(row) -> dict:
@@ -185,6 +186,9 @@ def replace_workspace_members_with_session(
     members: list[dict],
 ) -> list[dict]:
     now = datetime.now(UTC).isoformat()
+    invalid_roles = sorted({str(member.get("role") or "") for member in members} - VALID_WORKSPACE_MEMBER_ROLES)
+    if invalid_roles:
+        raise ValueError("invalid workspace member role")
     rows = [
         {
             "workspace_id": workspace_id,

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from src.rag.models import HotspotEntry, KBChunk
 
 WorkspaceRole = Literal["admin", "editor", "viewer"]
+WorkspaceMemberRole = Literal["editor", "viewer"]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
 
 
@@ -101,7 +102,7 @@ class AuditLogOut(BaseModel):
 
 class WorkspaceMemberIn(BaseModel):
     user_id: str = Field(..., min_length=1)
-    role: WorkspaceRole
+    role: WorkspaceMemberRole
 
 
 class WorkspaceMembersUpdate(BaseModel):
@@ -113,7 +114,7 @@ class WorkspaceMemberOut(BaseModel):
     workspace_id: str
     user_id: str
     username: str
-    role: WorkspaceRole
+    role: WorkspaceMemberRole
     created_at: str
 
 

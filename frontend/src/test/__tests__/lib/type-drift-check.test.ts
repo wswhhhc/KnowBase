@@ -14,6 +14,7 @@ import type {
   SettingsUpdateResult,
   Source,
   WorkspaceRole,
+  WorkspaceMemberRole,
 } from '@/shared/api'
 
 describe('api type contracts', () => {
@@ -100,9 +101,11 @@ describe('api type contracts', () => {
 
   it('team role and job status unions expose the准生产 contract values', () => {
     const roles: WorkspaceRole[] = ['admin', 'editor', 'viewer']
+    const workspaceMemberRoles: WorkspaceMemberRole[] = ['editor', 'viewer']
     const statuses: JobStatus[] = ['queued', 'running', 'succeeded', 'failed', 'canceled']
 
     expect(roles).toContain('editor')
+    expect(workspaceMemberRoles).not.toContain('admin')
     expect(statuses).toContain('failed')
   })
 })

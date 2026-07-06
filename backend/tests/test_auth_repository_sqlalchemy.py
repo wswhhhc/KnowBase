@@ -198,3 +198,21 @@ def test_sqlalchemy_replace_and_list_workspace_members():
     assert replaced == list_workspace_members_with_session(session_factory, "ws-a")
     assert len(replaced) == 1
     assert replaced[0]["user_id"] == viewer["id"]
+
+
+def test_sqlalchemy_replace_workspace_members_rejects_admin_workspace_role():
+    session_factory = _session_factory()
+    editor = create_user_with_session(session_factory, username="editor", password_hash="hash", role="editor")
+
+    try:
+        replace_workspace_members_with_session(
+            session_factory,
+            workspace_id="ws-a",
+            members=[{"user_id": editor["id"], "role": "admin"}],
+        )
+    except ValueError as exc:
+        assert "workspace member role" in str(exc)
+    else:
+        raise AssertionError("expected invalid workspace member role to be rejected")
+
+    assert list_workspace_members_with_session(session_factory, "ws-a") == []

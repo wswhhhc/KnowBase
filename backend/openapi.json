@@ -4801,7 +4801,6 @@
           "role": {
             "type": "string",
             "enum": [
-              "admin",
               "editor",
               "viewer"
             ],
@@ -4836,7 +4835,6 @@
           "role": {
             "type": "string",
             "enum": [
-              "admin",
               "editor",
               "viewer"
             ],

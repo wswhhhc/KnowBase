@@ -1569,7 +1569,7 @@ export interface components {
              * Role
              * @enum {string}
              */
-            role: "admin" | "editor" | "viewer";
+            role: "editor" | "viewer";
         };
         /** WorkspaceMemberOut */
         WorkspaceMemberOut: {
@@ -1585,7 +1585,7 @@ export interface components {
              * Role
              * @enum {string}
              */
-            role: "admin" | "editor" | "viewer";
+            role: "editor" | "viewer";
             /** Created At */
             created_at: string;
         };

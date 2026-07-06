@@ -93,7 +93,7 @@ workspace_members = Table(
     Column("user_id", Text, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
     Column("role", Text, nullable=False),
     Column("created_at", Text, nullable=False),
-    CheckConstraint("role IN ('admin', 'editor', 'viewer')", name="ck_workspace_members_role"),
+    CheckConstraint("role IN ('editor', 'viewer')", name="ck_workspace_members_role"),
     Index("idx_workspace_members_workspace_user", "workspace_id", "user_id", unique=True),
 )
 

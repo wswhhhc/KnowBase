@@ -4,11 +4,11 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui'
 import * as api from '@/shared/api'
 import type { AppRole } from '@/shared/auth/permissions'
-import type { User, Workspace, WorkspaceMember } from '@/shared/api'
+import type { User, Workspace, WorkspaceMemberRole } from '@/shared/api'
 
 type WorkspaceMemberDraft = {
   user_id: string
-  role: AppRole
+  role: WorkspaceMemberRole
 }
 
 const ROLE_LABELS: Record<AppRole, string> = {
@@ -17,7 +17,7 @@ const ROLE_LABELS: Record<AppRole, string> = {
   viewer: '浏览者',
 }
 
-const WORKSPACE_ROLES: AppRole[] = ['editor', 'viewer']
+const WORKSPACE_ROLES: WorkspaceMemberRole[] = ['editor', 'viewer']
 
 export default function WorkspaceMembersPanel() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -179,7 +179,7 @@ export default function WorkspaceMembersPanel() {
                   aria-label={`${userNameById.get(member.user_id) || member.user_id} 工作区角色`}
                   value={member.role}
                   onChange={(event) => {
-                    const nextRole = event.target.value as AppRole
+                    const nextRole = event.target.value as WorkspaceMemberRole
                     setMembers((current) => current.map((item) => item.user_id === member.user_id ? { ...item, role: nextRole } : item))
                   }}
                   className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none"
