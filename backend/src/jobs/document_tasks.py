@@ -123,7 +123,7 @@ def clear_workspace_documents(
     job_id: str | None = None,
     kb: KnowledgeBase | None = None,
 ) -> dict:
-    knowledge_base = kb or KnowledgeBase()
+    knowledge_base = kb or KnowledgeBase(require_embeddings=False)
     if job_id:
         job_store.update_job_progress(
             job_id,

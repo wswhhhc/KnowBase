@@ -44,16 +44,18 @@ def _load_url(url: str) -> list[Document]:
 class KnowledgeBase:
     """Facade managing ingestion, retrieval, and catalog operations for the KB."""
 
-    def __init__(self):
-        api_key = require_siliconflow_api_key()
+    def __init__(self, *, require_embeddings: bool = True):
         self.embedding_model = get_runtime_setting("embedding_model", EMBEDDING_MODEL)
         self._index_meta_path = Path(DATA_DIR) / "vector_store_meta.json"
         self._embedding_mismatch_error: str | None = None
-        self.embeddings = OpenAIEmbeddings(
-            model=self.embedding_model,
-            openai_api_key=api_key,
-            openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
-        )
+        self.embeddings = None
+        if require_embeddings:
+            api_key = require_siliconflow_api_key()
+            self.embeddings = OpenAIEmbeddings(
+                model=self.embedding_model,
+                openai_api_key=api_key,
+                openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
+            )
         self.vector_store = self._init_vector_store()
 
         self.state = KnowledgeBaseState(initial_chunk_ids=self.vector_store.get(include=[])["ids"])

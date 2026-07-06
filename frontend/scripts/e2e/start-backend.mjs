@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import net from 'node:net'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -6,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../..')
 const backendDir = path.join(repoRoot, 'backend')
 const apiPort = process.env.PLAYWRIGHT_API_PORT || '8001'
+const redisPort = process.env.PLAYWRIGHT_REDIS_PORT || '6390'
 
 const env = {
   ...process.env,
@@ -17,6 +19,7 @@ const env = {
   JWT_SECRET: process.env.JWT_SECRET || 'e2e-jwt-secret-1234567890abcdef',
   SILICONFLOW_API_KEY: process.env.SILICONFLOW_API_KEY || '',
   TAVILY_API_KEY: process.env.TAVILY_API_KEY || '',
+  REDIS_URL: process.env.REDIS_URL || `redis://127.0.0.1:${redisPort}/0`,
 }
 
 const childProcesses = []
@@ -44,6 +47,31 @@ function runSetup() {
   })
 }
 
+function waitForPort(port, host = '127.0.0.1', timeoutMs = 10000) {
+  const startedAt = Date.now()
+  return new Promise((resolve, reject) => {
+    const tryConnect = () => {
+      const socket = new net.Socket()
+      socket
+        .once('connect', () => {
+          socket.destroy()
+          resolve()
+        })
+        .once('error', () => {
+          socket.destroy()
+          if (Date.now() - startedAt > timeoutMs) {
+            reject(new Error(`Timed out waiting for ${host}:${port}`))
+            return
+          }
+          setTimeout(tryConnect, 200)
+        })
+        .connect(Number(port), host)
+    }
+
+    tryConnect()
+  })
+}
+
 function forwardSignal(signal) {
   for (const child of childProcesses) {
     if (!child.killed) child.kill(signal)
@@ -54,6 +82,13 @@ process.on('SIGINT', () => forwardSignal('SIGINT'))
 process.on('SIGTERM', () => forwardSignal('SIGTERM'))
 
 await runSetup()
+
+const fakeRedis = spawnCommand(uvCommand, ['run', 'python', 'scripts/start_fake_redis.py'])
+childProcesses.push(fakeRedis)
+await waitForPort(redisPort)
+
+const worker = spawnCommand(uvCommand, ['run', 'python', 'scripts/run_e2e_worker.py'])
+childProcesses.push(worker)
 
 const server = spawnCommand(uvCommand, [
   'run',
