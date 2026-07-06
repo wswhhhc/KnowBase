@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from src.api.auth_tokens import hash_password
 from src.api.main import app
-from src.persistence import auth_store
+from src.persistence import audit_store, auth_store
 from src.persistence.schema import metadata
 from src.persistence.sqlalchemy_database import create_engine_for_url
 
@@ -37,6 +37,9 @@ def test_login_me_refresh_and_logout_flow(monkeypatch, tmp_path):
     assert body["expires_in"] == 900
     assert body["user"]["id"] == user["id"]
     assert "password_hash" not in body["user"]
+    audit_events = audit_store.list_events(actor_user_id=user["id"])
+    assert audit_events[0]["action"] == "auth.login_succeeded"
+    assert audit_events[0]["metadata"] == {"role": "admin", "username": "admin"}
 
     me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"})
     assert me.status_code == 200
@@ -63,6 +66,10 @@ def test_login_rejects_bad_password(monkeypatch, tmp_path):
     response = client.post("/api/auth/login", json={"username": "admin", "password": "bad"})
 
     assert response.status_code == 401
+    audit_events = audit_store.list_events()
+    assert audit_events[0]["action"] == "auth.login_failed"
+    assert audit_events[0]["target_id"] == "admin"
+    assert "password" not in audit_events[0]["metadata"]
 
 
 def test_me_requires_valid_access_token(monkeypatch, tmp_path):

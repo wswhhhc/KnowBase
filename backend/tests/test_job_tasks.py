@@ -6,7 +6,7 @@ from src.api.auth_tokens import hash_password
 from src.jobs.document_tasks import clear_workspace_documents, rebuild_index_documents
 from src.jobs.enqueue import enqueue_tracked_job
 from src.jobs.tasks import run_tracked_job
-from src.persistence import auth_store, job_store
+from src.persistence import audit_store, auth_store, job_store
 from tests.test_auth_routes import _configure_auth_database
 
 
@@ -122,6 +122,10 @@ def test_enqueue_tracked_job_creates_db_job_and_uses_same_rq_job_id(isolated_job
     assert queue.calls[0]["func"] is run_tracked_job
     assert queue.calls[0]["args"] == (job["id"], "tests.test_job_tasks:sample_task", [2, 3], {})
     assert queue.calls[0]["kwargs"]["job_id"] == job["id"]
+    audit_events = audit_store.list_events(actor_user_id=user["id"])
+    assert audit_events[0]["action"] == "job.queued"
+    assert audit_events[0]["target_id"] == job["id"]
+    assert audit_events[0]["metadata"] == {"job_type": "sample", "workspace_id": "ws-a"}
 
 
 def test_enqueue_tracked_job_can_inject_db_job_id_into_task_kwargs(isolated_jobs_database):
@@ -156,9 +160,11 @@ def test_enqueue_tracked_job_marks_failed_when_enqueue_fails(isolated_jobs_datab
             queue=FailingQueue(),
         )
     stored_jobs = job_store.list_jobs(created_by_user_id=user["id"])
+    audit_events = audit_store.list_events(actor_user_id=user["id"])
 
     assert stored_jobs[0]["status"] == "failed"
     assert stored_jobs[0]["error"] == "redis unavailable"
+    assert [event["action"] for event in audit_events[:2]] == ["job.enqueue_failed", "job.queued"]
 
 
 def test_clear_workspace_documents_clears_workspace_and_returns_result():

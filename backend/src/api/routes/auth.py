@@ -15,7 +15,7 @@ from src.api.auth_tokens import (
 from src.api.deps import get_current_user
 from src.api.models import AuthSessionOut, LoginRequest, LogoutRequest, RefreshRequest, UserOut
 from src.config.settings import settings
-from src.persistence import auth_store
+from src.persistence import audit_store, auth_store
 
 
 router = APIRouter()
@@ -50,7 +50,20 @@ def _new_session_for_user(user: dict) -> AuthSessionOut:
 async def login(body: LoginRequest) -> AuthSessionOut:
     user = auth_store.get_user_by_username(body.username)
     if not user or not user.get("is_active") or not verify_password(body.password, user["password_hash"]):
+        audit_store.record_event(
+            action="auth.login_failed",
+            target_type="user",
+            target_id=body.username,
+            metadata={"username": body.username},
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+    audit_store.record_event(
+        action="auth.login_succeeded",
+        actor_user_id=user["id"],
+        target_type="user",
+        target_id=user["id"],
+        metadata={"username": user["username"], "role": user["role"]},
+    )
     return _new_session_for_user(user)
 
 
