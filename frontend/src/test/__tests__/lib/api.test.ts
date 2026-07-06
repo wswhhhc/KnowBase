@@ -214,6 +214,17 @@ describe('Documents API', () => {
 })
 
 describe('Jobs API', () => {
+  const queuedJob = {
+    id: 'job-1',
+    job_type: 'ingest_file',
+    status: 'queued',
+    workspace_id: '',
+    error: '',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  }
+  const succeededJob = { ...queuedJob, status: 'succeeded' }
+
   it('listJobs calls the jobs endpoint', async () => {
     const fn = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]), text: () => Promise.resolve('[]'), headers: new Headers() })
     vi.stubGlobal('fetch', fn)
@@ -225,7 +236,7 @@ describe('Jobs API', () => {
   it('getJob encodes the job id in the path', async () => {
     const fn = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ id: 'job/1', job_type: 'ingest_file', status: 'queued', workspace_id: '', error: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }),
+      json: () => Promise.resolve({ ...queuedJob, id: 'job/1' }),
       text: () => Promise.resolve('{}'),
       headers: new Headers(),
     })
@@ -238,13 +249,49 @@ describe('Jobs API', () => {
   it('cancelJob sends POST to the cancel endpoint', async () => {
     const fn = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ id: 'job-1', job_type: 'ingest_file', status: 'canceled', workspace_id: '', error: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }),
+      json: () => Promise.resolve({ ...queuedJob, status: 'canceled' }),
       text: () => Promise.resolve('{}'),
       headers: new Headers(),
     })
     vi.stubGlobal('fetch', fn)
     await api.cancelJob('job-1')
     expect(fn).toHaveBeenCalledWith('/api/jobs/job-1/cancel', expect.objectContaining({ method: 'POST' }))
+    vi.unstubAllGlobals()
+  })
+
+  it('detects terminal job statuses', () => {
+    expect(api.isTerminalJob({ status: 'queued' })).toBe(false)
+    expect(api.isTerminalJob({ status: 'running' })).toBe(false)
+    expect(api.isTerminalJob({ status: 'succeeded' })).toBe(true)
+    expect(api.isTerminalJob({ status: 'failed' })).toBe(true)
+    expect(api.isTerminalJob({ status: 'canceled' })).toBe(true)
+  })
+
+  it('pollJob fetches until the job reaches a terminal status', async () => {
+    const onUpdate = vi.fn()
+    const fn = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(queuedJob), text: () => Promise.resolve('{}'), headers: new Headers() })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(succeededJob), text: () => Promise.resolve('{}'), headers: new Headers() })
+    vi.stubGlobal('fetch', fn)
+
+    const result = await api.pollJob('job-1', { intervalMs: 1, onUpdate })
+
+    expect(result.status).toBe('succeeded')
+    expect(onUpdate).toHaveBeenCalledTimes(2)
+    expect(fn).toHaveBeenCalledTimes(2)
+    expect(fn).toHaveBeenNthCalledWith(1, '/api/jobs/job-1', expect.any(Object))
+    expect(fn).toHaveBeenNthCalledWith(2, '/api/jobs/job-1', expect.any(Object))
+    vi.unstubAllGlobals()
+  })
+
+  it('pollJob respects an already aborted signal', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const fn = vi.fn()
+    vi.stubGlobal('fetch', fn)
+
+    await expect(api.pollJob('job-1', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fn).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
 })
