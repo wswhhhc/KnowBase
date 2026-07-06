@@ -11,12 +11,14 @@ from src.api.rate_limit import RedisRateLimiter
 from src.api.routes import admin_users, auth, chat, conversations, documents, jobs, knowledge_base, metrics, workspaces, bookmarks, settings as settings_router
 from src.api.deps import get_knowledge_base
 from src.config.runtime_overrides import _is_configured_api_key, get_runtime_setting
+from src.config.security import validate_production_security
 from src.config.settings import settings
 from src.persistence.database import init_db
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    validate_production_security()
     init_db()
     api_key = get_runtime_setting("siliconflow_api_key", settings.llm.api_key)
     if _is_configured_api_key(api_key):

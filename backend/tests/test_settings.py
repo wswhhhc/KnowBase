@@ -4,10 +4,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
+
 import src.config.settings as settings_module
 import src.config.runtime_overrides as runtime_overrides_module
+from src.api import deps as api_deps
 from src.config.settings import Settings
 from src.api import main as api_main
+from src.config.security import validate_production_security
 
 
 class SettingsTests(unittest.TestCase):
@@ -80,6 +86,64 @@ class SettingsTests(unittest.TestCase):
             settings.api.cors_allow_origins,
             ["http://localhost:5173", "http://localhost:3000"],
         )
+
+    def test_settings_identifies_production_environment(self):
+        self.assertTrue(Settings(APP_ENV="production").is_production)
+        self.assertTrue(Settings(APP_ENV="prod").is_production)
+        self.assertFalse(Settings(APP_ENV="development").is_production)
+
+    def test_validate_production_security_requires_hardened_settings(self):
+        settings = Settings(
+            APP_ENV="production",
+            JWT_SECRET="short",
+            DATABASE_URL="sqlite:///runtime/local/conversations.db",
+            CORS_ALLOW_ORIGINS="http://localhost:5173,*",
+            API_KEY="legacy-key",
+        )
+
+        with pytest.raises(RuntimeError) as exc:
+            validate_production_security(settings)
+
+        message = str(exc.value)
+        self.assertIn("JWT_SECRET", message)
+        self.assertIn("DATABASE_URL", message)
+        self.assertIn("CORS_ALLOW_ORIGINS", message)
+        self.assertIn("API_KEY", message)
+
+    def test_validate_production_security_accepts_hardened_settings(self):
+        settings = Settings(
+            APP_ENV="production",
+            JWT_SECRET="x" * 48,
+            DATABASE_URL="postgresql+psycopg://knowbase:pw@postgres/knowbase",
+            CORS_ALLOW_ORIGINS="https://knowbase.internal",
+        )
+
+        validate_production_security(settings)
+
+    def test_production_rejects_legacy_api_key_path(self):
+        production_settings = Settings(
+            APP_ENV="production",
+            JWT_SECRET="x" * 48,
+            API_KEY="legacy-key",
+        )
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="legacy-key")
+
+        with patch.object(api_deps, "settings", production_settings):
+            with patch.object(api_deps, "get_runtime_setting", return_value="legacy-key"):
+                with self.assertRaises(HTTPException) as ctx:
+                    api_deps.get_current_user_or_legacy_api_key(credentials)
+
+        self.assertEqual(ctx.exception.status_code, 401)
+
+    def test_production_rejects_anonymous_local_dev_path(self):
+        production_settings = Settings(APP_ENV="production", JWT_SECRET="x" * 48)
+
+        with patch.object(api_deps, "settings", production_settings):
+            with patch.object(api_deps, "get_runtime_setting", return_value=""):
+                with self.assertRaises(HTTPException) as ctx:
+                    api_deps.get_current_user_or_legacy_api_key(None)
+
+        self.assertEqual(ctx.exception.status_code, 401)
 
     def test_settings_defaults_runtime_paths_to_runtime_local(self):
         settings = Settings(SILICONFLOW_API_KEY="sk-1234567890")
