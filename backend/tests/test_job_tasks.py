@@ -180,6 +180,22 @@ def test_clear_workspace_documents_clears_workspace_and_returns_result():
     }
 
 
+def test_clear_workspace_documents_builds_catalog_only_kb_when_none_is_provided(monkeypatch):
+    fake_kb = FakeClearKnowledgeBase()
+    init_calls: list[bool] = []
+
+    def _fake_kb_factory(*, require_embeddings: bool = True):
+        init_calls.append(require_embeddings)
+        return fake_kb
+
+    monkeypatch.setattr("src.jobs.document_tasks.KnowledgeBase", _fake_kb_factory)
+
+    result = clear_workspace_documents(workspace_id="ws-a")
+
+    assert init_calls == [False]
+    assert result["message"] == "知识库已清空"
+
+
 def test_rebuild_index_documents_rebuilds_index_and_returns_result():
     kb = FakeRebuildKnowledgeBase()
 

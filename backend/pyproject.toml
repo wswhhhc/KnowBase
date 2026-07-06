@@ -35,6 +35,7 @@ dependencies = [
     "psycopg[binary]>=3.2.0",
     "redis>=8.0.1",
     "rq>=2.10.0",
+    "fakeredis>=2.36.2",
 ]
 
 [tool.uv]

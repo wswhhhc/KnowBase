@@ -9,10 +9,12 @@
 - `viewer` 登录后不会显示“设置 / 指标”导航
 - `viewer` 直接请求 `/api/settings` 会收到 `403`
 - `admin` 可创建用户、创建工作区并保存成员授权；新用户登录后只能看到被授权工作区
+- `editor` 可导入示例资料、触发清空工作区后台任务，并在任务中心看到完成状态
 
 当前测试文件：
 
 - `frontend/e2e/auth-rbac.spec.ts`
+- `frontend/e2e/editor-jobs.spec.ts`
 
 ## 2. 测试环境
 
@@ -31,7 +33,7 @@ Playwright 会自动启动两类本地服务，不需要手动先开前后端：
 - `editor / editor-pass`
 - `viewer / viewer-pass`
 
-其中 `editor` 和 `viewer` 会被授予默认工作区成员关系，便于后续补工作区与知识库相关 E2E。
+其中 `editor` 和 `viewer` 会被授予默认工作区成员关系。Playwright backend 启动脚本还会在本地拉起 fake Redis TCP 服务和真实 RQ worker，因此后台任务流可以在不依赖系统 Redis 的情况下进入 E2E。
 
 ## 3. 执行方式
 
