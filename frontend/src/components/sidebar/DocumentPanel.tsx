@@ -456,7 +456,8 @@ export default function DocumentPanel({
         description="确定要清空整个知识库中的所有文档和段落吗？此操作不可撤销。"
         onConfirm={async () => {
           try {
-            await api.clearKnowledgeBase(workspaceId)
+            const result = await api.clearKnowledgeBase(workspaceId)
+            await api.waitForImportJob(result, () => {})
             if (await onRefresh()) toast.success('知识库已清空')
           } catch (e) {
             toast.error('清空失败', { description: String(e) })

@@ -449,13 +449,37 @@ class WorkspaceScopedKnowledgeBaseApiTests(unittest.TestCase):
             ],
         )
 
-    def test_clear_only_removes_requested_workspace(self):
-        resp = self.client.post("/api/documents/clear?workspace_id=ws-alpha")
+    def test_clear_enqueues_job_for_requested_workspace(self):
+        queued_job = {
+            "id": "job-clear-alpha",
+            "job_type": "clear_workspace",
+            "status": "queued",
+            "created_by_user_id": None,
+            "workspace_id": "ws-alpha",
+            "progress": {"phase": "queued", "percent": 0},
+            "error": "",
+            "attempts": 0,
+            "created_at": "2026-07-06T00:00:00+00:00",
+            "updated_at": "2026-07-06T00:00:00+00:00",
+            "started_at": None,
+            "finished_at": None,
+        }
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
+            resp = self.client.post("/api/documents/clear?workspace_id=ws-alpha")
+
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["removed"], 2)
+        self.assertEqual(resp.json()["job_id"], "job-clear-alpha")
+        mock_enqueue.assert_called_once_with(
+            job_type="clear_workspace",
+            target_path="src.jobs.document_tasks:clear_workspace_documents",
+            created_by_user_id=None,
+            workspace_id="ws-alpha",
+            kwargs={"workspace_id": "ws-alpha"},
+            inject_job_id=True,
+        )
 
         alpha_stats = self.client.get("/api/knowledge-base/stats?workspace_id=ws-alpha").json()
-        self.assertEqual(alpha_stats["chunk_count"], 0)
+        self.assertEqual(alpha_stats["chunk_count"], 2)
 
         default_stats = self.client.get("/api/knowledge-base/stats?workspace_id=").json()
         self.assertEqual(default_stats["chunk_count"], 2)

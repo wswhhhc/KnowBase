@@ -200,8 +200,24 @@ class APIRoutesCoverageTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_clear_knowledge_base(self):
-        response = self.client.post("/api/documents/clear")
+        queued_job = {
+            "id": "job-clear",
+            "job_type": "clear_workspace",
+            "status": "queued",
+            "created_by_user_id": None,
+            "workspace_id": "",
+            "progress": {"phase": "queued", "percent": 0},
+            "error": "",
+            "attempts": 0,
+            "created_at": "2026-07-06T00:00:00+00:00",
+            "updated_at": "2026-07-06T00:00:00+00:00",
+            "started_at": None,
+            "finished_at": None,
+        }
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job):
+            response = self.client.post("/api/documents/clear")
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["job_id"], "job-clear")
 
     # ── Knowledge Base routes ──
 

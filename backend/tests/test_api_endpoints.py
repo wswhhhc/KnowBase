@@ -638,10 +638,11 @@ class APIEndpointTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_clear_knowledge_base(self):
-        resp = self.client.post("/api/documents/clear")
+        queued_job = _queued_job("job-clear", job_type="clear_workspace")
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job):
+            resp = self.client.post("/api/documents/clear")
         self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertEqual(data["ok"], True)
+        self.assertEqual(resp.json()["job_id"], "job-clear")
 
     def test_import_demo_documents(self):
         with patch.object(

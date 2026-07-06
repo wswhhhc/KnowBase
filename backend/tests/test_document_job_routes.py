@@ -245,3 +245,29 @@ def test_ingest_url_stream_enqueues_job_and_streams_job_status_without_running_k
         },
         inject_job_id=True,
     )
+
+
+def test_clear_workspace_returns_queued_job_without_running_kb_clear():
+    fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
+    queued_job = _job_payload("job-clear-1")
+    queued_job["job_type"] = "clear_workspace"
+    queued_job["workspace_id"] = "ws-a"
+    try:
+        with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job) as mock_enqueue:
+            with patch.object(fake_kb, "clear_workspace") as mock_clear_workspace:
+                response = client.post("/api/documents/clear?workspace_id=ws-a")
+    finally:
+        teardown_test_env(tmp_dir, orig_db, patchers)
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == "job-clear-1"
+    assert response.json()["job"]["status"] == "queued"
+    mock_clear_workspace.assert_not_called()
+    mock_enqueue.assert_called_once_with(
+        job_type="clear_workspace",
+        target_path="src.jobs.document_tasks:clear_workspace_documents",
+        created_by_user_id=None,
+        workspace_id="ws-a",
+        kwargs={"workspace_id": "ws-a"},
+        inject_job_id=True,
+    )
