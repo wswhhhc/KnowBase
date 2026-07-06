@@ -69,9 +69,12 @@ async def update_user(user_id: str, body: AdminUserUpdate, current_user: dict = 
     target_user = auth_store.get_user_by_id(user_id)
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
-    updates = body.model_dump(exclude_unset=True)
-    password = updates.pop("password", None)
+    raw_updates = body.model_dump(exclude_unset=True)
+    updates = {key: value for key, value in raw_updates.items() if key != "password" and value is not None}
+    password = raw_updates.get("password")
     changed_fields = sorted([*updates.keys(), *(["password"] if password is not None else [])])
+    if not changed_fields:
+        return UserOut(**target_user)
     if password is not None:
         updates["password_hash"] = hash_password(password)
     _reject_if_removing_last_active_admin(target_user, updates)

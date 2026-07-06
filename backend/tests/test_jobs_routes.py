@@ -200,6 +200,38 @@ def test_user_can_cancel_own_queued_job(isolated_jobs_database):
     assert cancel_event["metadata"] == {"job_type": "ingest_url", "workspace_id": "ws-a"}
 
 
+def test_cancel_already_canceled_job_is_idempotent_without_duplicate_audit(isolated_jobs_database):
+    users = _seed_users()
+    auth_store.replace_workspace_members(
+        workspace_id="ws-a",
+        members=[{"user_id": users["editor"]["id"], "role": "editor"}],
+    )
+    editor_job = job_store.create_job(
+        job_type="ingest_url",
+        created_by_user_id=users["editor"]["id"],
+        workspace_id="ws-a",
+    )
+    client = TestClient(app)
+    editor_token = _login(client, "editor", "editor-pass")
+
+    with patch("src.api.deps.get_runtime_setting", side_effect=_api_key_runtime_setting):
+        first_response = client.post(
+            f"/api/jobs/{editor_job['id']}/cancel",
+            headers={"Authorization": f"Bearer {editor_token}"},
+        )
+        second_response = client.post(
+            f"/api/jobs/{editor_job['id']}/cancel",
+            headers={"Authorization": f"Bearer {editor_token}"},
+        )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert second_response.json()["status"] == "canceled"
+    audit_events = audit_store.list_events(actor_user_id=users["editor"]["id"])
+    cancel_events = [event for event in audit_events if event["action"] == "job.canceled"]
+    assert [event["target_id"] for event in cancel_events] == [editor_job["id"]]
+
+
 def test_cancel_queued_file_upload_job_removes_upload_temp_file(isolated_jobs_database):
     users = _seed_users()
     auth_store.replace_workspace_members(

@@ -150,6 +150,26 @@ def test_admin_update_user_rejects_duplicate_username(monkeypatch, tmp_path):
     assert auth_store.get_user_by_id(viewer["id"])["username"] == "viewer"
 
 
+def test_admin_empty_user_update_returns_current_user_without_audit(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+    admin = auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")
+    viewer = auth_store.create_user(username="viewer", password_hash=hash_password("viewer-pass"), role="viewer")
+    client = TestClient(app)
+    admin_token = _login(client, "admin", "admin-pass")
+
+    response = client.patch(
+        f"/api/admin/users/{viewer['id']}",
+        json={},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == viewer["id"]
+    assert response.json()["username"] == "viewer"
+    audit_events = audit_store.list_events(actor_user_id=admin["id"])
+    assert not [event for event in audit_events if event["action"] == "admin.user_updated"]
+
+
 def test_last_active_admin_cannot_be_disabled_demoted_or_deleted(monkeypatch, tmp_path):
     _configure_auth_database(monkeypatch, tmp_path)
     admin = auth_store.create_user(username="admin", password_hash=hash_password("admin-pass"), role="admin")
