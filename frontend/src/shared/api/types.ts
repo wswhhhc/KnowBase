@@ -28,6 +28,11 @@ export type Bookmark = Schemas['BookmarkOut']
 export type DebugSearchHit = Schemas['DebugSearchResult']
 export type DebugSearchResponse = Schemas['DebugSearchResponse']
 export type PinStateResponse = Schemas['PinStateOut']
+export type User = Schemas['UserOut']
+export type AuthSession = Schemas['AuthSessionOut']
+export type LoginRequest = Schemas['LoginRequest']
+export type RefreshRequest = Schemas['RefreshRequest']
+export type LogoutRequest = Schemas['LogoutRequest']
 
 export type {
   ChatStreamDonePayload,

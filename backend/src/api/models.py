@@ -16,6 +16,36 @@ class ChatRequest(BaseModel):
     workspace_id: str = ""
 
 
+class UserOut(BaseModel):
+    id: str
+    username: str
+    role: str
+    is_active: bool
+    created_at: str
+    updated_at: str
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=120)
+    password: str = Field(..., min_length=1, max_length=256)
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=1)
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=1)
+
+
+class AuthSessionOut(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserOut
+
+
 class ChatSource(BaseModel):
     source: str
     chunk_id: str | None = None
