@@ -137,11 +137,11 @@ npm run check-api-types
 - 启动方式、配置项、产品行为、工作区语义或架构假设变化后，要同步更新 `README.md`、`CLAUDE.md`、`docs/requirements/product-boundaries.md` 或相关文档。
 - 新增配置项已经体现在 `backend/.env.example`。
 - Compose 自托管相关变量样例维护在根目录 `.env.compose.example`；真实 `.env.compose` 不应提交。
-- 准生产团队版数据库配置通过 `DATABASE_URL` 管理；在 repository 层迁移完成前，默认值仍保留 SQLite 本地路径。
+- 准生产团队版数据库配置通过 `DATABASE_URL` 管理；生产模式必须指向 Postgres，本地开发默认值仍可保留 SQLite 本地路径。
 - 不要提交密钥、本地数据库、覆盖率产物（如 `backend/.coverage`）或运行期生成文件。
 - 尽量保持 PR 小而明确，一个 PR 解决一个清晰问题。
 - 跨平台测试不要写死 Windows 或 POSIX 路径分隔符，优先用 `pathlib.Path`、`os.path` 或前端等价方式构造路径断言。
-- 不要把当前工作区能力写成“多租户安全隔离”；它目前只是应用层作用域。
+- 不要把当前工作区能力写成“多组织租户隔离”；它是单组织内的授权作用域。
 
 ## 契约与类型更新
 

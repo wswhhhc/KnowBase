@@ -16,15 +16,16 @@ KnowBase 把“样例”和“运行数据”明确分离：
 
 这些目录用于：
 
-- SQLite 数据库
+- SQLite 本地开发数据库或 Postgres 连接指向的业务数据库
 - Chroma 持久化目录
 - 查询日志
 - 运行时设置覆盖
+- Redis RQ 队列状态和任务执行中的临时文件
 - 评估报告
 
 它们默认忽略提交，提交前不要把本地产物强行纳入版本库。
 
-准生产团队版会通过 `DATABASE_URL` 支持 Postgres 作为业务数据库。迁移完成前，本地默认值仍指向 `runtime/local/conversations.db`；Chroma、查询日志、运行时设置覆盖等本地运行数据仍继续遵守 `runtime/` 目录约定。
+准生产团队版通过 `DATABASE_URL` 支持 Postgres 作为业务数据库；本地开发默认值仍指向 `runtime/local/conversations.db`。Chroma、查询日志、运行时设置覆盖等本地运行数据仍继续遵守 `runtime/` 目录约定。
 
 从本地 SQLite 迁移到 `DATABASE_URL` 时，先备份 `runtime/local/conversations.db`，再运行 `cd backend && uv run python scripts/import_sqlite_business_data.py --sqlite-path ../runtime/local/conversations.db --truncate`。脚本只导入 Phase 1 业务表：`workspaces`、`conversations`、`messages`、`bookmarks`、`pinned_sources`；Chroma 向量库仍按本地目录单独保留。
 

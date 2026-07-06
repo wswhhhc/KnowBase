@@ -1,6 +1,6 @@
 <div align="center">
   <h1>KnowBase</h1>
-  <p>本地优先的知识库问答工作台，采用 React + FastAPI，围绕可维护的 RAG 开发与演示场景构建。</p>
+  <p>内网自托管的团队知识库问答工作台，采用 React + FastAPI，围绕可维护的 RAG 与准生产团队协作场景构建。</p>
   <p>
     <img src="https://img.shields.io/badge/React-19-000?style=for-the-badge&logo=react&logoColor=61DAFB" height="28" alt="React 19" />
     <img src="https://img.shields.io/badge/FastAPI-0.115-000?style=for-the-badge&logo=fastapi&logoColor=009688" height="28" alt="FastAPI" />
@@ -15,24 +15,27 @@
 
 ## 项目概览
 
-KnowBase 关注的是“可持续维护的本地 RAG 应用骨架”，而不是只演示一条检索链路。当前仓库已经具备这些能力：
+KnowBase 关注的是“可持续维护的团队 RAG 应用骨架”，而不是只演示一条检索链路。当前仓库已经具备这些能力：
 
 - SSE 流式问答，回答可附带来源片段与调试信息
-- 本地文件上传与公开 URL 导入
+- 账号密码登录、JWT 会话、固定角色和工作区授权
+- 本地文件上传与公开 URL 导入，导入/清空/重建索引通过 Redis RQ 后台任务执行
 - 知识库浏览、来源列表、热点片段与调试检索
 - 工作区、对话、书签与运行时设置
+- Postgres 业务数据入口与 SQLite 一次性导入脚本；Chroma 继续作为本地向量库
 - 本地查询日志与指标面板
 - OpenAPI 快照与前端生成类型的契约同步
 
 ## 工作区语义
 
-“工作区”是当前版本里最容易被过度承诺的概念，这里明确说明：
+“工作区”是单组织团队版的授权作用域，这里明确说明：
 
 - 工作区会作用于对话、书签，以及知识库导入/查询时传递的 `workspace_id`
-- 它是应用层的作用域组织方式，不是安全边界，也不是多租户隔离方案
+- JWT 用户访问工作区数据前会按成员角色校验；`admin` 可管理全部工作区
+- 它不是多组织 SaaS 租户隔离方案，也不承诺跨组织计费、域名或数据面隔离
 - 删除工作区时，对话和书签会回落到默认工作区；已导入知识库数据的迁移/清理仍需显式处理
 
-如果你要做公开演示，可以把它理解成“本地知识工作流分组”，而不是“租户级隔离”。
+如果你要做内网演示，可以把它理解成“单组织内的知识库授权分组”，而不是“租户级隔离”。
 
 ## 快速开始
 
@@ -181,7 +184,7 @@ flowchart LR
     A["用户提问"] --> B["SSE Chat API"]
     B --> C["LangGraph 工作流"]
     C --> D["混合检索 / 重排 / 生成 / 质量检查"]
-    D --> E["Chroma + SQLite + 本地日志"]
+    D --> E["Chroma + Postgres/SQLite + Redis RQ + 本地日志"]
     B --> F["React 前端"]
     F --> G["知识库浏览 / 工作区 / 书签 / 指标 / 设置"]
 ```
