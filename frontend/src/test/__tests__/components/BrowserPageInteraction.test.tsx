@@ -18,6 +18,21 @@ function createChunk(overrides: Partial<typeof mockKBChunks[number]> = {}) {
   }
 }
 
+function createJob(overrides: Partial<api.Job> = {}): api.Job {
+  return {
+    id: 'job-browser-import',
+    job_type: 'ingest_file',
+    status: 'queued',
+    workspace_id: '',
+    progress: { phase: 'queued', percent: 0, message: '' },
+    error: '',
+    attempts: 0,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
 vi.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: any) => {
@@ -51,13 +66,31 @@ vi.mock('@/shared/api', async () => {
     getKBHotspots: vi.fn(),
     checkSource: vi.fn().mockResolvedValue({ exists: false }),
     createBookmark: vi.fn(),
+    uploadDocument: vi.fn().mockResolvedValue({
+      job_id: 'job-browser-upload',
+      job: createJob({ id: 'job-browser-upload', job_type: 'ingest_file' }),
+    }),
     uploadDocumentStream: vi.fn().mockImplementation((_file, _mode, callbacks) => {
       callbacks.onDone?.({ chunk_count: 1, total_docs: 1, message: 'ok' })
       return { abort: vi.fn() }
     }),
+    ingestUrl: vi.fn().mockResolvedValue({
+      job_id: 'job-browser-url',
+      job: createJob({ id: 'job-browser-url', job_type: 'ingest_url' }),
+    }),
     ingestUrlStream: vi.fn().mockImplementation((_url, _mode, callbacks) => {
       callbacks.onDone?.({ chunk_count: 1, total_docs: 1, message: 'ok' })
       return { abort: vi.fn() }
+    }),
+    pollJob: vi.fn().mockImplementation((_jobId, options) => {
+      options?.onUpdate?.(createJob({
+        status: 'running',
+        progress: { phase: 'embedding', percent: 60, message: '正在向量化' },
+      }))
+      return Promise.resolve(createJob({
+        status: 'succeeded',
+        progress: { phase: 'done', percent: 100, message: '完成' },
+      }))
     }),
     debugSearch: vi.fn().mockResolvedValue({
       strategy: 'balanced',
@@ -321,7 +354,7 @@ describe('BrowserPage interactions', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('uploads documents through the SSE stream API', async () => {
+  it('uploads documents through the background job API', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
     await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
@@ -339,16 +372,16 @@ describe('BrowserPage interactions', () => {
     })
 
     expect(api.checkSource).toHaveBeenCalledWith('browser.txt', '')
-    expect(api.uploadDocumentStream).toHaveBeenCalledWith(
+    expect(api.uploadDocument).toHaveBeenCalledWith(
       expect.any(File),
       undefined,
-      expect.objectContaining({
-        onProgress: expect.any(Function),
-        onDone: expect.any(Function),
-        onError: expect.any(Function),
-      }),
       '',
     )
+    expect(api.pollJob).toHaveBeenCalledWith('job-browser-upload', expect.objectContaining({
+      intervalMs: 1000,
+      onUpdate: expect.any(Function),
+    }))
+    expect(api.uploadDocumentStream).not.toHaveBeenCalled()
     expect(screen.getByText(/资料已进入/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /去当前工作区提问/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /查看当前来源/i })).toBeInTheDocument()
@@ -378,14 +411,9 @@ describe('BrowserPage interactions', () => {
     })
 
     expect(api.checkSource).toHaveBeenCalledWith('browser.txt', 'ws-upload')
-    expect(api.uploadDocumentStream).toHaveBeenCalledWith(
+    expect(api.uploadDocument).toHaveBeenCalledWith(
       expect.any(File),
       undefined,
-      expect.objectContaining({
-        onProgress: expect.any(Function),
-        onDone: expect.any(Function),
-        onError: expect.any(Function),
-      }),
       'ws-upload',
     )
   })
@@ -438,25 +466,20 @@ describe('BrowserPage interactions', () => {
     await waitFor(() => {
       expect(screen.getByText(/引用来源".*browser\.txt.*已存在/)).toBeInTheDocument()
     })
-    expect(api.uploadDocumentStream).not.toHaveBeenCalled()
+    expect(api.uploadDocument).not.toHaveBeenCalled()
 
     await userEvent.click(screen.getByRole('button', { name: '追加版本' }))
 
     await waitFor(() => {
-      expect(api.uploadDocumentStream).toHaveBeenCalledWith(
+      expect(api.uploadDocument).toHaveBeenCalledWith(
         expect.any(File),
         'append',
-        expect.objectContaining({
-          onProgress: expect.any(Function),
-          onDone: expect.any(Function),
-          onError: expect.any(Function),
-        }),
         '',
       )
     })
   })
 
-  it('ingests URLs through the SSE stream API', async () => {
+  it('ingests URLs through the background job API', async () => {
     await act(async () => { render(<BrowserPage {...defaultProps} />) })
 
     await waitFor(() => expect(screen.getByText('知识库')).toBeInTheDocument())
@@ -465,17 +488,17 @@ describe('BrowserPage interactions', () => {
     await userEvent.click(screen.getByText('Globe'))
 
     await waitFor(() => {
-      expect(api.ingestUrlStream).toHaveBeenCalledWith(
+      expect(api.ingestUrl).toHaveBeenCalledWith(
         'https://example.com',
         undefined,
-        expect.objectContaining({
-          onProgress: expect.any(Function),
-          onDone: expect.any(Function),
-          onError: expect.any(Function),
-        }),
         '',
       )
     })
+    expect(api.pollJob).toHaveBeenCalledWith('job-browser-url', expect.objectContaining({
+      intervalMs: 1000,
+      onUpdate: expect.any(Function),
+    }))
+    expect(api.ingestUrlStream).not.toHaveBeenCalled()
     expect(screen.getByText(/资料已进入/)).toBeInTheDocument()
   })
 
@@ -489,14 +512,9 @@ describe('BrowserPage interactions', () => {
 
     await waitFor(() => {
       expect(api.checkSource).toHaveBeenCalledWith('https://example.com/ws', 'ws-import')
-      expect(api.ingestUrlStream).toHaveBeenCalledWith(
+      expect(api.ingestUrl).toHaveBeenCalledWith(
         'https://example.com/ws',
         undefined,
-        expect.objectContaining({
-          onProgress: expect.any(Function),
-          onDone: expect.any(Function),
-          onError: expect.any(Function),
-        }),
         'ws-import',
       )
     })
