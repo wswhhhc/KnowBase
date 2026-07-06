@@ -10,6 +10,7 @@ import GridView from '@/components/browser/GridView'
 import SearchToolbar from '@/components/browser/SearchToolbar'
 import SliceView from '@/components/browser/SliceView'
 import { useBrowserPage } from '@/features/knowledge-browser/hooks/useBrowserPage'
+import { isPermissionError } from '@/shared/api/client'
 
 interface BrowserPageProps {
   onOpenSidebar: () => void
@@ -139,12 +140,23 @@ export default function BrowserPage({
       <ScrollArea ref={scrollRef} className="flex-1">
         <div className="mx-auto max-w-5xl px-5 py-6">
           {error ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <AlertTriangle className="h-12 w-12 text-destructive/40 mb-4" />
-              <p className="text-sm text-muted-foreground mb-1">数据加载失败</p>
-              <p className="text-2xs text-muted-foreground/50 mb-4 max-w-xs">{error}</p>
-              <Button variant="outline" size="sm" onClick={() => window.location.reload()}>重试</Button>
-            </div>
+            isPermissionError(error) ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <AlertTriangle className="h-12 w-12 text-amber-500/50 mb-4" />
+                <p className="text-sm font-medium text-foreground/85 mb-1">没有该工作区权限</p>
+                <p className="text-2xs text-muted-foreground/60 mb-4 max-w-sm">
+                  当前账号无权访问这个工作区的知识库内容，请联系管理员调整工作区授权。
+                </p>
+                <Button variant="outline" size="sm" onClick={() => onNavigate('chat')}>返回聊天</Button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <AlertTriangle className="h-12 w-12 text-destructive/40 mb-4" />
+                <p className="text-sm text-muted-foreground mb-1">数据加载失败</p>
+                <p className="text-2xs text-muted-foreground/50 mb-4 max-w-xs">{error}</p>
+                <Button variant="outline" size="sm" onClick={() => window.location.reload()}>重试</Button>
+              </div>
+            )
           ) : (<>
             <AnimatePresence initial={false}>
               {canManageKnowledgeBase && showPostUploadGuide && (

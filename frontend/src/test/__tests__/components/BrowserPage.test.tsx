@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import BrowserPage from '@/pages/browser/BrowserPage'
 import * as api from '@/shared/api'
+import { ApiError } from '@/shared/api'
 import { mockKBStats, mockKBChunks } from '@/test/mocks/data'
 
 // Mock framer-motion
@@ -157,6 +158,22 @@ describe('BrowserPage', () => {
     })
     expect(screen.queryByText('上传文档')).not.toBeInTheDocument()
     expect(screen.queryByPlaceholderText('输入网页 URL')).not.toBeInTheDocument()
+  })
+
+  it('shows a permission error state when the workspace is forbidden', async () => {
+    const onNavigate = vi.fn()
+    vi.mocked(api.getKBChunks).mockRejectedValue(new ApiError(403, '无权访问该工作区'))
+
+    await act(async () => {
+      render(<BrowserPage {...defaultProps} onNavigate={onNavigate} />)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('没有该工作区权限')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: '返回聊天' }))
+    expect(onNavigate).toHaveBeenCalledWith('chat')
   })
 
   it('keeps the loading state until the initial chunk request resolves', async () => {

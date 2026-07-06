@@ -63,6 +63,19 @@ export async function createApiErrorFromResponse(res: Response): Promise<ApiErro
   return new ApiError(res.status, message, retryAfter)
 }
 
+export function isPermissionError(value: unknown): boolean {
+  if (value instanceof ApiError) return value.status === 401 || value.status === 403
+  const message = String(value).toLowerCase()
+  return (
+    message.includes('401') ||
+    message.includes('403') ||
+    message.includes('forbidden') ||
+    message.includes('unauthorized') ||
+    message.includes('无权') ||
+    message.includes('权限')
+  )
+}
+
 export async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, {
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...init?.headers },
