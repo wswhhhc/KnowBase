@@ -148,6 +148,19 @@ describe('App component', () => {
     expect(localStorage.getItem('knowbase_access_token')).toBe('access-token')
   })
 
+  it('toggles password visibility on the login page', async () => {
+    render(<App />)
+
+    const passwordInput = screen.getByLabelText('密码')
+    expect(passwordInput).toHaveAttribute('type', 'password')
+
+    await userEvent.click(screen.getByRole('button', { name: '显示输入内容' }))
+    expect(passwordInput).toHaveAttribute('type', 'text')
+
+    await userEvent.click(screen.getByRole('button', { name: '隐藏输入内容' }))
+    expect(passwordInput).toHaveAttribute('type', 'password')
+  })
+
   it('registers an editor account and renders the workspace shell', async () => {
     mockRegister.mockResolvedValue({
       access_token: 'registered-access-token',
