@@ -106,12 +106,12 @@ export default function App() {
         />
       </div>
 
-      <main className="relative flex min-w-0 flex-1 flex-col pb-safe">
+      <main className={`relative flex min-w-0 flex-1 flex-col pb-safe ${hasJwtSession && getStoredRefreshToken() ? 'has-shell-action' : ''}`}>
         {hasJwtSession && getStoredRefreshToken() && (
           <button
             type="button"
             onClick={handleLogout}
-            className="absolute right-4 top-4 z-30 flex h-9 items-center gap-2 rounded-md border border-border bg-surface/90 px-3 text-sm text-muted-foreground backdrop-blur transition-colors hover:border-primary/50 hover:text-foreground"
+            className="absolute right-4 top-4 z-30 flex h-9 shrink-0 items-center gap-2 rounded-md border border-border bg-surface/90 px-3 text-sm text-muted-foreground backdrop-blur transition-colors hover:border-primary/50 hover:text-foreground"
           >
             <LogOut className="h-4 w-4" aria-hidden="true" />
             退出登录

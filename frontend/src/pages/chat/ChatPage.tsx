@@ -151,23 +151,23 @@ export default function ChatPage({ chat, onOpenSidebar, sidebarOpen, onNavigate,
   return (
     <>
       {/* Top bar */}
-      <header className="flex items-center justify-between border-b border-border px-5 py-3 bg-background/80 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur-sm">
+        <div className="flex min-w-0 items-center gap-3">
           {!sidebarOpen && (
             <Button variant="ghost" size="sm" onClick={onOpenSidebar}>
               <PanelRightOpen className="h-4 w-4" />
             </Button>
           )}
-          <div>
-            <h1 className={`font-heading text-lg text-foreground tracking-tight ${isMobile ? 'max-w-[11rem] truncate' : ''}`}>{activeTitle}</h1>
-            <p className="text-2xs text-muted-foreground/60">
+          <div className="min-w-0">
+            <h1 className={`truncate font-heading text-lg text-foreground tracking-tight ${isMobile ? 'max-w-[11rem]' : 'max-w-[18rem]'}`}>{activeTitle}</h1>
+            <p className="truncate text-2xs text-muted-foreground/60">
               当前工作区：{workspaceSummary.workspaceName} · {workspaceSummary.documentCount} 份资料
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-0.5 rounded-md border border-border p-0.5">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <div className="hidden xl:flex items-center gap-0.5 rounded-md border border-border p-0.5">
               <button onClick={() => onNavigate('chat')}
                 className="flex items-center gap-1 rounded-sm bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
                 <Sparkles className="h-3 w-3" />聊天
@@ -184,10 +184,10 @@ export default function ChatPage({ chat, onOpenSidebar, sidebarOpen, onNavigate,
               )}
             </div>
 
-          <div className="h-4 w-px bg-border hidden md:block" />
+          <div className="hidden h-4 w-px bg-border xl:block" />
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 flex-wrap justify-end">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>

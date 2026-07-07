@@ -159,6 +159,13 @@
   }
 }
 
+/* ── App shell floating actions ── */
+@media (min-width: 768px) {
+  .has-shell-action > header {
+    padding-right: 11.75rem;
+  }
+}
+
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
