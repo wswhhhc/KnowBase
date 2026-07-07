@@ -11,8 +11,9 @@ test('editor can trigger a clear-workspace job and sees it in task center', asyn
 
   await page.getByRole('button', { name: '任务' }).click()
   await expect(page.getByRole('heading', { name: '任务中心' })).toBeVisible()
-  await expect(page.getByText(job.body.job_id)).toBeVisible()
-  await expect(page.getByText('清空工作区')).toBeVisible()
+  const jobCard = page.getByRole('article').filter({ hasText: job.body.job_id })
+  await expect(jobCard).toBeVisible()
+  await expect(jobCard.getByRole('heading', { name: '清空工作区' })).toBeVisible()
   await expect.poll(async () => {
     const token = await accessToken(page)
     const response = await page.request.get(`/api/jobs/${job.body.job_id}`, {
@@ -25,7 +26,7 @@ test('editor can trigger a clear-workspace job and sees it in task center', asyn
   await page.reload()
   await expect(page.getByRole('button', { name: '退出登录' })).toBeVisible()
   await page.getByRole('button', { name: '任务' }).click()
-  await expect(page.getByText('已完成')).toBeVisible({ timeout: 10000 })
+  await expect(page.getByRole('article').filter({ hasText: job.body.job_id }).getByText('已完成')).toBeVisible({ timeout: 10000 })
 })
 
 test('editor can import a document, ask a question, and jump to the cited source', async ({ page }) => {
