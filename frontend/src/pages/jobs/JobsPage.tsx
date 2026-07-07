@@ -182,7 +182,8 @@ function JobRow({
   const percent = clampPercent(job.progress?.percent)
   const phase = job.progress?.message || job.progress?.phase || '等待 worker 更新进度'
   const canCancel = job.status === 'queued' || job.status === 'running'
-  const canRetry = job.status === 'failed'
+  const canRetry = job.status === 'failed' && job.job_type !== 'ingest_file'
+  const requiresReupload = job.status === 'failed' && job.job_type === 'ingest_file'
 
   return (
     <article className="rounded-lg border border-border bg-surface/30 p-4">
@@ -226,6 +227,11 @@ function JobRow({
             >
               {retrying ? '重试中' : '重试任务'}
             </Button>
+          )}
+          {requiresReupload && (
+            <p className="mt-3 max-w-36 text-2xs font-sans leading-relaxed text-muted-foreground/70">
+              请重新上传文件
+            </p>
           )}
         </div>
       </div>

@@ -210,6 +210,7 @@ describe('JobsPage', () => {
     vi.mocked(api.listJobs).mockResolvedValue([
       job({
         id: 'job-retry-fail',
+        job_type: 'ingest_url',
         status: 'failed',
         error: 'URL 下载失败',
       }),
@@ -222,6 +223,23 @@ describe('JobsPage', () => {
 
     expect(await screen.findByText('文件导入任务无法直接重试')).toBeInTheDocument()
     expect(screen.getByText('失败')).toBeInTheDocument()
+  })
+
+  it('does not offer direct retry for failed file imports', async () => {
+    vi.mocked(api.listJobs).mockResolvedValue([
+      job({
+        id: 'job-file-failed',
+        job_type: 'ingest_file',
+        status: 'failed',
+        error: '任务队列不可用',
+      }),
+    ])
+
+    render(<JobsPage onOpenSidebar={vi.fn()} sidebarOpen onNavigate={vi.fn()} />)
+
+    expect(await screen.findByText('任务队列不可用')).toBeInTheDocument()
+    expect(screen.getByText('请重新上传文件')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重试任务 job-file-failed' })).not.toBeInTheDocument()
   })
 
   it('auto refreshes while jobs are still active', async () => {

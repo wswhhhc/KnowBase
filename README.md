@@ -76,11 +76,24 @@ Windows PowerShell:
 scripts\dev.bat
 ```
 
+脚本会启动前端、后端、RQ worker，并在本机没有 Redis 监听 `6379` 时启动项目内置的 fake Redis。文件上传、URL 导入、清空工作区和重建索引都依赖这个后台任务链路。
+
 也可以分别启动：
 
 ```bash
 cd backend
 uv run uvicorn src.api.main:app --reload --port 8000
+```
+
+```bash
+cd backend
+# 如果本机没有 Redis，可先启动开发用 fake Redis
+PLAYWRIGHT_REDIS_PORT=6379 uv run python scripts/start_fake_redis.py
+```
+
+```bash
+cd backend
+uv run python -m src.jobs.worker
 ```
 
 ```bash

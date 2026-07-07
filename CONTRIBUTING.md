@@ -45,7 +45,20 @@ Windows PowerShell:
 scripts\dev.bat
 ```
 
+开发脚本会同时启动 Redis/RQ worker、FastAPI 和 Vite。上传、URL 导入、清空工作区、重建索引都是后台任务；如果只启动 backend/frontend，没有 Redis 和 worker，请求会返回“任务队列不可用”。
+
 也可以分别启动：
+
+```bash
+cd backend
+# 本机没有 Redis 时使用开发用 fake Redis
+PLAYWRIGHT_REDIS_PORT=6379 uv run python scripts/start_fake_redis.py
+```
+
+```bash
+cd backend
+uv run python -m src.jobs.worker
+```
 
 ```bash
 cd backend
