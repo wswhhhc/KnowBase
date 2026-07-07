@@ -161,7 +161,8 @@
 
 /* ── App shell floating actions ── */
 @media (min-width: 768px) {
-  .has-shell-action > header {
+  .has-shell-action > header,
+  .has-shell-action > div > header {
     padding-right: 11.75rem;
   }
 }
