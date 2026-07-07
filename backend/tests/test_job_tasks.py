@@ -204,6 +204,28 @@ def test_enqueue_tracked_job_can_inject_db_job_id_into_task_kwargs(isolated_jobs
     )
 
 
+def test_enqueue_tracked_job_runs_inline_in_e2e_fake_ai(monkeypatch, isolated_jobs_database):
+    user = auth_store.create_user(username="editor", password_hash=hash_password("editor-pass"), role="editor")
+    monkeypatch.setattr("src.jobs.enqueue.settings.e2e_fake_ai", True)
+
+    def fail_if_queue_is_used():
+        raise AssertionError("E2E inline jobs must not connect to Redis")
+
+    monkeypatch.setattr("src.jobs.enqueue.create_queue", fail_if_queue_is_used)
+
+    job = enqueue_tracked_job(
+        job_type="sample",
+        target_path="tests.test_job_tasks:sample_task",
+        created_by_user_id=user["id"],
+        workspace_id="ws-a",
+        args=[2, 3],
+    )
+
+    assert job["status"] == "succeeded"
+    assert job["attempts"] == 1
+    assert job["progress"] == {"phase": "done", "percent": 100}
+
+
 def test_enqueue_tracked_job_marks_failed_when_enqueue_fails(isolated_jobs_database):
     user = auth_store.create_user(username="editor", password_hash=hash_password("editor-pass"), role="editor")
 

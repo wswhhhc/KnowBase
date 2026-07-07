@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from rq import Queue
 
+from src.config.settings import settings
 from src.jobs.queue import create_queue
 from src.jobs.tasks import run_tracked_job
 from src.persistence import audit_store, job_store
+
+logger = logging.getLogger(__name__)
 
 
 def _retry_payload(
@@ -26,18 +30,35 @@ def _retry_payload(
     }
 
 
-def _enqueue_payload(job_id: str, payload: dict[str, Any], *, queue: Queue | None = None) -> None:
+def _task_kwargs(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     task_kwargs = dict(payload.get("kwargs") or {})
     if payload.get("inject_job_id"):
         task_kwargs["job_id"] = job_id
+    return task_kwargs
+
+
+def _enqueue_payload(job_id: str, payload: dict[str, Any], *, queue: Queue | None = None) -> None:
     (queue or create_queue()).enqueue(
         run_tracked_job,
         job_id,
         str(payload["target_path"]),
         list(payload.get("args") or []),
-        task_kwargs,
+        _task_kwargs(job_id, payload),
         job_id=job_id,
     )
+
+
+def _run_payload_inline(job_id: str, payload: dict[str, Any]) -> dict | None:
+    try:
+        run_tracked_job(
+            job_id,
+            str(payload["target_path"]),
+            list(payload.get("args") or []),
+            _task_kwargs(job_id, payload),
+        )
+    except Exception:
+        logger.exception("E2E inline job execution failed: %s", job_id)
+    return job_store.get_job(job_id)
 
 
 def enqueue_tracked_job(
@@ -70,6 +91,9 @@ def enqueue_tracked_job(
         target_id=job["id"],
         metadata={"job_type": job_type, "workspace_id": workspace_id},
     )
+    if settings.e2e_fake_ai and queue is None:
+        return _run_payload_inline(job["id"], retry_payload) or job
+
     try:
         _enqueue_payload(job["id"], retry_payload, queue=queue)
     except Exception as exc:
@@ -126,6 +150,9 @@ def retry_tracked_job(
         metadata={"job_type": retried["job_type"], "workspace_id": retried.get("workspace_id", "")},
     )
     try:
+        if settings.e2e_fake_ai and queue is None:
+            return _run_payload_inline(job_id, payload) or retried
+
         _enqueue_payload(job_id, payload, queue=queue)
     except Exception as exc:
         job_store.mark_job_failed(job_id, error=str(exc))

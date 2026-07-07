@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test'
 test('unauthenticated users land on login and admins can open settings', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { name: 'KnowBase' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '登录工作台' })).toBeVisible()
   await expect(page.getByLabel('用户名')).toBeVisible()
 
   await login(page, 'admin', 'admin-pass')
@@ -111,7 +111,7 @@ test('admin can create a user, create a workspace, assign membership, and the ne
 
 async function login(page: Page, username: string, password: string) {
   await page.getByLabel('用户名').fill(username)
-  await page.getByLabel('密码').fill(password)
+  await page.getByLabel('密码', { exact: true }).fill(password)
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await expect(page.getByRole('button', { name: '退出登录' })).toBeVisible()
 }
