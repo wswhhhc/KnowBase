@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 import threading
 import hashlib
+from typing import TypeVar
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -27,6 +28,12 @@ from src.rag.models import HotspotEntry, KBChunk, RetrievalResult
 
 
 logger = logging.getLogger(__name__)
+
+
+_RECOVERABLE_VECTOR_INDEX_ERROR_MARKERS = (
+    "Error finding id",
+)
+_T = TypeVar("_T")
 
 
 class EmbeddingIndexMismatchError(ValueError):
@@ -98,6 +105,43 @@ class KnowledgeBase:
         )
 
         self._write_lock = threading.Lock()
+
+    @staticmethod
+    def _is_recoverable_vector_index_error(exc: Exception) -> bool:
+        message = str(exc)
+        return any(marker in message for marker in _RECOVERABLE_VECTOR_INDEX_ERROR_MARKERS)
+
+    def refresh_from_persisted_store(self) -> None:
+        """Reopen Chroma and discard lazy-loaded in-memory state.
+
+        Local self-hosted runs use a separate RQ worker process for ingestion.
+        Chroma's long-lived API process handle can become stale after that
+        external writer mutates the persisted index, which may surface as
+        "Error finding id" during vector search. Reopening the store is safe
+        for read paths and keeps the API process in sync with disk.
+        """
+        with self._write_lock:
+            self.vector_store = self._init_vector_store()
+            self.state.clear()
+            self.state.existing_chunk_ids.update(self.vector_store.get(include=[]).get("ids") or [])
+            self.ingestion.vector_store = self.vector_store
+            self.retriever.vector_store = self.vector_store
+            self.catalog.vector_store = self.vector_store
+            self._refresh_index_metadata_state()
+
+    def _retry_after_vector_refresh(self, operation: Callable[[], _T], *, operation_name: str) -> _T:
+        try:
+            return operation()
+        except Exception as exc:
+            if not self._is_recoverable_vector_index_error(exc):
+                raise
+            logger.warning(
+                "Chroma vector index handle was stale during %s; reopening persisted store and retrying once: %s",
+                operation_name,
+                exc,
+            )
+            self.refresh_from_persisted_store()
+            return operation()
 
     def _create_embeddings(self):
         if settings.e2e_fake_ai:
@@ -178,13 +222,16 @@ class KnowledgeBase:
         workspace_id: str | None = None,
     ) -> list[RetrievalResult]:
         self._ensure_embedding_compatible()
-        return self.retriever.hybrid_search(
-            query,
-            k=k,
-            score_threshold=score_threshold,
-            vector_candidate_k=vector_candidate_k,
-            filter=filter,
-            workspace_id=workspace_id,
+        return self._retry_after_vector_refresh(
+            lambda: self.retriever.hybrid_search(
+                query,
+                k=k,
+                score_threshold=score_threshold,
+                vector_candidate_k=vector_candidate_k,
+                filter=filter,
+                workspace_id=workspace_id,
+            ),
+            operation_name="hybrid_search",
         )
 
     def debug_search_breakdown(
@@ -197,12 +244,15 @@ class KnowledgeBase:
         workspace_id: str | None = None,
     ) -> dict[str, list[RetrievalResult]]:
         self._ensure_embedding_compatible()
-        return self.retriever.debug_search_breakdown(
-            query,
-            k=k,
-            filter=filter,
-            vector_candidate_k=vector_candidate_k,
-            workspace_id=workspace_id,
+        return self._retry_after_vector_refresh(
+            lambda: self.retriever.debug_search_breakdown(
+                query,
+                k=k,
+                filter=filter,
+                vector_candidate_k=vector_candidate_k,
+                workspace_id=workspace_id,
+            ),
+            operation_name="debug_search_breakdown",
         )
 
     def get_neighbor_chunks(self, chunk_id: str, window: int = 1, workspace_id: str | None = None) -> list[Document]:

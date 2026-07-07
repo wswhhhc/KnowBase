@@ -154,6 +154,86 @@ class ClearTests(unittest.TestCase):
             self.assertIsNone(self.kb._embedding_mismatch_error)
 
 
+class RecoverStaleVectorIndexTests(unittest.TestCase):
+    def setUp(self):
+        patcher1 = patch("src.rag.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
+        patcher2 = patch("src.rag.knowledge_base.OpenAIEmbeddings")
+        patcher3 = patch("src.rag.knowledge_base.Chroma")
+        self.addCleanup(patcher1.stop)
+        self.addCleanup(patcher2.stop)
+        self.addCleanup(patcher3.stop)
+        patcher1.start()
+        patcher2.start()
+        self.mock_chroma_cls = patcher3.start()
+
+        self.first_store = MagicMock()
+        self.first_store.get.return_value = {
+            "documents": [], "metadatas": [], "ids": ["old-id"],
+        }
+        self.second_store = MagicMock()
+        self.second_store.get.return_value = {
+            "documents": [], "metadatas": [], "ids": ["new-id"],
+        }
+        self.mock_chroma_cls.side_effect = [self.first_store, self.second_store]
+        self.kb = KnowledgeBase()
+
+    def test_refresh_from_persisted_store_reopens_chroma_and_resets_loaded_state(self):
+        self.kb.ingestion._loaded = True
+        self.kb.all_docs[:] = [
+            Document(page_content="old", metadata={"source": "old.txt", "chunk_id": "old-id"}),
+        ]
+        self.kb.ingestion._rebuild_all()
+
+        self.kb.refresh_from_persisted_store()
+
+        self.assertIs(self.kb.vector_store, self.second_store)
+        self.assertIs(self.kb.ingestion.vector_store, self.second_store)
+        self.assertIs(self.kb.retriever.vector_store, self.second_store)
+        self.assertIs(self.kb.catalog.vector_store, self.second_store)
+        self.assertEqual(self.kb.existing_chunk_ids, {"new-id"})
+        self.assertEqual(self.kb.all_docs, [])
+        self.assertFalse(self.kb.ingestion._loaded)
+
+    def test_hybrid_search_reopens_chroma_and_retries_stale_index_error(self):
+        expected = [MagicMock()]
+        self.kb.retriever.hybrid_search = MagicMock(
+            side_effect=[
+                RuntimeError("Error executing plan: Internal error: Error finding id"),
+                expected,
+            ]
+        )
+
+        result = self.kb.hybrid_search("langchain", workspace_id="ws-alpha")
+
+        self.assertEqual(result, expected)
+        self.assertEqual(self.kb.retriever.hybrid_search.call_count, 2)
+        self.assertIs(self.kb.vector_store, self.second_store)
+
+    def test_debug_search_breakdown_reopens_chroma_and_retries_stale_index_error(self):
+        expected = {"vector_results": [], "bm25_results": [], "fused_results": []}
+        self.kb.retriever.debug_search_breakdown = MagicMock(
+            side_effect=[
+                RuntimeError("Internal error: Error finding id"),
+                expected,
+            ]
+        )
+
+        result = self.kb.debug_search_breakdown("langchain", workspace_id="ws-alpha")
+
+        self.assertEqual(result, expected)
+        self.assertEqual(self.kb.retriever.debug_search_breakdown.call_count, 2)
+        self.assertIs(self.kb.vector_store, self.second_store)
+
+    def test_non_recoverable_search_error_is_not_retried(self):
+        self.kb.retriever.hybrid_search = MagicMock(side_effect=RuntimeError("embedding service failed"))
+
+        with self.assertRaisesRegex(RuntimeError, "embedding service failed"):
+            self.kb.hybrid_search("langchain")
+
+        self.assertEqual(self.kb.retriever.hybrid_search.call_count, 1)
+        self.assertIs(self.kb.vector_store, self.first_store)
+
+
 class ContentHashTests(unittest.TestCase):
     def test_content_hash_is_consistent(self):
         h1 = _content_hash("同一个内容")

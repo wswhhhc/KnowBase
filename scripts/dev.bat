@@ -26,6 +26,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "}"
 echo.
 
+set "BACKEND_PORT=8000"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "if (Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue) { exit 1 }"
+if errorlevel 1 (
+  echo 端口 8000 仍被占用，改用 8001 启动后端。
+  set "BACKEND_PORT=8001"
+)
+
 :: 后端先安装依赖
 echo [1/4] 同步后端依赖...
 pushd "%~dp0..\backend"
@@ -48,8 +56,8 @@ echo 启动 RQ worker...
 start "KnowBase-Worker" cmd /c "cd /d "%~dp0..\backend" && uv run python -m src.jobs.worker"
 
 :: 启动后端
-echo [3/4] 启动 FastAPI 后端 (端口 8000)...
-start "KnowBase-Backend" cmd /c "cd /d "%~dp0..\backend" && uv sync && uv run uvicorn src.api.main:app --reload --port 8000 --host 0.0.0.0"
+echo [3/4] 启动 FastAPI 后端 (端口 %BACKEND_PORT%)...
+start "KnowBase-Backend" cmd /c "cd /d "%~dp0..\backend" && uv sync && uv run uvicorn src.api.main:app --port %BACKEND_PORT% --host 0.0.0.0"
 
 :: 等几秒让后端先启动
 echo 等待后端就绪...
@@ -57,13 +65,13 @@ timeout /t 8 /nobreak >nul
 
 :: 启动前端
 echo [4/4] 启动 React 前端 (端口 5173)...
-start "KnowBase-Frontend" cmd /c "cd /d "%~dp0..\frontend" && npm run dev"
+start "KnowBase-Frontend" cmd /c "cd /d "%~dp0..\frontend" && set "VITE_API_PROXY_TARGET=http://localhost:%BACKEND_PORT%" && npm run dev"
 
 echo.
 echo ===========================================
-echo   后端 API:  http://localhost:8000
+echo   后端 API:  http://localhost:%BACKEND_PORT%
 echo   前端界面:  http://localhost:5173
-echo   API 文档:  http://localhost:8000/docs
+echo   API 文档:  http://localhost:%BACKEND_PORT%/docs
 echo   Redis/RQ:  redis://localhost:6379/0 / knowbase
 echo ===========================================
 echo.
