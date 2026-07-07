@@ -5,16 +5,20 @@ from unittest.mock import patch
 
 from src.api.auth_tokens import hash_password
 from src.api.main import app
-from src.persistence import audit_store, auth_store
+from src.persistence import audit_store, auth_store, database, workspace_store
 from src.persistence.schema import metadata
 from src.persistence.sqlalchemy_database import create_engine_for_url
 
 
 def _configure_auth_database(monkeypatch, tmp_path):
-    database_url = f"sqlite:///{tmp_path / 'auth.db'}"
+    db_path = tmp_path / "auth.db"
+    database_url = f"sqlite:///{db_path}"
     engine = create_engine_for_url(database_url)
     metadata.create_all(engine)
+    monkeypatch.setattr(database, "_DB_PATH_OVERRIDE", db_path)
     monkeypatch.setattr(auth_store.settings, "database_url", database_url)
+    monkeypatch.setattr(audit_store.settings, "database_url", database_url)
+    monkeypatch.setattr(workspace_store.settings, "database_url", database_url)
     monkeypatch.setattr(auth_store.settings, "jwt_secret", "test-secret")
     monkeypatch.setattr(auth_store.settings, "access_token_minutes", 15)
     monkeypatch.setattr(auth_store.settings, "refresh_token_days", 14)
