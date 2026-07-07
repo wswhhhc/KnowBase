@@ -30,6 +30,49 @@ def _get_llm(*, streaming: bool = False) -> ChatOpenAI:
     )
 
 
+def get_stream_token_callback(config: object) -> object | None:
+    if not isinstance(config, dict):
+        return None
+    configurable = config.get("configurable")
+    if not isinstance(configurable, dict):
+        return None
+    callback = configurable.get("token_callback")
+    return callback if callable(callback) else None
+
+
+def run_llm_text(
+    llm: object,
+    prompt: str,
+    *,
+    stream: bool = False,
+    token_callback: object | None = None,
+) -> tuple[str, dict[str, int]]:
+    if not stream or not hasattr(llm, "stream"):
+        result = llm.invoke(prompt)
+        return str(result.content).strip(), extract_token_usage(result)
+
+    content_parts: list[str] = []
+    token_usage: dict[str, int] = {}
+    saw_stream_chunk = False
+    for chunk in llm.stream(prompt):
+        saw_stream_chunk = True
+        content = getattr(chunk, "content", "") or ""
+        if content:
+            text = str(content)
+            content_parts.append(text)
+            if callable(token_callback):
+                token_callback(text)
+        chunk_usage = extract_token_usage(chunk)
+        if chunk_usage:
+            token_usage = chunk_usage
+
+    if not saw_stream_chunk:
+        result = llm.invoke(prompt)
+        return str(result.content).strip(), extract_token_usage(result)
+
+    return "".join(content_parts).strip(), token_usage
+
+
 def extract_token_usage(result: object) -> dict[str, int]:
     """Extract normalized token usage fields from a LangChain/OpenAI response."""
     prompt_tokens: int | None = None

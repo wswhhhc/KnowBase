@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import queue
+import threading
 import time
 from uuid import uuid4
 
@@ -61,6 +63,8 @@ class ChatStreamService:
         self.ttfb = 0
         self.first_token = 0
         self._ttfb_set = False
+        self._manual_token_streamed = False
+        self._stream_error: Exception | None = None
 
     def _resolve_workspace_id(self) -> str:
         """Use the persisted conversation workspace when a thread already exists."""
@@ -99,28 +103,62 @@ class ChatStreamService:
 
     def _stream_updates(self):
         """Iterate the LangGraph stream, yielding ``node`` and ``token`` SSE events."""
-        events = run_query(
-            question=self.body.question,
-            thread_id=self.thread_id,
-            knowledge_base=self.kb,
-            stream_tokens=True,
-            web_search_enabled=self.body.web_search_enabled,
-            search_strategy=self.body.search_strategy,
-            workspace_id=self.workspace_id,
-            pinned_chunk_ids=self.body.pinned_chunk_ids,
-            excluded_chunk_ids=self.body.excluded_chunk_ids,
-        )
+        event_queue: queue.Queue[dict | object] = queue.Queue()
+        sentinel = object()
 
-        for mode, data in events:
-            # TTFB = time from request start until first event of any type
-            if not self._ttfb_set:
-                self.ttfb = int((time.monotonic() - self.t0) * 1000)
-                self._ttfb_set = True
+        def enqueue_token(text: str) -> None:
+            if not text:
+                return
+            if self.first_token == 0:
+                self.first_token = int((time.monotonic() - self.t0) * 1000)
+            self._manual_token_streamed = True
+            self.accumulated_answer += text
+            event_queue.put({"event": "token", "data": json.dumps({"text": text})})
 
-            if mode == "updates":
-                yield from self._process_updates(data)
-            elif mode == "messages":
-                yield from self._process_messages(data)
+        def worker() -> None:
+            try:
+                events = run_query(
+                    question=self.body.question,
+                    thread_id=self.thread_id,
+                    knowledge_base=self.kb,
+                    stream_tokens=True,
+                    web_search_enabled=self.body.web_search_enabled,
+                    search_strategy=self.body.search_strategy,
+                    workspace_id=self.workspace_id,
+                    pinned_chunk_ids=self.body.pinned_chunk_ids,
+                    excluded_chunk_ids=self.body.excluded_chunk_ids,
+                    token_callback=enqueue_token,
+                )
+
+                for mode, data in events:
+                    # TTFB = time from request start until first event of any type
+                    if not self._ttfb_set:
+                        self.ttfb = int((time.monotonic() - self.t0) * 1000)
+                        self._ttfb_set = True
+
+                    if mode == "updates":
+                        for event in self._process_updates(data):
+                            event_queue.put(event)
+                    elif mode == "messages":
+                        for event in self._process_messages(data):
+                            event_queue.put(event)
+            except Exception as exc:
+                self._stream_error = exc
+            finally:
+                event_queue.put(sentinel)
+
+        thread = threading.Thread(target=worker, name="chat-stream-worker", daemon=True)
+        thread.start()
+
+        while True:
+            event = event_queue.get()
+            if event is sentinel:
+                break
+            yield event
+
+        thread.join()
+        if self._stream_error is not None:
+            raise self._stream_error
 
     def _process_updates(self, data: dict):
         """Handle a LangGraph ``updates`` event: emit node SSE and accumulate state."""
@@ -151,6 +189,8 @@ class ChatStreamService:
             and chunk.content
             and metadata.get("langgraph_node") in ANSWER_STREAM_NODES
         ):
+            if self._manual_token_streamed:
+                return
             if self.first_token == 0:
                 self.first_token = int((time.monotonic() - self.t0) * 1000)
             self.accumulated_answer += chunk.content

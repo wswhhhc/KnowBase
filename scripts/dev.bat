@@ -18,7 +18,7 @@ echo.
 
 echo 清理旧的开发服务端口...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$ports = 8000,5173; " ^
+  "$ports = 8000,8001,5173; " ^
   "foreach ($port in $ports) { " ^
   "  Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | " ^
   "    Select-Object -ExpandProperty OwningProcess -Unique | " ^

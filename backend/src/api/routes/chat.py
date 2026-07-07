@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import AsyncGenerator
 
+import anyio
 from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
 
@@ -33,7 +34,20 @@ async def chat_stream(
     service = ChatStreamService(body, kb)
 
     async def async_wrapper() -> AsyncGenerator[dict, None]:
-        for event in service.run():
+        sentinel = object()
+        iterator = iter(service.run())
+
+        def next_event() -> dict | object:
+            try:
+                return next(iterator)
+            except StopIteration:
+                return sentinel
+
+        while True:
+            event = await anyio.to_thread.run_sync(next_event)
+            if event is sentinel:
+                break
             yield event
+            await anyio.sleep(0)
 
     return EventSourceResponse(async_wrapper())

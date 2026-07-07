@@ -1,14 +1,13 @@
 """Answer generation nodes."""
 
-from __future__ import annotations
-
+from langchain_core.runnables import RunnableConfig
 from langchain_core.prompts import ChatPromptTemplate
 
 from src.graph import utils as gu
 from src.graph.state import GraphState, GraphStateUpdate
 
 
-def generate_answer(state: GraphState) -> GraphStateUpdate:
+def generate_answer(state: GraphState, config: RunnableConfig | None = None) -> GraphStateUpdate:
     context = state.get("context", "")
     web_context = state.get("web_context", "")
     web_search_error = state.get("web_search_error", "")
@@ -16,6 +15,7 @@ def generate_answer(state: GraphState) -> GraphStateUpdate:
     used_web_search = state.get("used_web_search", False)
     history = gu._messages_to_turns(state.get("messages", []))
     strategy = state.get("search_strategy", "balanced")
+    token_callback = gu.get_stream_token_callback(config)
 
     if web_context:
         context = f"{context}\n\n{web_context}" if context else web_context
@@ -45,14 +45,23 @@ def generate_answer(state: GraphState) -> GraphStateUpdate:
             ("system", system_msg),
             ("human", "对话历史：\n{history}\n\n参考文档：\n{context}\n\n用户问题：{question}"),
         ])
-        result = llm.invoke(prompt.format(history=gu._format_chat_history(history, limit=3), context=context, question=question))
+        answer, token_usage = gu.run_llm_text(
+            llm,
+            prompt.format(history=gu._format_chat_history(history, limit=3), context=context, question=question),
+            stream=True,
+            token_callback=token_callback,
+        )
     else:
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_msg),
             ("human", "参考文档：\n{context}\n\n用户问题：{question}"),
         ])
-        result = llm.invoke(prompt.format(context=context, question=question))
-    answer = str(result.content).strip()
+        answer, token_usage = gu.run_llm_text(
+            llm,
+            prompt.format(context=context, question=question),
+            stream=True,
+            token_callback=token_callback,
+        )
 
     sources = state.get("sources", [])
     if web_context:
@@ -74,5 +83,5 @@ def generate_answer(state: GraphState) -> GraphStateUpdate:
     return {
         "answer": answer,
         "sources": sources,
-        **gu.extract_token_usage(result),
+        **token_usage,
     }

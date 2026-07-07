@@ -152,8 +152,8 @@ def _initial_state(question: str) -> GraphState:
     }
 
 
-def _graph_config(thread_id: str) -> GraphConfig:
-    return {"configurable": {"thread_id": thread_id}}
+def _graph_config(thread_id: str, **configurable: object) -> GraphConfig:
+    return {"configurable": {"thread_id": thread_id, **configurable}}
 
 
 def _state_with_overrides(question: str, **overrides: object) -> GraphState:
@@ -169,12 +169,20 @@ def _stream_query(question: str, thread_id: str, knowledge_base: KnowledgeBase, 
 
 
 def _stream_query_with_tokens(
-    question: str, thread_id: str, knowledge_base: KnowledgeBase, **state_overrides: object
+    question: str,
+    thread_id: str,
+    knowledge_base: KnowledgeBase,
+    token_callback: object | None = None,
+    **state_overrides: object,
 ) -> Generator[tuple[str, object], None, None]:
     graph = get_graph(knowledge_base)
+    config = _graph_config(
+        thread_id,
+        **({"token_callback": token_callback} if token_callback is not None else {}),
+    )
     for mode, data in graph.stream(
         _state_with_overrides(question, **state_overrides),
-        config=_graph_config(thread_id),
+        config=config,
         stream_mode=["updates", "messages"],
     ):
         yield (mode, data)
@@ -192,6 +200,7 @@ def run_query(
     workspace_id: str = "",
     pinned_chunk_ids: list[str] | None = None,
     excluded_chunk_ids: list[str] | None = None,
+    token_callback: object | None = None,
 ) -> GraphState | Iterable[GraphStateUpdate] | Generator[tuple[str, object], None, None]:
     overrides = {
         "web_search_enabled": web_search_enabled,
@@ -203,7 +212,7 @@ def run_query(
     if excluded_chunk_ids:
         overrides["excluded_chunk_ids"] = excluded_chunk_ids
     if stream_tokens:
-        return _stream_query_with_tokens(question, thread_id, knowledge_base, **overrides)
+        return _stream_query_with_tokens(question, thread_id, knowledge_base, token_callback=token_callback, **overrides)
     if stream:
         return _stream_query(question, thread_id, knowledge_base, **overrides)
 
