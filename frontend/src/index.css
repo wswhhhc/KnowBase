@@ -149,6 +149,52 @@
   @apply h-full rounded-full transition-all duration-700 ease-out;
 }
 
+/* ── Auth page motion ── */
+.auth-grid {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.18) 1px, transparent 1px),
+    linear-gradient(115deg, hsl(var(--background)) 0%, hsl(var(--surface) / 0.45) 52%, hsl(var(--background)) 100%);
+  background-position: 0 0, 0 0, center;
+  background-size: 48px 48px, 48px 48px, cover;
+}
+
+.auth-enter {
+  animation: auth-enter 0.52s ease-out both;
+}
+
+.auth-reveal {
+  animation: auth-enter 0.22s ease-out both;
+}
+
+.auth-scanline {
+  background:
+    linear-gradient(90deg, transparent, hsl(var(--primary) / 0.16), transparent),
+    repeating-linear-gradient(0deg, transparent 0 17px, hsl(var(--border) / 0.35) 18px);
+  transform: translateX(-35%);
+  animation: auth-drift 7s ease-in-out infinite alternate;
+}
+
+@keyframes auth-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-drift {
+  from {
+    transform: translateX(-35%);
+  }
+  to {
+    transform: translateX(35%);
+  }
+}
+
 /* ── Mobile bottom tab safe area ── */
 @media (max-width: 767px) {
   .pb-safe {
