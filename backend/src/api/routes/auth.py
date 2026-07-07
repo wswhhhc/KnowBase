@@ -17,7 +17,7 @@ from src.api.deps import get_current_user
 from src.api.models import AuthSessionOut, LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest, UserOut
 from src.api.rate_limit import enforce_auth_login_rate_limit
 from src.config.settings import settings
-from src.persistence import audit_store, auth_store
+from src.persistence import audit_store, auth_store, workspace_store
 
 
 router = APIRouter()
@@ -92,10 +92,14 @@ async def register(body: RegisterRequest, request: Request) -> AuthSessionOut:
         user = auth_store.create_user(
             username=body.username,
             password_hash=hash_password(body.password),
-            role="viewer",
+            role="editor",
             is_active=True,
         )
-        auth_store.add_workspace_member(workspace_id="", user_id=user["id"], role="viewer")
+        workspace = workspace_store.create_workspace(
+            name=f"{user['username']} 的工作区",
+            description="自注册账号的个人知识库工作区",
+        )
+        auth_store.add_workspace_member(workspace_id=workspace["id"], user_id=user["id"], role="editor")
     except Exception as exc:
         audit_store.record_event(
             action="auth.register_failed",
@@ -112,7 +116,8 @@ async def register(body: RegisterRequest, request: Request) -> AuthSessionOut:
         metadata={
             "username": user["username"],
             "role": user["role"],
-            "default_workspace_role": "viewer",
+            "personal_workspace_id": workspace["id"],
+            "personal_workspace_role": "editor",
         },
     )
     return _new_session_for_user(user)

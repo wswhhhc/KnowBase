@@ -148,7 +148,7 @@ describe('App component', () => {
     expect(localStorage.getItem('knowbase_access_token')).toBe('access-token')
   })
 
-  it('registers a viewer account and renders the workspace shell', async () => {
+  it('registers an editor account and renders the workspace shell', async () => {
     mockRegister.mockResolvedValue({
       access_token: 'registered-access-token',
       refresh_token: 'registered-refresh-token',
@@ -157,7 +157,7 @@ describe('App component', () => {
       user: {
         id: 'user-2',
         username: 'alice',
-        role: 'viewer',
+        role: 'editor',
         is_active: true,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',

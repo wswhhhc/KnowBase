@@ -82,7 +82,7 @@ def test_login_rejects_bad_password(monkeypatch, tmp_path):
     assert "password" not in audit_events[0]["metadata"]
 
 
-def test_register_creates_active_viewer_session_and_default_workspace_membership(monkeypatch, tmp_path):
+def test_register_creates_isolated_editor_workspace(monkeypatch, tmp_path):
     _configure_auth_database(monkeypatch, tmp_path)
 
     client = TestClient(app)
@@ -95,20 +95,66 @@ def test_register_creates_active_viewer_session_and_default_workspace_membership
     body = response.json()
     assert body["token_type"] == "bearer"
     assert body["user"]["username"] == "alice"
-    assert body["user"]["role"] == "viewer"
+    assert body["user"]["role"] == "editor"
     assert body["user"]["is_active"] is True
     assert "password_hash" not in body["user"]
     stored = auth_store.get_user_by_username("alice")
     assert stored is not None
-    assert auth_store.get_workspace_member_role(workspace_id="", user_id=stored["id"]) == "viewer"
+    assert auth_store.get_workspace_member_role(workspace_id="", user_id=stored["id"]) is None
+
+    workspaces = client.get(
+        "/api/workspaces",
+        headers={"Authorization": f"Bearer {body['access_token']}"},
+    )
+    assert workspaces.status_code == 200
+    visible_workspaces = workspaces.json()
+    assert len(visible_workspaces) == 1
+    personal_workspace = visible_workspaces[0]
+    assert personal_workspace["id"]
+    assert personal_workspace["name"] == "alice 的工作区"
+    assert auth_store.get_workspace_member_role(
+        workspace_id=personal_workspace["id"],
+        user_id=stored["id"],
+    ) == "editor"
 
     audit_events = audit_store.list_events(actor_user_id=stored["id"], limit=10)
     assert audit_events[0]["action"] == "auth.register_succeeded"
     assert audit_events[0]["metadata"] == {
-        "default_workspace_role": "viewer",
-        "role": "viewer",
+        "personal_workspace_id": personal_workspace["id"],
+        "personal_workspace_role": "editor",
+        "role": "editor",
         "username": "alice",
     }
+
+
+def test_registered_users_do_not_see_each_others_workspaces(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+
+    client = TestClient(app)
+    alice = client.post("/api/auth/register", json={"username": "alice", "password": "alice-pass"}).json()
+    bob = client.post("/api/auth/register", json={"username": "bob", "password": "bob-pass-123"}).json()
+
+    alice_workspaces = client.get(
+        "/api/workspaces",
+        headers={"Authorization": f"Bearer {alice['access_token']}"},
+    )
+    bob_workspaces = client.get(
+        "/api/workspaces",
+        headers={"Authorization": f"Bearer {bob['access_token']}"},
+    )
+
+    assert alice_workspaces.status_code == 200
+    assert bob_workspaces.status_code == 200
+    assert [workspace["name"] for workspace in alice_workspaces.json()] == ["alice 的工作区"]
+    assert [workspace["name"] for workspace in bob_workspaces.json()] == ["bob 的工作区"]
+    assert alice_workspaces.json()[0]["id"] != bob_workspaces.json()[0]["id"]
+
+    bob_workspace_id = bob_workspaces.json()[0]["id"]
+    forbidden = client.get(
+        f"/api/knowledge-base/stats?workspace_id={bob_workspace_id}",
+        headers={"Authorization": f"Bearer {alice['access_token']}"},
+    )
+    assert forbidden.status_code == 403
 
 
 def test_register_rejects_duplicate_username_without_logging_password(monkeypatch, tmp_path):
