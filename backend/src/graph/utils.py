@@ -19,13 +19,14 @@ from src.utils import json_from_text
 logger = logging.getLogger(__name__)
 
 
-def _get_llm() -> ChatOpenAI:
+def _get_llm(*, streaming: bool = False) -> ChatOpenAI:
     return ChatOpenAI(
         model=get_runtime_setting("llm_model", LLM_MODEL),
         temperature=get_runtime_setting("llm_temperature", LLM_TEMPERATURE),
         max_tokens=LLM_MAX_TOKENS,
         openai_api_key=require_siliconflow_api_key(),
         openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
+        streaming=streaming,
     )
 
 

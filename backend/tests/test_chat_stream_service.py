@@ -188,6 +188,32 @@ class ChatStreamServiceTests(unittest.TestCase):
         self.assertGreaterEqual(kwargs["first_token_ms"], 40)
 
     @patch.object(ChatStreamService, "_persist", return_value=("conv-1", 2))
+    @patch("src.api.chat_stream_service.run_query")
+    def test_only_visible_answer_nodes_emit_token_events(
+        self,
+        mock_run_query,
+        _mock_persist,
+    ):
+        mock_run_query.return_value = iter([
+            ("messages", (AIMessageChunk(content="内部改写"), {"langgraph_node": "rewrite_query"})),
+            ("messages", (AIMessageChunk(content="历史回答"), {"langgraph_node": "answer_from_history"})),
+            ("messages", (AIMessageChunk(content="总结回答"), {"langgraph_node": "summarize_history"})),
+            ("messages", (AIMessageChunk(content="知识库回答"), {"langgraph_node": "generate_answer"})),
+            ("updates", {"finalize": {"evidence_level": "high", "outcome_category": "success"}}),
+        ])
+        body = ChatRequest(question="测试", web_search_enabled=False, search_strategy="balanced")
+
+        events = list(ChatStreamService(body, kb=object()).run())
+        token_texts = [
+            json.loads(event["data"])["text"]
+            for event in events
+            if event["event"] == "token"
+        ]
+
+        self.assertEqual(token_texts, ["历史回答", "总结回答", "知识库回答"])
+        self.assertNotIn("内部改写", token_texts)
+
+    @patch.object(ChatStreamService, "_persist", return_value=("conv-1", 2))
     @patch("src.graph.quality_nodes.check_quality", side_effect=_accept_answer)
     @patch("src.graph.generation_nodes.generate_answer", side_effect=_generate_answer_from_sources)
     @patch("src.graph.graph.route_question", side_effect=_route_kb)

@@ -15,7 +15,7 @@ def answer_from_history(state: GraphState) -> GraphStateUpdate:
         answer = "当前会话里还没有可参考的历史消息，所以我无法回答这个问题。"
         return {"answer": answer, "sources": [], "messages": [AIMessage(content=answer)]}
 
-    llm = gu._get_llm()
+    llm = gu._get_llm(streaming=True)
     prompt = ChatPromptTemplate.from_messages([
         ("system", "你是对话记忆助手。只能依据给定会话历史回答；如果历史不足，明确说明。用中文回答。"),
         ("human", "会话历史：\n{history}\n\n当前问题：{question}"),
@@ -36,7 +36,7 @@ def summarize_history(state: GraphState) -> GraphStateUpdate:
         answer = "当前会话还没有足够内容可供总结。"
         return {"answer": answer, "sources": [], "messages": [AIMessage(content=answer)]}
 
-    llm = gu._get_llm()
+    llm = gu._get_llm(streaming=True)
     prompt = ChatPromptTemplate.from_messages([
         ("system", "你是对话总结助手。基于会话历史总结关键信息、结论和未解决问题，不要编造。"),
         ("human", "会话历史：\n{history}\n\n用户要求：{question}"),

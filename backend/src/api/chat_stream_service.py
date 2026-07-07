@@ -20,6 +20,8 @@ from src.rag.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
+ANSWER_STREAM_NODES = {"generate_answer", "answer_from_history", "summarize_history"}
+
 
 def get_conversation_by_thread(thread_id: str) -> dict | None:
     return conversation_store.get_conversation_by_thread(thread_id)
@@ -147,7 +149,7 @@ class ChatStreamService:
         if (
             isinstance(chunk, AIMessageChunk)
             and chunk.content
-            and metadata.get("langgraph_node") == "generate_answer"
+            and metadata.get("langgraph_node") in ANSWER_STREAM_NODES
         ):
             if self.first_token == 0:
                 self.first_token = int((time.monotonic() - self.t0) * 1000)

@@ -39,7 +39,7 @@ def generate_answer(state: GraphState) -> GraphStateUpdate:
     else:
         system_msg += "只能基于参考文档回答；证据不足就说不知道。在回答中引用参考文档时，使用 [1]、[2] 等编号标注来源，编号对应上方参考文档列表中的编号。例如：根据文档说明，该值为 42[1]。多个引用用逗号分隔如 [1,2]。每个关键事实都应标注来源。用中文回答。保持与对话历史中已给出信息的一致性，如果同一实体已有过描述，不要自相矛盾。"
 
-    llm = gu._get_llm()
+    llm = gu._get_llm(streaming=True)
     if history:
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_msg),
