@@ -38,10 +38,9 @@ describe('useTheme', () => {
     expect(localStorage.getItem('knowbase-theme')).toBe('light')
   })
 
-  it('respects prefers-color-scheme when no stored value', () => {
-    // Set matchMedia to report light preference
+  it('defaults to light when no stored value exists', () => {
     window.matchMedia = ((query: string) => ({
-      matches: query === '(prefers-color-scheme: light)',
+      matches: query === '(prefers-color-scheme: dark)',
       media: query,
       onchange: null,
       addListener: () => {},

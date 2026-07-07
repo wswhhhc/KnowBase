@@ -1,7 +1,8 @@
 import { FormEvent, useState } from 'react'
-import { Eye, EyeOff, Layers3, Loader2, LockKeyhole, LogIn, ShieldCheck, UserPlus } from 'lucide-react'
+import { Eye, EyeOff, Layers3, Loader2, LockKeyhole, LogIn, Moon, ShieldCheck, Sun, UserPlus } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/hooks/useTheme'
 import { login, register } from '@/shared/api/auth'
 import { ApiError } from '@/shared/api/client'
 import { saveAuthSession } from '@/shared/api/session'
@@ -12,6 +13,7 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onAuthenticated }: LoginPageProps) {
+  const theme = useTheme()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -54,6 +56,18 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
 
   return (
     <div className="auth-grid noise-overlay min-h-screen overflow-hidden bg-background text-foreground">
+      <button
+        type="button"
+        aria-label={theme.theme === 'light' ? '切换深色模式' : '切换浅色模式'}
+        onClick={theme.toggle}
+        className="fixed right-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-md border border-border bg-surface/85 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:border-primary/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {theme.theme === 'light' ? (
+          <Moon className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Sun className="h-4 w-4" aria-hidden="true" />
+        )}
+      </button>
       <main className="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-10 px-4 py-8 sm:px-6 lg:grid-cols-[1fr_26rem] lg:px-8">
         <section className="auth-enter hidden min-h-[32rem] flex-col justify-between lg:flex">
           <div className="max-w-xl">
@@ -181,59 +195,59 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
               />
             </div>
 
-          <div className="space-y-2">
-            <label htmlFor="login-password" className="text-sm font-medium text-surface-foreground">
-              密码
-            </label>
-            <div className="relative">
-              <input
-                id="login-password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="h-11 w-full rounded-md border border-input bg-background px-3 pr-11 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/25"
-                minLength={mode === 'register' ? 8 : undefined}
-                required
-              />
-              <button
-                type="button"
-                aria-label={showPassword ? '隐藏输入内容' : '显示输入内容'}
-                onClick={() => setShowPassword((visible) => !visible)}
-                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-              </button>
-            </div>
-          </div>
-
-          {mode === 'register' && (
-            <div className="auth-reveal space-y-2">
-              <label htmlFor="register-confirm-password" className="text-sm font-medium text-surface-foreground">
-                确认密码
+            <div className="space-y-2">
+              <label htmlFor="login-password" className="text-sm font-medium text-surface-foreground">
+                密码
               </label>
               <div className="relative">
                 <input
-                  id="register-confirm-password"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
                   className="h-11 w-full rounded-md border border-input bg-background px-3 pr-11 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/25"
-                  minLength={8}
+                  minLength={mode === 'register' ? 8 : undefined}
                   required
                 />
                 <button
                   type="button"
-                  aria-label={showConfirmPassword ? '隐藏确认输入' : '显示确认输入'}
-                  onClick={() => setShowConfirmPassword((visible) => !visible)}
+                  aria-label={showPassword ? '隐藏输入内容' : '显示输入内容'}
+                  onClick={() => setShowPassword((visible) => !visible)}
                   className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  {showConfirmPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+                  {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
                 </button>
               </div>
             </div>
-          )}
+
+            {mode === 'register' && (
+              <div className="auth-reveal space-y-2">
+                <label htmlFor="register-confirm-password" className="text-sm font-medium text-surface-foreground">
+                  确认密码
+                </label>
+                <div className="relative">
+                  <input
+                    id="register-confirm-password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className="h-11 w-full rounded-md border border-input bg-background px-3 pr-11 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/25"
+                    minLength={8}
+                    required
+                  />
+                  <button
+                    type="button"
+                    aria-label={showConfirmPassword ? '隐藏确认输入' : '显示确认输入'}
+                    onClick={() => setShowConfirmPassword((visible) => !visible)}
+                    className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+                  </button>
+                </div>
+              </div>
+            )}
 
           {error && (
             <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

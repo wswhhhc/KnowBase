@@ -5,6 +5,8 @@ import App from '@/app/App'
 
 const mockLogin = vi.fn()
 const mockRegister = vi.fn()
+const mockToggleTheme = vi.fn()
+let mockTheme: 'dark' | 'light' = 'light'
 
 function storeSession(role: string) {
   localStorage.setItem('knowbase_access_token', 'access-token')
@@ -86,7 +88,7 @@ vi.mock('@/hooks/useData', () => ({
   useSources: () => ({ sources: [], refresh: vi.fn() }),
 }))
 vi.mock('@/hooks/useTheme', () => ({
-  useTheme: () => ({ theme: 'dark', toggle: vi.fn() }),
+  useTheme: () => ({ theme: mockTheme, toggle: mockToggleTheme }),
 }))
 vi.mock('@/shared/api/auth', () => ({
   login: (...args: unknown[]) => mockLogin(...args),
@@ -96,6 +98,7 @@ vi.mock('@/shared/api/auth', () => ({
 describe('App component', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockTheme = 'light'
     localStorage.clear()
     sessionStorage.clear()
     mockChat.workspaceId = ''
@@ -159,6 +162,14 @@ describe('App component', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '隐藏输入内容' }))
     expect(passwordInput).toHaveAttribute('type', 'password')
+  })
+
+  it('shows a theme toggle on the login page', async () => {
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '切换深色模式' }))
+
+    expect(mockToggleTheme).toHaveBeenCalledTimes(1)
   })
 
   it('registers an editor account and renders the workspace shell', async () => {
