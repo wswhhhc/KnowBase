@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import App from '@/app/App'
 
 const mockLogin = vi.fn()
+const mockRegister = vi.fn()
 
 function storeSession(role: string) {
   localStorage.setItem('knowbase_access_token', 'access-token')
@@ -89,6 +90,7 @@ vi.mock('@/hooks/useTheme', () => ({
 }))
 vi.mock('@/shared/api/auth', () => ({
   login: (...args: unknown[]) => mockLogin(...args),
+  register: (...args: unknown[]) => mockRegister(...args),
 }))
 
 describe('App component', () => {
@@ -144,6 +146,48 @@ describe('App component', () => {
 
     expect(await screen.findByTestId('sidebar')).toBeInTheDocument()
     expect(localStorage.getItem('knowbase_access_token')).toBe('access-token')
+  })
+
+  it('registers a viewer account and renders the workspace shell', async () => {
+    mockRegister.mockResolvedValue({
+      access_token: 'registered-access-token',
+      refresh_token: 'registered-refresh-token',
+      token_type: 'bearer',
+      expires_in: 1800,
+      user: {
+        id: 'user-2',
+        username: 'alice',
+        role: 'viewer',
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    })
+
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '切换到注册模式' }))
+    await userEvent.type(screen.getByLabelText('用户名'), 'alice')
+    await userEvent.type(screen.getByLabelText('密码'), 'alice-pass')
+    await userEvent.type(screen.getByLabelText('确认密码'), 'alice-pass')
+    await userEvent.click(screen.getByRole('button', { name: '注册并进入' }))
+
+    expect(mockRegister).toHaveBeenCalledWith({ username: 'alice', password: 'alice-pass' })
+    expect(await screen.findByTestId('sidebar')).toBeInTheDocument()
+    expect(localStorage.getItem('knowbase_access_token')).toBe('registered-access-token')
+  })
+
+  it('blocks registration when password confirmation does not match', async () => {
+    render(<App />)
+
+    await userEvent.click(screen.getByRole('button', { name: '切换到注册模式' }))
+    await userEvent.type(screen.getByLabelText('用户名'), 'alice')
+    await userEvent.type(screen.getByLabelText('密码'), 'alice-pass')
+    await userEvent.type(screen.getByLabelText('确认密码'), 'other-pass')
+    await userEvent.click(screen.getByRole('button', { name: '注册并进入' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('两次输入的密码不一致')
+    expect(mockRegister).not.toHaveBeenCalled()
   })
 
   it('renders Sidebar and ChatArea when a legacy API key is configured', async () => {

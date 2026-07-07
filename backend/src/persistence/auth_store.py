@@ -77,6 +77,15 @@ def get_workspace_member_role(*, workspace_id: str, user_id: str) -> str | None:
     )
 
 
+def add_workspace_member(*, workspace_id: str, user_id: str, role: str) -> dict:
+    return auth_repository.add_workspace_member_with_session(
+        _session_factory(),
+        workspace_id=workspace_id,
+        user_id=user_id,
+        role=role,
+    )
+
+
 def replace_workspace_members(*, workspace_id: str, members: list[dict]) -> list[dict]:
     return auth_repository.replace_workspace_members_with_session(
         _session_factory(),

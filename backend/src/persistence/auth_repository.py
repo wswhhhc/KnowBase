@@ -179,6 +179,30 @@ def get_workspace_member_role_with_session(
     return role
 
 
+def add_workspace_member_with_session(
+    session_factory: SessionFactory,
+    *,
+    workspace_id: str,
+    user_id: str,
+    role: str,
+) -> dict:
+    if role not in VALID_WORKSPACE_MEMBER_ROLES:
+        raise ValueError("invalid workspace member role")
+    now = datetime.now(UTC).isoformat()
+    row = {
+        "workspace_id": workspace_id,
+        "user_id": user_id,
+        "role": role,
+        "created_at": now,
+    }
+    with session_factory.begin() as session:
+        result = session.execute(workspace_members.insert().values(**row))
+        row["id"] = result.inserted_primary_key[0]
+    user = get_user_by_id_with_session(session_factory, user_id) or {}
+    row["username"] = user.get("username", "")
+    return row
+
+
 def replace_workspace_members_with_session(
     session_factory: SessionFactory,
     *,

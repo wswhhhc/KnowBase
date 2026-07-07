@@ -124,13 +124,14 @@ class RateLimitTests(unittest.TestCase):
                 return 0
             return default
 
-        with patch("src.api.deps.get_runtime_setting", side_effect=_runtime_setting):
-            with patch("src.api.rate_limit.get_runtime_setting", side_effect=_runtime_setting):
-                response = self.client.post(
-                    "/api/chat/stream",
-                    json={"question": "测试", "web_search_enabled": False, "search_strategy": "balanced"},
-                    headers={"Authorization": "Bearer wrong-key"},
-                )
+        with patch("src.api.deps.settings.jwt_secret", ""):
+            with patch("src.api.deps.get_runtime_setting", side_effect=_runtime_setting):
+                with patch("src.api.rate_limit.get_runtime_setting", side_effect=_runtime_setting):
+                    response = self.client.post(
+                        "/api/chat/stream",
+                        json={"question": "测试", "web_search_enabled": False, "search_strategy": "balanced"},
+                        headers={"Authorization": "Bearer wrong-key"},
+                    )
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "Invalid or missing API key")

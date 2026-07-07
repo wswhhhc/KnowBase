@@ -82,6 +82,55 @@ def test_login_rejects_bad_password(monkeypatch, tmp_path):
     assert "password" not in audit_events[0]["metadata"]
 
 
+def test_register_creates_active_viewer_session_and_default_workspace_membership(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/auth/register",
+        json={"username": "  alice  ", "password": "alice-pass"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["token_type"] == "bearer"
+    assert body["user"]["username"] == "alice"
+    assert body["user"]["role"] == "viewer"
+    assert body["user"]["is_active"] is True
+    assert "password_hash" not in body["user"]
+    stored = auth_store.get_user_by_username("alice")
+    assert stored is not None
+    assert auth_store.get_workspace_member_role(workspace_id="", user_id=stored["id"]) == "viewer"
+
+    audit_events = audit_store.list_events(actor_user_id=stored["id"], limit=10)
+    assert audit_events[0]["action"] == "auth.register_succeeded"
+    assert audit_events[0]["metadata"] == {
+        "default_workspace_role": "viewer",
+        "role": "viewer",
+        "username": "alice",
+    }
+
+
+def test_register_rejects_duplicate_username_without_logging_password(monkeypatch, tmp_path):
+    _configure_auth_database(monkeypatch, tmp_path)
+    auth_store.create_user(username="alice", password_hash=hash_password("alice-pass"), role="viewer")
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/auth/register",
+        json={"username": "alice", "password": "different-pass"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "用户已存在"
+    assert len([user for user in auth_store.list_users() if user["username"] == "alice"]) == 1
+    audit_events = audit_store.list_events(limit=10)
+    assert audit_events[0]["action"] == "auth.register_failed"
+    assert audit_events[0]["target_id"] == "alice"
+    assert audit_events[0]["metadata"] == {"reason": "duplicate_username", "username": "alice"}
+    assert "password" not in audit_events[0]["metadata"]
+
+
 def test_login_is_rate_limited_by_ip_and_username(monkeypatch, tmp_path):
     _configure_auth_database(monkeypatch, tmp_path)
     auth_store.create_user(username="admin", password_hash=hash_password("pw"), role="admin")

@@ -9,11 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from src.api.auth_tokens import (
     create_access_token,
     generate_refresh_token,
+    hash_password,
     hash_refresh_token,
     verify_password,
 )
 from src.api.deps import get_current_user
-from src.api.models import AuthSessionOut, LoginRequest, LogoutRequest, RefreshRequest, UserOut
+from src.api.models import AuthSessionOut, LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest, UserOut
 from src.api.rate_limit import enforce_auth_login_rate_limit
 from src.config.settings import settings
 from src.persistence import audit_store, auth_store
@@ -75,6 +76,44 @@ async def login(body: LoginRequest, request: Request) -> AuthSessionOut:
         target_type="user",
         target_id=user["id"],
         metadata={"username": user["username"], "role": user["role"]},
+    )
+    return _new_session_for_user(user)
+
+
+@router.post("/register")
+async def register(body: RegisterRequest, request: Request) -> AuthSessionOut:
+    enforce_auth_login_rate_limit(request, body.username)
+    if not settings.auth.jwt_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="JWT secret is not configured",
+        )
+    try:
+        user = auth_store.create_user(
+            username=body.username,
+            password_hash=hash_password(body.password),
+            role="viewer",
+            is_active=True,
+        )
+        auth_store.add_workspace_member(workspace_id="", user_id=user["id"], role="viewer")
+    except Exception as exc:
+        audit_store.record_event(
+            action="auth.register_failed",
+            target_type="user",
+            target_id=body.username,
+            metadata={"username": body.username, "reason": "duplicate_username"},
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="用户已存在") from exc
+    audit_store.record_event(
+        action="auth.register_succeeded",
+        actor_user_id=user["id"],
+        target_type="user",
+        target_id=user["id"],
+        metadata={
+            "username": user["username"],
+            "role": user["role"],
+            "default_workspace_role": "viewer",
+        },
     )
     return _new_session_for_user(user)
 

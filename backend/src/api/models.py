@@ -50,6 +50,16 @@ class LoginRequest(BaseModel):
         return _normalize_username(value)
 
 
+class RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=120)
+    password: str = Field(..., min_length=8, max_length=256)
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def _normalize_username(cls, value: object) -> object:
+        return _normalize_username(value)
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str = Field(..., min_length=1)
 

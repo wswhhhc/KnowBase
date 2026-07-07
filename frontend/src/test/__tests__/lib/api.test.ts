@@ -75,6 +75,34 @@ describe('req helper (tested through public functions)', () => {
     expect(api.getStoredUser()).toBeNull()
   })
 
+  it('register sends POST to the auth registration endpoint', async () => {
+    const fn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+        token_type: 'bearer',
+        expires_in: 1800,
+        user: {
+          id: 'user-1',
+          username: 'alice',
+          role: 'viewer',
+          is_active: true,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      }),
+      text: () => Promise.resolve('{}'),
+      headers: new Headers(),
+    })
+    vi.stubGlobal('fetch', fn)
+
+    await api.register({ username: 'alice', password: 'alice-pass' })
+
+    expect(fn).toHaveBeenCalledWith('/api/auth/register', expect.objectContaining({ method: 'POST' }))
+    vi.unstubAllGlobals()
+  })
+
   it('getConversations calls correct URL', async () => {
     const mock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]), text: () => Promise.resolve('[]'), headers: new Headers() })
     vi.stubGlobal('fetch', mock)
