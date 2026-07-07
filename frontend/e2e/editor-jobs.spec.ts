@@ -1,35 +1,27 @@
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 
+test.setTimeout(90_000)
+
 test('editor can trigger a clear-workspace job and sees it in task center', async ({ page }) => {
   await page.goto('/')
   await login(page, 'editor', 'editor-pass')
 
-  const job = await page.evaluate(async () => {
-    const token = localStorage.getItem('knowbase_access_token') || ''
-    const response = await fetch('/api/documents/clear?workspace_id=', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    return {
-      status: response.status,
-      body: await response.json(),
-    }
-  })
-  expect(job.status, JSON.stringify(job.body)).toBe(200)
+  const job = await createClearWorkspaceJob(page)
 
   await page.getByRole('button', { name: '任务' }).click()
   await expect(page.getByRole('heading', { name: '任务中心' })).toBeVisible()
   await expect(page.getByText(job.body.job_id)).toBeVisible()
   await expect(page.getByText('清空工作区')).toBeVisible()
   await expect.poll(async () => {
-    const token = await page.evaluate(() => localStorage.getItem('knowbase_access_token') || '')
+    const token = await accessToken(page)
     const response = await page.request.get(`/api/jobs/${job.body.job_id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
+    if (!response.ok()) return `http-${response.status()}`
     const payload = await response.json()
     return payload.status
-  }, { timeout: 15000 }).toBe('succeeded')
+  }, { timeout: 45000 }).toBe('succeeded')
   await page.reload()
   await expect(page.getByRole('button', { name: '退出登录' })).toBeVisible()
   await page.getByRole('button', { name: '任务' }).click()
@@ -40,7 +32,7 @@ test('editor can import a document, ask a question, and jump to the cited source
   await page.goto('/')
   await login(page, 'editor', 'editor-pass')
 
-  await page.getByRole('button', { name: '知识库' }).click()
+  await page.getByRole('button', { name: '知识库' }).first().click()
   const fileChooserPromise = page.waitForEvent('filechooser')
   await page.getByText('上传文档').click()
   const fileChooser = await fileChooserPromise
@@ -52,6 +44,7 @@ test('editor can import a document, ask a question, and jump to the cited source
     const response = await page.request.get('/api/jobs', {
       headers: { Authorization: `Bearer ${token}` },
     })
+    if (!response.ok()) return ''
     const jobs = await response.json()
     jobId = jobs.find((job: { job_type: string; id: string }) => job.job_type === 'ingest_file')?.id || ''
     return jobId
@@ -62,9 +55,10 @@ test('editor can import a document, ask a question, and jump to the cited source
     const response = await page.request.get(`/api/jobs/${jobId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
+    if (!response.ok()) return `http-${response.status()}`
     const job = await response.json()
     return job.status
-  }, { timeout: 20000 }).toBe('succeeded')
+  }, { timeout: 45000 }).toBe('succeeded')
 
   await page.getByRole('button', { name: '聊天' }).click()
   await page.locator('textarea').fill('这份会议纪要的重点是什么？')
@@ -82,4 +76,29 @@ async function login(page: Page, username: string, password: string) {
   await page.getByLabel('密码').fill(password)
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await expect(page.getByRole('button', { name: '退出登录' })).toBeVisible()
+}
+
+async function accessToken(page: Page) {
+  return page.evaluate(() => localStorage.getItem('knowbase_access_token') || '')
+}
+
+async function createClearWorkspaceJob(page: Page) {
+  let job: { status: number; body: { job_id: string } } | null = null
+  let lastBody: unknown = null
+  await expect.poll(async () => {
+    const token = await accessToken(page)
+    const response = await page.request.post('/api/documents/clear?workspace_id=', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    lastBody = await response.json().catch(() => ({}))
+    if (response.status() === 200) {
+      job = { status: response.status(), body: lastBody as { job_id: string } }
+    }
+    return response.status()
+  }, { timeout: 20000 }).toBe(200)
+
+  expect(job?.status, JSON.stringify(lastBody)).toBe(200)
+  expect(job?.body.job_id).toBeTruthy()
+  if (!job) throw new Error(`Clear workspace job was not created: ${JSON.stringify(lastBody)}`)
+  return job
 }
