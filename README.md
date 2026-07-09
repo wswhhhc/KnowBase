@@ -1,6 +1,6 @@
 <div align="center">
   <h1>KnowBase</h1>
-  <p>内网自托管的团队知识库问答工作台，采用 React + FastAPI，围绕可维护的 RAG 与准生产团队协作场景构建。</p>
+  <p>面向内网团队知识管理场景的 AI 知识库问答系统，展示 RAG 应用从文档导入、检索增强、流式问答、来源引用、权限控制到工程化部署的完整实现。</p>
   <p>
     <img src="https://img.shields.io/badge/React-19-000?style=for-the-badge&logo=react&logoColor=61DAFB" height="28" alt="React 19" />
     <img src="https://img.shields.io/badge/FastAPI-0.115-000?style=for-the-badge&logo=fastapi&logoColor=009688" height="28" alt="FastAPI" />
@@ -12,6 +12,34 @@
 ![KnowBase 当前桌面界面](docs/screenshots/chat-overview.png)
 
 当前仓库已附带一张真实截图。其余展示位不再使用占位图，待补资源见 [docs/screenshots/TODO.md](docs/screenshots/TODO.md)。
+
+## 项目亮点
+
+- 完整 RAG 链路：支持文档导入、切分、Embedding、混合检索、重排、生成和来源引用
+- LangGraph 工作流：将问题路由、查询改写、检索、生成、质量检查和 Web Search fallback 拆成可维护节点
+- SSE 流式问答：后端持续推送节点状态、token、来源和调试信息，前端实时渲染回答过程
+- 后台任务系统：文件导入、URL 导入、清空工作区和重建索引通过 Redis RQ 异步执行
+- 团队协作能力：支持账号登录、JWT 会话、角色权限、工作区授权、对话、书签和运行时设置
+- 工程化约束：包含 OpenAPI 类型同步、结构守卫、测试、Docker Compose 和准生产安全检查
+
+## 核心链路
+
+```mermaid
+flowchart LR
+    A["上传文档 / 导入 URL"] --> B["Redis RQ 后台任务"]
+    B --> C["文档解析与切分"]
+    C --> D["Embedding"]
+    D --> E["Chroma 向量库"]
+
+    U["用户提问"] --> G["FastAPI SSE 接口"]
+    G --> H["LangGraph 工作流"]
+    H --> I["查询改写 / 混合检索 / 重排"]
+    I --> J["LLM 生成与质量检查"]
+    J --> K["来源引用 + 流式返回"]
+
+    G --> L["Postgres/SQLite 业务数据"]
+    L --> M["对话 / 书签 / 工作区 / 审计 / 任务"]
+```
 
 ## 项目概览
 
@@ -25,6 +53,20 @@ KnowBase 关注的是“可持续维护的团队 RAG 应用骨架”，而不是
 - Postgres 业务数据入口与 SQLite 一次性导入脚本；Chroma 继续作为本地向量库
 - 本地查询日志与指标面板
 - OpenAPI 快照与前端生成类型的契约同步
+
+## 重点设计
+
+### RAG 可维护性
+
+项目没有把检索、生成和质量检查写成单个长函数，而是通过 LangGraph 拆成问题路由、查询改写、知识库检索、Web Search fallback、回答生成和质量检查等节点。这样可以更清楚地观察每一步的输入输出，也方便后续替换检索策略或增加新的质量门禁。
+
+### 工程化而非单次 Demo
+
+文档导入走后台任务，避免长耗时请求阻塞 API；前后端通过 OpenAPI 快照和生成类型保持契约同步；提交前提供结构守卫、后端测试、前端测试和构建检查，目标是让项目能持续维护，而不是只跑通一次演示。
+
+### 安全边界
+
+URL 导入包含 SSRF 防护、响应大小限制和重定向逐跳校验；生产模式会拒绝弱 JWT、SQLite 数据库、localhost CORS 和 legacy API key；工作区用于单组织内的访问授权，不把当前实现包装成 SaaS 级多租户隔离。
 
 ## 工作区语义
 
@@ -223,6 +265,18 @@ KnowBase/
 - 已有账号密码登录、JWT、固定角色和工作区授权；legacy `API_KEY` 仅保留为开发兼容路径
 - 工作区是单组织内的授权作用域，不提供 SaaS 租户级隔离
 - 工作区删除不会自动完成所有知识库数据的生命周期治理
+- 前端 token 当前存储在 `localStorage`，适合内网演示和本地开发；更严格的生产环境可改为 HttpOnly refresh cookie + 内存 access token
+- 前端部分页面和面板仍偏大，后续可以继续拆分为更细的 feature hooks 和展示组件
+- SQLite/Postgres 双路径提升了本地体验，但也增加了 schema 漂移和测试矩阵成本，后续可进一步统一到 SQLAlchemy + Alembic
+- RAG 质量评估已有数据集入口，后续可继续补充检索命中率、引用正确率和无证据拒答率等离线指标
+
+## 面试讲解摘要
+
+KnowBase 是一个内网团队知识库问答系统。我重点实现的是完整 AI 应用链路，而不是简单调用大模型 API。
+
+用户可以上传文档或导入公开 URL，后端通过 Redis RQ 后台任务解析、切分并写入 Chroma 向量库。用户提问时，FastAPI 通过 SSE 建立流式接口，LangGraph 负责问题路由、查询改写、混合检索、重排、生成和质量检查，最终返回回答、引用来源和调试信息。
+
+项目还实现了账号登录、JWT、工作区权限、对话历史、书签、指标、OpenAPI 类型同步、测试和 Docker Compose 部署，因此它更接近真实 AI 应用开发场景，而不是一次性的 RAG Demo。
 
 ## 贡献
 
