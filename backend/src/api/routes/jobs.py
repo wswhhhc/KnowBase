@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,11 +10,11 @@ from src.api.deps import authorize_workspace_role, get_current_user_or_legacy_ap
 from src.api.models import JobOut
 from src.jobs.enqueue import retry_tracked_job
 from src.persistence import audit_store, job_store
+from src.utils import UPLOAD_TEMP_DIR
 
 
 router = APIRouter()
 _KB_MUTATION_JOB_TYPES = {"ingest_file", "ingest_url", "clear_workspace", "rebuild_index"}
-_UPLOAD_TEMP_DIR = Path(tempfile.gettempdir()) / "knowbase_uploads"
 
 
 def _is_admin_or_legacy(current_user: dict | None) -> bool:
@@ -66,7 +65,7 @@ def _cleanup_queued_upload_temp_file(job: dict) -> None:
     if not isinstance(raw_file_path, str) or not raw_file_path.strip():
         return
     try:
-        upload_root = _UPLOAD_TEMP_DIR.resolve()
+        upload_root = UPLOAD_TEMP_DIR.resolve()
         file_path = Path(raw_file_path).resolve()
     except (OSError, RuntimeError, ValueError):
         return

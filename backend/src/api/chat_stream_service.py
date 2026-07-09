@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import queue
-import threading
 import time
 from uuid import uuid4
 
@@ -93,18 +91,23 @@ class ChatStreamService:
             if settings.e2e_fake_ai:
                 yield from self._run_e2e_fake_chat()
                 return
+            self._refresh_kb_before_graph_read()
             yield from self._stream_updates()
             yield from self._emit_completion()
         except Exception as e:
             logger.exception("Chat stream error")
             yield {"event": "error", "data": json.dumps({"message": str(e)})}
 
+    def _refresh_kb_before_graph_read(self) -> None:
+        refresh = getattr(self.kb, "refresh_from_persisted_store", None)
+        if callable(refresh):
+            refresh()
+
     # ── Internal phases ─────────────────────────────────────────────────
 
     def _stream_updates(self):
         """Iterate the LangGraph stream, yielding ``node`` and ``token`` SSE events."""
-        event_queue: queue.Queue[dict | object] = queue.Queue()
-        sentinel = object()
+        pending_token_events: list[dict] = []
 
         def enqueue_token(text: str) -> None:
             if not text:
@@ -113,52 +116,39 @@ class ChatStreamService:
                 self.first_token = int((time.monotonic() - self.t0) * 1000)
             self._manual_token_streamed = True
             self.accumulated_answer += text
-            event_queue.put({"event": "token", "data": json.dumps({"text": text})})
+            pending_token_events.append({"event": "token", "data": json.dumps({"text": text})})
 
-        def worker() -> None:
-            try:
-                events = run_query(
-                    question=self.body.question,
-                    thread_id=self.thread_id,
-                    knowledge_base=self.kb,
-                    stream_tokens=True,
-                    web_search_enabled=self.body.web_search_enabled,
-                    search_strategy=self.body.search_strategy,
-                    workspace_id=self.workspace_id,
-                    pinned_chunk_ids=self.body.pinned_chunk_ids,
-                    excluded_chunk_ids=self.body.excluded_chunk_ids,
-                    token_callback=enqueue_token,
-                )
+        def drain_pending_tokens():
+            while pending_token_events:
+                yield pending_token_events.pop(0)
 
-                for mode, data in events:
-                    # TTFB = time from request start until first event of any type
-                    if not self._ttfb_set:
-                        self.ttfb = int((time.monotonic() - self.t0) * 1000)
-                        self._ttfb_set = True
+        events = run_query(
+            question=self.body.question,
+            thread_id=self.thread_id,
+            knowledge_base=self.kb,
+            stream_tokens=True,
+            web_search_enabled=self.body.web_search_enabled,
+            search_strategy=self.body.search_strategy,
+            workspace_id=self.workspace_id,
+            pinned_chunk_ids=self.body.pinned_chunk_ids,
+            excluded_chunk_ids=self.body.excluded_chunk_ids,
+            token_callback=enqueue_token,
+        )
 
-                    if mode == "updates":
-                        for event in self._process_updates(data):
-                            event_queue.put(event)
-                    elif mode == "messages":
-                        for event in self._process_messages(data):
-                            event_queue.put(event)
-            except Exception as exc:
-                self._stream_error = exc
-            finally:
-                event_queue.put(sentinel)
+        for mode, data in events:
+            # TTFB = time from request start until first event of any type
+            if not self._ttfb_set:
+                self.ttfb = int((time.monotonic() - self.t0) * 1000)
+                self._ttfb_set = True
+            yield from drain_pending_tokens()
 
-        thread = threading.Thread(target=worker, name="chat-stream-worker", daemon=True)
-        thread.start()
+            if mode == "updates":
+                yield from self._process_updates(data)
+            elif mode == "messages":
+                yield from self._process_messages(data)
+            yield from drain_pending_tokens()
 
-        while True:
-            event = event_queue.get()
-            if event is sentinel:
-                break
-            yield event
-
-        thread.join()
-        if self._stream_error is not None:
-            raise self._stream_error
+        yield from drain_pending_tokens()
 
     def _process_updates(self, data: dict):
         """Handle a LangGraph ``updates`` event: emit node SSE and accumulate state."""

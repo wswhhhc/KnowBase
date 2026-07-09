@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch, call
 from langchain_core.documents import Document
 
 from src.rag.knowledge_base import (
+    DeterministicTestEmbeddings,
     EmbeddingIndexMismatchError,
     IngestionService,
     KnowledgeBase,
@@ -19,6 +20,14 @@ from src.rag.models import (
     infer_source_type as _infer_source_type,
     normalize_source,
 )
+
+
+class DeterministicTestEmbeddingsTests(unittest.TestCase):
+    def test_fake_embeddings_match_default_bge_m3_dimension(self):
+        embeddings = DeterministicTestEmbeddings()
+
+        self.assertEqual(len(embeddings.embed_query("hello")), 1024)
+        self.assertEqual(len(embeddings.embed_documents(["hello"])[0]), 1024)
 
 
 class NeighborChunksTests(unittest.TestCase):
@@ -159,12 +168,15 @@ class RecoverStaleVectorIndexTests(unittest.TestCase):
         patcher1 = patch("src.rag.knowledge_base.require_siliconflow_api_key", return_value="sk-test")
         patcher2 = patch("src.rag.knowledge_base.OpenAIEmbeddings")
         patcher3 = patch("src.rag.knowledge_base.Chroma")
+        patcher4 = patch("src.rag.knowledge_base.SharedSystemClient.clear_system_cache")
         self.addCleanup(patcher1.stop)
         self.addCleanup(patcher2.stop)
         self.addCleanup(patcher3.stop)
+        self.addCleanup(patcher4.stop)
         patcher1.start()
         patcher2.start()
         self.mock_chroma_cls = patcher3.start()
+        self.mock_clear_system_cache = patcher4.start()
 
         self.first_store = MagicMock()
         self.first_store.get.return_value = {
@@ -193,6 +205,7 @@ class RecoverStaleVectorIndexTests(unittest.TestCase):
         self.assertEqual(self.kb.existing_chunk_ids, {"new-id"})
         self.assertEqual(self.kb.all_docs, [])
         self.assertFalse(self.kb.ingestion._loaded)
+        self.mock_clear_system_cache.assert_called_once_with()
 
     def test_hybrid_search_reopens_chroma_and_retries_stale_index_error(self):
         expected = [MagicMock()]
@@ -222,6 +235,36 @@ class RecoverStaleVectorIndexTests(unittest.TestCase):
 
         self.assertEqual(result, expected)
         self.assertEqual(self.kb.retriever.debug_search_breakdown.call_count, 2)
+        self.assertIs(self.kb.vector_store, self.second_store)
+
+    def test_get_neighbor_chunks_reopens_chroma_and_retries_stale_index_error(self):
+        expected = [Document(page_content="neighbor", metadata={"chunk_id": "new-id"})]
+        self.kb.retriever.get_neighbor_chunks = MagicMock(
+            side_effect=[
+                RuntimeError("Error executing plan: Internal error: Error finding id"),
+                expected,
+            ]
+        )
+
+        result = self.kb.get_neighbor_chunks("new-id", workspace_id="ws-alpha")
+
+        self.assertEqual(result, expected)
+        self.assertEqual(self.kb.retriever.get_neighbor_chunks.call_count, 2)
+        self.assertIs(self.kb.vector_store, self.second_store)
+
+    def test_search_content_reopens_chroma_and_retries_stale_index_error(self):
+        expected = [Document(page_content="content", metadata={"chunk_id": "new-id"})]
+        self.kb.retriever.search_content = MagicMock(
+            side_effect=[
+                RuntimeError("Error executing plan: Internal error: Error finding id"),
+                expected,
+            ]
+        )
+
+        result = self.kb.search_content("langchain", workspace_id="ws-alpha")
+
+        self.assertEqual(result, expected)
+        self.assertEqual(self.kb.retriever.search_content.call_count, 2)
         self.assertIs(self.kb.vector_store, self.second_store)
 
     def test_non_recoverable_search_error_is_not_retried(self):

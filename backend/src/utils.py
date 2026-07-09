@@ -3,13 +3,12 @@
 import json
 import os
 import re
-import tempfile
 import uuid
 from pathlib import Path
 
 import jieba
 
-from src.config.constants import MAX_UPLOAD_MB
+from src.config.constants import DATA_DIR, MAX_UPLOAD_MB
 
 
 ALLOWED_UPLOAD_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".html", ".htm"}
@@ -23,6 +22,7 @@ ALLOWED_UPLOAD_MIME_TYPES = {
 }
 
 _MAX_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+UPLOAD_TEMP_DIR = Path(DATA_DIR) / "uploads"
 
 
 def sanitize_upload_filename(filename: str) -> str:
@@ -65,7 +65,7 @@ def save_uploaded_file(uploaded_file) -> tuple[str, str]:
     safe_name = validate_upload(uploaded_file)
     # Unique filename to prevent overwrites on temp storage
     unique_name = f"{uuid.uuid4().hex[:12]}_{safe_name}"
-    tmp_dir = Path(tempfile.gettempdir()) / "knowbase_uploads"
+    tmp_dir = UPLOAD_TEMP_DIR
     tmp_dir.mkdir(exist_ok=True)
     file_path = tmp_dir / unique_name
 

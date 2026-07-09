@@ -78,6 +78,14 @@ class E2EFakeChatKB:
         ]
 
 
+class RefreshableKB:
+    def __init__(self):
+        self.refresh_calls = 0
+
+    def refresh_from_persisted_store(self):
+        self.refresh_calls += 1
+
+
 def _route_kb(_state):
     return {"question_type": "knowledge_base", "search_filter": {}}
 
@@ -116,6 +124,51 @@ class ChatStreamServiceTests(unittest.TestCase):
 
         _, kwargs = mock_run_query.call_args
         self.assertEqual(kwargs["workspace_id"], "ws-alpha")
+
+    @patch("src.api.chat_stream_service.settings")
+    @patch("src.api.chat_stream_service.run_query")
+    def test_real_chat_refreshes_kb_before_running_graph(self, mock_run_query, mock_settings):
+        mock_settings.e2e_fake_ai = False
+        kb = RefreshableKB()
+
+        def _run_query(**_kwargs):
+            self.assertEqual(kb.refresh_calls, 1)
+            return iter([
+                ("updates", {"finalize": {"evidence_level": "none", "outcome_category": "success"}}),
+            ])
+
+        mock_run_query.side_effect = _run_query
+        body = ChatRequest(
+            question="测试",
+            web_search_enabled=False,
+            search_strategy="balanced",
+            workspace_id="ws-alpha",
+        )
+
+        list(ChatStreamService(body, kb=kb).run())
+
+        self.assertEqual(kb.refresh_calls, 1)
+
+    @patch.object(ChatStreamService, "_persist", return_value=("conv-1", 2))
+    @patch("src.api.chat_stream_service.run_query")
+    def test_manual_token_callback_events_are_drained(self, mock_run_query, _mock_persist):
+        def _run_query(**kwargs):
+            kwargs["token_callback"]("实时")
+            return iter([
+                ("updates", {"finalize": {"evidence_level": "high", "outcome_category": "success"}}),
+            ])
+
+        mock_run_query.side_effect = _run_query
+        body = ChatRequest(question="测试", web_search_enabled=False, search_strategy="balanced")
+
+        events = list(ChatStreamService(body, kb=object()).run())
+        token_texts = [
+            json.loads(event["data"])["text"]
+            for event in events
+            if event["event"] == "token"
+        ]
+
+        self.assertEqual(token_texts, ["实时"])
 
     @patch("src.api.chat_stream_service.get_conversation_by_thread")
     @patch("src.api.chat_stream_service.run_query")

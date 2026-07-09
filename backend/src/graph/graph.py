@@ -3,18 +3,16 @@
 from __future__ import annotations
 
 import logging
-import os
-import sqlite3
 import threading
 import weakref
 from functools import partial
 from typing import Generator, Iterable
 
 from langchain_core.messages import HumanMessage
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
-from src.config.constants import CHECKPOINT_DB_PATH, SCORE_THRESHOLD, TOP_K_RETRIEVAL
+from src.config.constants import SCORE_THRESHOLD, TOP_K_RETRIEVAL
 from src.config.runtime_overrides import get_runtime_setting
 from src.graph import finalization_nodes, generation_nodes, history_nodes, quality_nodes, retrieval_nodes, web_search_nodes
 from src.graph.routing import (
@@ -30,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 _GRAPH_CACHE: dict[int, tuple[weakref.ref, object]] = {}
-_CHECKPOINTER: SqliteSaver | None = None
+_CHECKPOINTER: MemorySaver | None = None
 _CHECKPOINTER_LOCK = threading.Lock()
 
 
@@ -41,11 +39,7 @@ def _init_checkpointer():
     with _CHECKPOINTER_LOCK:
         if _CHECKPOINTER is not None:
             return _CHECKPOINTER
-        db_dir = os.path.dirname(CHECKPOINT_DB_PATH)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
-        conn = sqlite3.connect(CHECKPOINT_DB_PATH, check_same_thread=False)
-        _CHECKPOINTER = SqliteSaver(conn)
+        _CHECKPOINTER = MemorySaver()
         return _CHECKPOINTER
 
 

@@ -9,6 +9,7 @@ from src.utils import (
     json_from_text,
     sanitize_upload_filename,
     save_uploaded_file,
+    UPLOAD_TEMP_DIR,
     validate_upload,
 )
 
@@ -122,15 +123,12 @@ class SaveUploadedFileTests(unittest.TestCase):
 
     @patch("pathlib.Path.mkdir")
     @patch("builtins.open", new_callable=MagicMock)
-    @patch("src.utils.tempfile.gettempdir")
-    def test_normal_save_streamlit_uploaded_file(self, mock_gettempdir, mock_open, mock_mkdir):
+    def test_normal_save_streamlit_uploaded_file(self, mock_open, mock_mkdir):
         """Normal save with Streamlit UploadedFile (has getbuffer)."""
-        mock_gettempdir.return_value = "/tmp"
-
         mock_file = self._make_streamlit_file()
         file_path, source_name = save_uploaded_file(mock_file)
 
-        self.assertIn("knowbase_uploads", file_path)
+        self.assertIn(str(UPLOAD_TEMP_DIR), file_path)
         self.assertTrue(file_path.endswith("test.txt"))
         self.assertEqual(source_name, "test.txt")
 
@@ -139,15 +137,12 @@ class SaveUploadedFileTests(unittest.TestCase):
 
     @patch("pathlib.Path.mkdir")
     @patch("builtins.open", new_callable=MagicMock)
-    @patch("src.utils.tempfile.gettempdir")
-    def test_normal_save_fastapi_upload_file(self, mock_gettempdir, mock_open, mock_mkdir):
+    def test_normal_save_fastapi_upload_file(self, mock_open, mock_mkdir):
         """Normal save with FastAPI UploadFile (has .file.read())."""
-        mock_gettempdir.return_value = "/tmp"
-
         mock_file = self._make_fastapi_file()
         file_path, source_name = save_uploaded_file(mock_file)
 
-        self.assertIn("knowbase_uploads", file_path)
+        self.assertIn(str(UPLOAD_TEMP_DIR), file_path)
         self.assertTrue(file_path.endswith("doc.md"))
         self.assertEqual(source_name, "doc.md")
 
@@ -198,11 +193,8 @@ class SaveUploadedFileTests(unittest.TestCase):
 
     @patch("pathlib.Path.mkdir")
     @patch("builtins.open", new_callable=MagicMock)
-    @patch("src.utils.tempfile.gettempdir")
-    def test_oversized_file_raises_error(self, mock_gettempdir, mock_open, mock_mkdir):
+    def test_oversized_file_raises_error(self, mock_open, mock_mkdir):
         """Oversized file raises ValueError."""
-        mock_gettempdir.return_value = "/tmp"
-
         mock_file = MagicMock(spec=["file", "filename", "size"])
         mock_file.filename = "large.txt"
         mock_file.size = 6 * 1024 * 1024

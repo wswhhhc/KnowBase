@@ -17,13 +17,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    boolean_true_default = sa.text("true") if bind.dialect.name == "postgresql" else sa.text("1")
+
     op.create_table(
         "users",
         sa.Column("id", sa.Text(), primary_key=True, nullable=False),
         sa.Column("username", sa.Text(), nullable=False, unique=True),
         sa.Column("password_hash", sa.Text(), nullable=False),
         sa.Column("role", sa.Text(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=boolean_true_default),
         sa.Column("created_at", sa.Text(), nullable=False),
         sa.Column("updated_at", sa.Text(), nullable=False),
         sa.CheckConstraint("role IN ('admin', 'editor', 'viewer')", name="ck_users_role"),

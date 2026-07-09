@@ -11,6 +11,7 @@ import threading
 import hashlib
 from typing import TypeVar
 
+from chromadb.api.shared_system_client import SharedSystemClient
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
@@ -43,9 +44,17 @@ class EmbeddingIndexMismatchError(ValueError):
 class DeterministicTestEmbeddings:
     """Small local embeddings used only by the explicit E2E fake-AI mode."""
 
+    dimension = 1024
+
     def _embed(self, text: str) -> list[float]:
-        digest = hashlib.sha256(text.encode("utf-8")).digest()
-        return [((byte / 255.0) * 2.0) - 1.0 for byte in digest[:16]]
+        values: list[float] = []
+        seed = text.encode("utf-8")
+        counter = 0
+        while len(values) < self.dimension:
+            digest = hashlib.sha256(seed + counter.to_bytes(4, "big")).digest()
+            values.extend(((byte / 255.0) * 2.0) - 1.0 for byte in digest)
+            counter += 1
+        return values[: self.dimension]
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return [self._embed(text) for text in texts]
@@ -121,6 +130,7 @@ class KnowledgeBase:
         for read paths and keeps the API process in sync with disk.
         """
         with self._write_lock:
+            SharedSystemClient.clear_system_cache()
             self.vector_store = self._init_vector_store()
             self.state.clear()
             self.state.existing_chunk_ids.update(self.vector_store.get(include=[]).get("ids") or [])
@@ -256,10 +266,16 @@ class KnowledgeBase:
         )
 
     def get_neighbor_chunks(self, chunk_id: str, window: int = 1, workspace_id: str | None = None) -> list[Document]:
-        return self.retriever.get_neighbor_chunks(chunk_id, window=window, workspace_id=workspace_id)
+        return self._retry_after_vector_refresh(
+            lambda: self.retriever.get_neighbor_chunks(chunk_id, window=window, workspace_id=workspace_id),
+            operation_name="get_neighbor_chunks",
+        )
 
     def search_content(self, query: str, workspace_id: str | None = None) -> list[Document]:
-        return self.retriever.search_content(query, workspace_id=workspace_id)
+        return self._retry_after_vector_refresh(
+            lambda: self.retriever.search_content(query, workspace_id=workspace_id),
+            operation_name="search_content",
+        )
 
     def load_preset_documents(self, workspace_id: str = "") -> int:
         with self._write_lock:

@@ -14,6 +14,8 @@ from src.metrics import log_query
 
 logger = logging.getLogger(__name__)
 
+_AUXILIARY_LLM_TIMEOUT_SECONDS = 15
+
 
 NODE_LABELS = {
     "route_question": "问题路由",
@@ -28,6 +30,17 @@ NODE_LABELS = {
     "handle_missing_context": "证据不足兜底",
     "handle_clarification": "模糊问题提示",
 }
+
+
+def _create_auxiliary_llm() -> ChatOpenAI:
+    return ChatOpenAI(
+        model=get_runtime_setting("llm_model", LLM_MODEL),
+        temperature=0.3,
+        openai_api_key=require_siliconflow_api_key(),
+        openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
+        timeout=_AUXILIARY_LLM_TIMEOUT_SECONDS,
+        max_retries=0,
+    )
 
 
 def record_query_metrics(
@@ -77,12 +90,7 @@ def generate_title(question: str) -> str:
         if not _is_configured_api_key(get_runtime_setting("siliconflow_api_key", "")):
             return question[:30]
 
-        llm = ChatOpenAI(
-            model=get_runtime_setting("llm_model", LLM_MODEL),
-            temperature=0.3,
-            openai_api_key=require_siliconflow_api_key(),
-            openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
-        )
+        llm = _create_auxiliary_llm()
         prompt = ChatPromptTemplate.from_messages([
             ("system", "根据用户的问题，生成一个简短（不超过15字）的对话标题。只返回标题本身，不要加引号和标点。"),
             ("human", question),
@@ -103,12 +111,7 @@ def generate_suggested_questions(docs_text: str, max_questions: int = 5) -> list
         if not _is_configured_api_key(get_runtime_setting("siliconflow_api_key", "")):
             return []
 
-        llm = ChatOpenAI(
-            model=get_runtime_setting("llm_model", LLM_MODEL),
-            temperature=0.3,
-            openai_api_key=require_siliconflow_api_key(),
-            openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
-        )
+        llm = _create_auxiliary_llm()
         prompt = ChatPromptTemplate.from_messages([
             ("system", "根据以下文档内容，生成{max_n}个用户可能想问的问题，每行一个，用中文。只返回问题，不要编号和额外的文字。"),
             ("human", docs_text[:2000]),

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +12,7 @@ from src.jobs.tasks import run_tracked_job
 from src.persistence import audit_store, auth_store, job_store
 from src.persistence.schema import metadata
 from src.persistence.sqlalchemy_database import create_engine_for_url
+from src.utils import UPLOAD_TEMP_DIR
 from tests.test_auth_routes import _configure_auth_database
 
 
@@ -238,7 +238,7 @@ def test_cancel_queued_file_upload_job_removes_upload_temp_file(isolated_jobs_da
         workspace_id="ws-a",
         members=[{"user_id": users["editor"]["id"], "role": "editor"}],
     )
-    upload_dir = Path(tempfile.gettempdir()) / "knowbase_uploads"
+    upload_dir = UPLOAD_TEMP_DIR
     upload_dir.mkdir(exist_ok=True)
     upload_path = upload_dir / "queued-cancel-upload.txt"
     upload_path.write_text("pending upload", encoding="utf-8")
