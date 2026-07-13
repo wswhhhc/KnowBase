@@ -257,7 +257,15 @@ def test_clear_workspace_documents_clears_workspace_and_returns_result():
     }
 
 
-def test_clear_workspace_documents_builds_catalog_only_kb_when_none_is_provided(monkeypatch):
+@pytest.mark.parametrize(
+    ("e2e_fake_ai", "expected_require_embeddings"),
+    [(False, False), (True, True)],
+)
+def test_clear_workspace_documents_uses_e2e_embeddings_only_in_fake_ai_mode(
+    monkeypatch,
+    e2e_fake_ai,
+    expected_require_embeddings,
+):
     fake_kb = FakeClearKnowledgeBase()
     init_calls: list[bool] = []
 
@@ -266,10 +274,11 @@ def test_clear_workspace_documents_builds_catalog_only_kb_when_none_is_provided(
         return fake_kb
 
     monkeypatch.setattr("src.jobs.document_tasks.KnowledgeBase", _fake_kb_factory)
+    monkeypatch.setattr("src.jobs.document_tasks.settings.e2e_fake_ai", e2e_fake_ai)
 
     result = clear_workspace_documents(workspace_id="ws-a")
 
-    assert init_calls == [False]
+    assert init_calls == [expected_require_embeddings]
     assert result["message"] == "知识库已清空"
 
 
