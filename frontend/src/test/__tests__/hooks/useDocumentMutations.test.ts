@@ -44,4 +44,30 @@ describe('useDocumentMutations', () => {
     expect(api.waitForImportJob).toHaveBeenCalledWith(expect.objectContaining({ job_id: 'job-clear' }), expect.any(Function))
     expect(onRefresh).toHaveBeenCalledOnce()
   })
+
+  it('owns the delete target and clear confirmation state', () => {
+    const { result } = renderHook(() => useDocumentMutations({ workspaceId: 'ws-a', onRefresh }))
+
+    expect(result.current.deleteSourceTarget).toBeNull()
+    expect(result.current.clearOpen).toBe(false)
+
+    act(() => {
+      result.current.setDeleteSourceTarget('policy.md')
+      result.current.setClearOpen(true)
+    })
+
+    expect(result.current.deleteSourceTarget).toBe('policy.md')
+    expect(result.current.clearOpen).toBe(true)
+  })
+
+  it('reports delete errors without refreshing or showing success', async () => {
+    vi.mocked(api.deleteSource).mockRejectedValue(new Error('network down'))
+    const { result } = renderHook(() => useDocumentMutations({ workspaceId: 'ws-a', onRefresh }))
+
+    await act(async () => result.current.deleteSource('policy.md'))
+
+    expect(onRefresh).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith('删除失败', { description: 'Error: network down' })
+  })
 })

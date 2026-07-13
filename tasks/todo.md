@@ -20,23 +20,23 @@
 
 ## P1：页面级热点
 
-- [ ] Task 9：抽取 Dashboard 数据 hook 与纯指标模型
-- [ ] Task 10：拆分 Dashboard 独立展示区块
-- [ ] Task 11：统一 Chat 搜索偏好状态与控件
-- [ ] Task 11B：拆分 Chat 输入与消息区域
-- [ ] Task 12：固化前端边界并同步文档
-- [ ] Checkpoint C：仓库全量质量门禁与关键 E2E 通过
+- [x] Task 9：抽取 Dashboard 数据 hook 与纯指标模型
+- [x] Task 10：拆分 Dashboard 独立展示区块
+- [x] Task 11：统一 Chat 搜索偏好状态与控件
+- [x] Task 11B：拆分 Chat 输入与消息区域
+- [x] Task 12：固化前端边界并同步文档
+- [x] Checkpoint C：仓库全量质量门禁与关键 E2E 通过
 
 ## P2：兼容债务
 
-- [ ] Task 13：建立兼容路径退出清单
+- [x] Task 13：建立兼容路径退出清单
 
 ## 每项任务的完成门槛
 
-- [ ] 仅包含当前任务范围内的改动
-- [ ] 现有功能、接口、文案和错误行为保持不变
-- [ ] 目标测试通过
-- [ ] `python scripts/check-structure.py` 通过
-- [ ] 阶段 Checkpoint 执行 `bash scripts/run-checks.sh`
-- [ ] 无未使用 import、死代码或临时兼容 wrapper
-- [ ] 提交说明使用中文
+- [x] 仅包含当前任务范围内的改动
+- [x] 现有功能、接口、文案和错误行为保持不变
+- [x] 目标测试通过
+- [x] `python scripts/check-structure.py` 通过
+- [x] 阶段 Checkpoint 执行 `bash scripts/run-checks.sh`
+- [x] 无未使用 import、死代码或临时兼容 wrapper
+- [x] 提交说明使用中文

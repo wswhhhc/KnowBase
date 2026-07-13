@@ -18,5 +18,6 @@
 - `rag` 不再依赖 `api.models`
 - `api/` 与测试辅助直接依赖 `persistence/`，不再经过 `conversations.py` 兼容层
 - Documents 路由只处理 HTTP/鉴权/响应映射；导入、同步操作、维护任务契约和审计 metadata 分别位于 `services/document_import_service.py`、`document_operations.py`、`document_job_service.py`、`document_audit.py`，任务 SSE 协议适配位于 `api/document_job_stream.py`
+- 文件上传临时文件在入队前由 Documents 路由持有：来源探测、校验或入队失败时由路由删除；入队成功后所有权转交文件导入 worker，由 worker 在 `finally` 中删除，排队任务取消时由 Jobs 路由清理。所有权转移后，审计或 SSE 响应适配失败不得再删除该文件
 - `graph/` 主路径直接使用 `history_nodes.py`、`generation_nodes.py`、`finalization_nodes.py`、`retrieval_nodes.py`、`quality_nodes.py`、`web_search_nodes.py`
 - `DATABASE_URL` 是准生产团队版业务数据库入口；生产模式必须指向 Postgres，本地开发默认仍可使用 `runtime/local/conversations.db`

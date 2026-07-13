@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { toast } from 'sonner'
 import * as api from '@/shared/api'
 
@@ -7,6 +8,9 @@ interface UseDocumentMutationsOptions {
 }
 
 export function useDocumentMutations({ workspaceId, onRefresh }: UseDocumentMutationsOptions) {
+  const [deleteSourceTarget, setDeleteSourceTarget] = useState<string | null>(null)
+  const [clearOpen, setClearOpen] = useState(false)
+
   const deleteSource = async (sourceName: string) => {
     try {
       await api.deleteSource(sourceName, workspaceId)
@@ -26,5 +30,12 @@ export function useDocumentMutations({ workspaceId, onRefresh }: UseDocumentMuta
     }
   }
 
-  return { deleteSource, clearKnowledgeBase }
+  return {
+    deleteSourceTarget,
+    setDeleteSourceTarget,
+    clearOpen,
+    setClearOpen,
+    deleteSource,
+    clearKnowledgeBase,
+  }
 }

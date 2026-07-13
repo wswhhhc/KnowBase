@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
-from sse_starlette.sse import EventSourceResponse
 
 from src.api.deps import get_knowledge_base, require_workspace_editor, require_workspace_viewer
-from src.api.document_job_stream import job_event_source
+from src.api.document_job_stream import done_event_source, job_event_source
 from src.api.models import DemoImportResponse, IngestResponse, JobCreateResponse, URLIngestRequest, SourceOut
 from src.api.rate_limit import enforce_document_import_rate_limit
 from src.jobs.enqueue import enqueue_tracked_job
@@ -64,6 +62,7 @@ async def upload_file_stream(
 ):
     """SSE streaming upload — sends progress events during ingestion."""
     file_path: str | None = None
+    file_owned_by_job = False
     try:
         file_path, source_name = save_uploaded_file(file)
         actor_user_id = str(_workspace_access.get("id")) if _workspace_access else None
@@ -77,17 +76,16 @@ async def upload_file_stream(
             enqueue_job=enqueue_tracked_job,
         )
         if submission.job is None:
-            async def _probe_events():
-                yield {"event": "done", "data": json.dumps({
-                    "chunk_count": 0,
-                    "total_docs": kb.document_count_for_workspace(workspace_id),
-                    "message": "来源已存在，请指定 version_mode（replace/append/skip）",
-                    "existing_version": True,
-                })}
             Path(file_path).unlink(missing_ok=True)
-            return EventSourceResponse(_probe_events())
+            return done_event_source({
+                "chunk_count": 0,
+                "total_docs": kb.document_count_for_workspace(workspace_id),
+                "message": "来源已存在，请指定 version_mode（replace/append/skip）",
+                "existing_version": True,
+            })
 
         job = submission.job
+        file_owned_by_job = True
         actual_mode = submission.version_mode
         record_file_import_queued(
             audit_store.record_event,
@@ -110,9 +108,11 @@ async def upload_file_stream(
             get_job=job_store.get_job,
         )
     except ValueError as e:
+        if file_path and not file_owned_by_job:
+            Path(file_path).unlink(missing_ok=True)
         raise HTTPException(400, str(e))
     except Exception as e:
-        if file_path:
+        if file_path and not file_owned_by_job:
             Path(file_path).unlink(missing_ok=True)
         raise HTTPException(503, "任务队列不可用") from e
 
@@ -141,14 +141,12 @@ async def ingest_url_stream(
             enqueue_job=enqueue_tracked_job,
         )
         if submission.job is None:
-            async def _probe_events():
-                yield {"event": "done", "data": json.dumps({
-                    "chunk_count": 0,
-                    "total_docs": kb.document_count_for_workspace(workspace_id),
-                    "message": "来源已存在，请指定 version_mode（replace/append/skip）",
-                    "existing_version": True,
-                })}
-            return EventSourceResponse(_probe_events())
+            return done_event_source({
+                "chunk_count": 0,
+                "total_docs": kb.document_count_for_workspace(workspace_id),
+                "message": "来源已存在，请指定 version_mode（replace/append/skip）",
+                "existing_version": True,
+            })
 
         job = submission.job
         actual_mode = submission.version_mode
@@ -191,6 +189,7 @@ async def upload_file(
     kb: KnowledgeBase = Depends(get_knowledge_base),
 ) -> IngestResponse | JobCreateResponse:
     file_path: str | None = None
+    file_owned_by_job = False
     try:
         file_path, source_name = save_uploaded_file(file)
         actor_user_id = str(_workspace_access.get("id")) if _workspace_access else None
@@ -212,6 +211,7 @@ async def upload_file(
             )
 
         job = submission.job
+        file_owned_by_job = True
         actual_mode = submission.version_mode
         record_file_import_queued(
             audit_store.record_event,
@@ -224,9 +224,11 @@ async def upload_file(
         )
         return JobCreateResponse(job_id=job["id"], job=job)
     except ValueError as e:
+        if file_path and not file_owned_by_job:
+            Path(file_path).unlink(missing_ok=True)
         raise HTTPException(400, str(e))
     except Exception as e:
-        if file_path:
+        if file_path and not file_owned_by_job:
             Path(file_path).unlink(missing_ok=True)
         raise HTTPException(503, "任务队列不可用") from e
 

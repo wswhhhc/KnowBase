@@ -17,3 +17,8 @@
 - 页面组件和 Sidebar 改从 `app/navigation.ts` 获取导航类型
 - API client 不再集中在单个 `lib/api.ts`
 - 知识库浏览的大 hook 开始向 `features/knowledge-browser/hooks/` 拆分
+- `features/documents/hooks/` 管理文档导入、删除/清空副作用及确认框目标状态；`DocumentPanel` 只装配 `DocumentImportControls`、`DocumentImportFeedback`、来源列表和确认框，不直接调用运行时 API client
+- `features/dashboard/hooks/useDashboardData.ts` 负责指标日志请求，`features/dashboard/model/dashboardMetrics.ts` 负责纯统计、费用和小时分布派生
+- `components/dashboard/` 放 Dashboard 图表与日志表等纯展示区块，`DashboardPage` 只装配页面状态和展示组件
+- `features/chat/hooks/useSearchPreferences.ts` 管理搜索偏好持久化，`components/chat/SearchPreferencesPanel.tsx` 用显式桌面/移动变体复用同一组选项、radio 语义和键盘导航
+- `features/chat/hooks/useChatComposer.ts`、`components/chat/ChatComposer.tsx` 和 `components/chat/ChatMessageList.tsx` 分别承载输入状态、输入展示与消息展示/滚动

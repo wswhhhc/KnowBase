@@ -175,6 +175,16 @@ describe('ChatArea interactions', () => {
     expect(mockSendMessage).toHaveBeenCalled()
   })
 
+  it('keeps Shift+Enter as a newline without sending', async () => {
+    renderChatArea()
+    const input = screen.getByPlaceholderText(onboardingPlaceholder)
+    await userEvent.type(input, '第一行')
+    await userEvent.keyboard('{Shift>}{Enter}{/Shift}')
+
+    expect(mockSendMessage).not.toHaveBeenCalled()
+    expect(input).toHaveValue('第一行\n')
+  })
+
   it('disables send button when streaming', () => {
     renderChatArea({ isStreaming: true })
     expect(screen.getByText('Square')).toBeInTheDocument() // stop button icon
@@ -215,11 +225,33 @@ describe('ChatArea interactions', () => {
     expect(screen.getByText('当前工作区还没有资料')).toBeInTheDocument()
   })
 
-  it('shows a compact strategy trigger instead of the full strategy group on mobile', () => {
+  it('opens the document panel from the onboarding empty state', async () => {
+    renderChatArea()
+
+    await userEvent.click(screen.getByRole('button', { name: '打开资料面板' }))
+
+    expect(mockOnOpenSidebar).toHaveBeenCalled()
+  })
+
+  it('uses the same keyboard-navigable radio semantics in the mobile strategy dialog', async () => {
     renderChatArea(undefined, { isMobile: true })
 
     expect(screen.queryByRole('radiogroup', { name: '检索策略' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /检索与策略/i })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /检索与策略/i }))
+
+    expect(screen.getByRole('radiogroup', { name: '检索策略' })).toBeInTheDocument()
+    const balanced = screen.getByRole('radio', { name: /标准$/ })
+    const rigorous = screen.getByRole('radio', { name: /严谨$/ })
+    expect(balanced).toHaveAttribute('aria-checked', 'true')
+
+    await act(async () => {
+      balanced.focus()
+      fireEvent.keyDown(balanced, { key: 'ArrowRight' })
+    })
+
+    expect(rigorous).toHaveAttribute('aria-checked', 'true')
+    expect(rigorous).toHaveFocus()
+    expect(localStorage.getItem('kb_search_strategy')).toBe('high_quality')
   })
 
   it('renders messages with citations', () => {
@@ -232,6 +264,18 @@ describe('ChatArea interactions', () => {
       ],
     })
     expect(screen.getByText(/年假/)).toBeInTheDocument()
+  })
+
+  it('passes citation clicks through the message-list boundary', async () => {
+    const onCitationClick = vi.fn()
+    const source = { source: 'policy.txt', index: 1, content: '年假5天' }
+    renderChatArea({
+      messages: [{ id: 1, role: 'assistant', content: '年假为 5 天 [1]', sources: [source] }],
+    }, { onCitationClick })
+
+    await userEvent.click(screen.getByText('1'))
+
+    expect(onCitationClick).toHaveBeenCalledWith(source)
   })
 
   it('renders copy button and copies content', async () => {

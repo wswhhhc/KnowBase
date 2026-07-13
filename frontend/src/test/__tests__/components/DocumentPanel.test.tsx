@@ -145,6 +145,70 @@ describe('DocumentPanel', () => {
     })
   })
 
+  it('keeps the drop target active until all nested drag entries leave', () => {
+    render(
+      <DocumentPanel
+        sources={[]}
+        onRefresh={onRefresh}
+        workspaceId=""
+        workspaceName="默认工作区"
+      />,
+    )
+
+    const dropzone = screen.getByText('拖拽文件到这里，或选择文件').closest('label')!
+    fireEvent.dragEnter(dropzone)
+    fireEvent.dragEnter(dropzone)
+    fireEvent.dragLeave(dropzone)
+    expect(dropzone).toHaveClass('bg-primary/10')
+
+    fireEvent.dragLeave(dropzone)
+    expect(dropzone).not.toHaveClass('bg-primary/10')
+  })
+
+  it('resets the file input after selecting a file so the same file can be selected again', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <DocumentPanel
+        sources={[]}
+        onRefresh={onRefresh}
+        workspaceId=""
+        workspaceName="默认工作区"
+        onSendQuestion={onSendQuestion}
+        onOpenKnowledgeBase={onOpenKnowledgeBase}
+      />,
+    )
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['same-file'], 'same.md', { type: 'text/markdown' })
+
+    await user.upload(fileInput, file)
+
+    expect(fileInput.value).toBe('')
+    await waitFor(() => expect(api.uploadDocument).toHaveBeenCalledOnce())
+  })
+
+  it('imports the URL when Enter is pressed', async () => {
+    vi.mocked(api.ingestUrl).mockResolvedValue({
+      job_id: 'job-url-enter',
+      job: createJob({ id: 'job-url-enter', job_type: 'ingest_url' }),
+    })
+    render(
+      <DocumentPanel
+        sources={[]}
+        onRefresh={onRefresh}
+        workspaceId="ws-url"
+        workspaceName="URL 工作区"
+      />,
+    )
+
+    const input = screen.getByPlaceholderText('https://…')
+    await userEvent.type(input, 'https://example.com/guide{Enter}')
+
+    await waitFor(() => {
+      expect(api.checkSource).toHaveBeenCalledWith('https://example.com/guide', 'ws-url')
+      expect(api.ingestUrl).toHaveBeenCalledWith('https://example.com/guide', undefined, 'ws-url')
+    })
+  })
+
   it('shows sources but hides import and delete actions in read-only mode', () => {
     render(
       <DocumentPanel

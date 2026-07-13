@@ -86,6 +86,9 @@ def _document_route_boundary_violations(source: str) -> list[str]:
         (re.compile(r"\baudit_store\.record_event\s*\("), "Documents 路由不能直接拼装审计事件"),
         (re.compile(r"src\.jobs\.document_tasks:"), "Documents 路由不能直接拼装后台任务 target path"),
         (re.compile(r"\bgenerate_suggested_questions\s*\("), "Documents 路由不能直接收集推荐问题"),
+        (re.compile(r"\bEventSourceResponse\s*\("), "Documents 路由不能直接创建任务 SSE 响应"),
+        (re.compile(r"\bjob_store\.get_job\s*\("), "Documents 路由不能直接读取任务状态"),
+        (re.compile(r"\benqueue_tracked_job\s*\("), "Documents 路由不能直接编排后台任务"),
     ]
     return [message for pattern, message in boundary_patterns if pattern.search(source)]
 
@@ -95,6 +98,89 @@ def _check_documents_route_boundaries() -> list[str]:
     return [
         f"{message}: {route_path.relative_to(ROOT)}"
         for message in _document_route_boundary_violations(_read(route_path))
+    ]
+
+
+def _service_boundary_violations(source: str) -> list[str]:
+    boundary_patterns = [
+        (
+            re.compile(
+                r"^\s*(?:from\s+fastapi(?:\.[A-Za-z_]\w*)*\s+import\s+|import\s+fastapi(?:\.[A-Za-z_]\w*)*\b)",
+                re.MULTILINE,
+            ),
+            "应用服务不能依赖 FastAPI",
+        ),
+        (
+            re.compile(
+                r"^\s*(?:from\s+src\.api\.models\s+import\s+|import\s+src\.api\.models\b)",
+                re.MULTILINE,
+            ),
+            "应用服务不能依赖 src.api.models",
+        ),
+        (
+            re.compile(
+                r"^\s*(?:from\s+sse_starlette(?:\.[A-Za-z_]\w*)*\s+import\s+|import\s+sse_starlette(?:\.[A-Za-z_]\w*)*\b)",
+                re.MULTILINE,
+            ),
+            "应用服务不能依赖 SSE 响应类型",
+        ),
+    ]
+    return [message for pattern, message in boundary_patterns if pattern.search(source)]
+
+
+def _check_service_boundaries() -> list[str]:
+    violations: list[str] = []
+    for path in _iter_files(ROOT / "backend" / "src" / "services", "*.py"):
+        for message in _service_boundary_violations(_read(path)):
+            violations.append(f"{message}: {path.relative_to(ROOT)}")
+    return violations
+
+
+def _document_panel_boundary_violations(source: str) -> list[str]:
+    runtime_api_import = re.compile(
+        r"^\s*import\s+(?!type\b)(?P<clause>"
+        r"[A-Za-z_$][\w$]*(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?"
+        r"|\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*"
+        r")\s+from\s+['\"]@/shared/api(?:/[^'\"]+)?['\"]",
+        re.MULTILINE,
+    )
+    side_effect_api_import = re.compile(
+        r"^\s*import\s+['\"]@/shared/api(?:/[^'\"]+)?['\"]",
+        re.MULTILINE,
+    )
+    for match in runtime_api_import.finditer(source):
+        clause = match.group("clause").strip()
+        if clause.startswith("{") and clause.endswith("}"):
+            specifiers = [specifier.strip() for specifier in clause[1:-1].split(",") if specifier.strip()]
+            if specifiers and all(specifier.startswith("type ") for specifier in specifiers):
+                continue
+        return ["DocumentPanel 不能直接依赖运行时 API client"]
+    if side_effect_api_import.search(source):
+        return ["DocumentPanel 不能直接依赖运行时 API client"]
+    return []
+
+
+def _check_document_panel_boundaries() -> list[str]:
+    panel_path = ROOT / "frontend" / "src" / "components" / "sidebar" / "DocumentPanel.tsx"
+    return [
+        f"{message}: {panel_path.relative_to(ROOT)}"
+        for message in _document_panel_boundary_violations(_read(panel_path))
+    ]
+
+
+def _chat_page_preference_violations(source: str) -> list[str]:
+    preference_key = re.compile(r"['\"]kb_(?:web_search|search_strategy)['\"]")
+    local_storage_access = re.compile(r"\blocalStorage\.(?:getItem|setItem)\s*\(")
+    if preference_key.search(source) and local_storage_access.search(source):
+        return ["ChatPage 不能直接读写搜索偏好 localStorage"]
+    return []
+
+
+def _check_chat_page_preference_boundaries() -> list[str]:
+    page_path = ROOT / "frontend" / "src" / "pages" / "chat" / "ChatPage.tsx"
+    return [
+        f"{message}: {page_path.relative_to(ROOT)}"
+        for message in _chat_page_preference_violations(_read(page_path))
     ]
 
 
@@ -159,6 +245,9 @@ def main() -> int:
     violations = [
         *_check_forbidden_imports(),
         *_check_documents_route_boundaries(),
+        *_check_service_boundaries(),
+        *_check_document_panel_boundaries(),
+        *_check_chat_page_preference_boundaries(),
         *_check_pages_are_real_containers(),
         *_check_component_page_shells(),
         *_check_active_docs_do_not_reference_legacy_paths(),
