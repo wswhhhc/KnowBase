@@ -13,6 +13,12 @@
   - 已抽取 `dashboardMetrics` 与 `useDashboardData`，并使页面仅消费状态和指标模型。
   - 已通过 16 项 Dashboard 针对性测试与生产构建。
   - 已完成 Task 10：图表摘要与日志表移动到纯展示组件，页面保留筛选和展开状态。
+  - 已盘点 Chat 偏好状态和现有交互覆盖，准备进入 Task 11。
+  - 已完成 Task 11：搜索偏好持久化移至 hook，桌面与移动策略控件复用同一策略定义。
+  - 已完成 Task 11B：输入编辑器与消息列表拆为独立组件，页面只保留导航和应用级接线。
+  - 已完成 Task 12：新增两个窄范围结构守卫并同步前端架构文档、依赖规则和工程指引。
+  - 已完成 Task 13：建立 legacy API Key、debug pin/exclude 和 Chroma 索引元数据的退出清单，未删除兼容实现。
+  - Checkpoint C 已完成：全量质量门禁、两组关键 E2E 和独立审查均通过。
 - 创建/修改的文件：
   - `task_plan.md`
   - `findings.md`
@@ -27,6 +33,11 @@
 | Dashboard 针对性测试 | 3 个测试文件 / 16 项 | 页面和指标行为保持不变 | 16 项通过 | passed |
 | 前端生产构建 | `npm run build` | 类型检查和 Vite 构建通过 | 通过 | passed |
 | Dashboard 展示拆分测试 | 2 个页面测试文件 / 13 项 | 布局、日志表与筛选交互保持不变 | 13 项通过 | passed |
+| Chat 偏好与交互测试 | 3 个测试文件 / 29 项 | 持久化、键盘导航、移动端与发送参数保持不变 | 29 项通过 | passed |
+| Chat 输入与消息拆分测试 | 2 个页面测试文件 / 26 项 | 键盘、流式、空状态、引用与导航保持不变 | 26 项通过 | passed |
+| 前端边界守卫 | `backend/tests/test_structure_guard.py` 与 `check-structure.py` | 已知回退模式被检测且当前代码通过 | 4 项通过；脚本通过 | passed |
+| Checkpoint C 全量门禁 | `bash scripts/run-checks.sh` | 后端、守卫、前端、构建、类型同步均通过 | 后端 697 通过/1 跳过；前端 298 通过；全部通过 | passed |
+| Checkpoint C 关键 E2E | `editor-jobs` + `auth-rbac` | 关键任务与权限流程通过 | 6 项通过 | passed |
 
 ## 错误日志
 
@@ -36,6 +47,8 @@
 | 2026-07-13 | 直接 Vitest 调用超时 | 1 | 改用 `npm test -- <目标>` 并检查残留进程 |
 | 2026-07-13 | 指标测试的 UTC 小时预期错误 | 1 | 使用与页面相同的本地时区小时规则 |
 | 2026-07-13 | Dashboard 构建因测试夹具不满足 OpenAPI 类型失败 | 1 | 修正数值字段并补齐完整响应字段 |
+| 2026-07-13 | Task 12 文档盘点命令的 PowerShell 引号错误 | 1 | 拆分为独立读取与搜索命令 |
+| 2026-07-13 | 后端结构守卫测试从仓库根调用导致路径不存在 | 1 | 改从 `backend/` 执行 |
 
 ## 五问重启检查
 
