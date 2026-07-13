@@ -60,6 +60,24 @@ class ConversationMigrationTests(unittest.TestCase):
         )
         mock_upgrade.assert_called_once_with(mock_config, "head")
 
+    def test_database_run_migrations_propagates_upgrade_failures(self):
+        with patch("alembic.command.upgrade", side_effect=RuntimeError("migration failed")):
+            with patch("alembic.config.Config") as mock_config_cls:
+                mock_config_cls.return_value = MagicMock()
+
+                with self.assertRaisesRegex(RuntimeError, "migration failed"):
+                    database_module.run_migrations()
+
+    def test_database_run_migrations_requires_alembic_config(self):
+        with patch.object(Path, "exists", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "Alembic config"):
+                database_module.run_migrations()
+
+    def test_database_run_migrations_requires_alembic_dependency(self):
+        with patch.dict(sys.modules, {"alembic": None}):
+            with self.assertRaisesRegex(RuntimeError, "Alembic is required"):
+                database_module.run_migrations()
+
     def test_database_run_migrations_skips_non_runtime_override_paths(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             database_module.set_db_path_override(Path(temp_dir) / "conversations.db")

@@ -41,6 +41,7 @@ conversations = Table(
     Column("workspace_id", Text, server_default=""),
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
+    Index("uq_conversations_thread_id", "thread_id", unique=True),
 )
 
 messages = Table(
