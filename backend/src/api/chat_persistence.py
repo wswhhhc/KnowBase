@@ -9,6 +9,10 @@ from src.chat_utils import generate_title
 from src.persistence import conversation_store, message_store, pin_state_store
 
 
+class ConversationWorkspaceMismatchError(ValueError):
+    """Raised when a thread is already bound to another workspace."""
+
+
 def get_conversation_by_thread(thread_id: str) -> dict | None:
     return conversation_store.get_conversation_by_thread(thread_id)
 
@@ -88,6 +92,9 @@ def persist_conversation_turn(
 
     existing = get_conversation_by_thread(thread_id)
     if existing:
+        existing_workspace_id = str(existing.get("workspace_id") or "")
+        if existing_workspace_id != workspace_id:
+            raise ConversationWorkspaceMismatchError("会话与当前工作区不匹配")
         conversation_id = existing["id"]
     else:
         title = generate_title(question)
