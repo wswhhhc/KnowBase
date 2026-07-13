@@ -208,7 +208,7 @@ python scripts/check-structure.py
 
 GitHub Actions 当前会执行：
 
-- 后端 `pytest`
+- 后端 `pytest`（包含隔离 Postgres 16 上的 Chat 并发事务测试）
 - 结构守卫 `python scripts/check-structure.py`
 - 前端 `npm test`
 - 前端 `npm run build`

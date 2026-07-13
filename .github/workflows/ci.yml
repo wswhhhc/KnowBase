@@ -10,6 +10,21 @@ jobs:
   backend:
     name: Backend Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: knowbase_test
+          POSTGRES_USER: knowbase
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U knowbase -d knowbase_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -30,6 +45,8 @@ jobs:
       - name: Run backend pytest suite
         working-directory: backend
         run: uv run pytest tests --tb=short -q
+        env:
+          KNOWBASE_TEST_POSTGRES_URL: postgresql+psycopg://knowbase@localhost:5432/knowbase_test?connect_timeout=5
 
       - name: Run structure guard
         run: python scripts/check-structure.py
