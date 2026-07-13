@@ -51,6 +51,13 @@ def submit_file_import(
     actor_user_id: str | None,
     enqueue_job: EnqueueJob,
 ) -> ImportSubmission:
+    """Submit a file job without reading or deleting the temporary upload.
+
+    The caller owns ``file_path`` until this function returns a submission with
+    a job. Once a job is returned, the worker owns the file and removes it in a
+    ``finally`` block after execution; callers must not delete it on later
+    audit or response-adapter failures.
+    """
     existing = source_exists(catalog, source_name, workspace_id=workspace_id)
     if existing and not version_mode:
         return ImportSubmission(existing_version=True, version_mode=None, job=None)

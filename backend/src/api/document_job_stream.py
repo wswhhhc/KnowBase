@@ -33,6 +33,15 @@ def _sse_event(event: str, payload: dict[str, Any]) -> dict[str, str]:
     return {"event": event, "data": json.dumps(payload, ensure_ascii=False)}
 
 
+def done_event_source(payload: dict[str, Any]) -> EventSourceResponse:
+    """Return a one-shot ``done`` stream for imports that do not enqueue a job."""
+
+    async def event_stream():
+        yield _sse_event("done", payload)
+
+    return EventSourceResponse(event_stream())
+
+
 def job_event_source(
     job_id: str,
     *,

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from tests.helpers import setup_test_env, teardown_test_env
 
@@ -76,18 +79,42 @@ def test_upload_returns_queued_job_without_running_kb_import():
             "stream": False,
             "source_name": "upload.txt",
         }
+        assert Path(uploaded_path).exists()
     finally:
         if uploaded_path:
-            from pathlib import Path
             Path(uploaded_path).unlink(missing_ok=True)
         teardown_test_env(tmp_dir, orig_db, patchers)
 
 
-def test_upload_existing_source_probe_does_not_enqueue_job_and_removes_temp_file():
+def test_upload_existing_source_probe_does_not_enqueue_job_and_removes_temp_file(tmp_path):
     fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
+    upload_path = tmp_path / "upload.txt"
+    upload_path.write_bytes(b"hello")
     try:
-        with patch.object(fake_kb, "source_counts", return_value=[("upload.txt", 1)]):
-            with patch("src.api.routes.documents.enqueue_tracked_job") as mock_enqueue:
+        with patch("src.api.routes.documents.save_uploaded_file", return_value=(str(upload_path), "upload.txt")):
+            with patch.object(fake_kb, "source_counts", return_value=[("upload.txt", 1)]):
+                with patch("src.api.routes.documents.enqueue_tracked_job") as mock_enqueue:
+                    response = client.post(
+                        "/api/documents/upload?workspace_id=ws-a",
+                        files={"file": ("upload.txt", b"hello", "text/plain")},
+                    )
+    finally:
+        teardown_test_env(tmp_dir, orig_db, patchers)
+
+    assert response.status_code == 200
+    assert response.json()["existing_version"] is True
+    assert response.json()["chunk_count"] == 0
+    assert not upload_path.exists()
+    mock_enqueue.assert_not_called()
+
+
+def test_upload_enqueue_failure_removes_route_owned_temp_file(tmp_path):
+    _fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
+    upload_path = tmp_path / "upload.txt"
+    upload_path.write_bytes(b"hello")
+    try:
+        with patch("src.api.routes.documents.save_uploaded_file", return_value=(str(upload_path), "upload.txt")):
+            with patch("src.api.routes.documents.enqueue_tracked_job", side_effect=RuntimeError("queue down")):
                 response = client.post(
                     "/api/documents/upload?workspace_id=ws-a",
                     files={"file": ("upload.txt", b"hello", "text/plain")},
@@ -95,10 +122,50 @@ def test_upload_existing_source_probe_does_not_enqueue_job_and_removes_temp_file
     finally:
         teardown_test_env(tmp_dir, orig_db, patchers)
 
-    assert response.status_code == 200
-    assert response.json()["existing_version"] is True
-    assert response.json()["chunk_count"] == 0
-    mock_enqueue.assert_not_called()
+    assert response.status_code == 503
+    assert not upload_path.exists()
+
+
+@pytest.mark.parametrize("endpoint", ["upload", "upload-stream"])
+def test_upload_validation_failure_removes_route_owned_temp_file(tmp_path, endpoint):
+    _fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
+    upload_path = tmp_path / "upload.txt"
+    upload_path.write_bytes(b"hello")
+    try:
+        with patch("src.api.routes.documents.save_uploaded_file", return_value=(str(upload_path), "upload.txt")):
+            with patch("src.api.routes.documents.submit_file_import", side_effect=ValueError("invalid source")):
+                response = client.post(
+                    f"/api/documents/{endpoint}?workspace_id=ws-a",
+                    files={"file": ("upload.txt", b"hello", "text/plain")},
+                )
+    finally:
+        teardown_test_env(tmp_dir, orig_db, patchers)
+
+    assert response.status_code == 400
+    assert not upload_path.exists()
+
+
+@pytest.mark.parametrize("endpoint", ["upload", "upload-stream"])
+def test_queued_upload_audit_failure_does_not_delete_worker_owned_temp_file(tmp_path, endpoint):
+    _fake_kb, client, tmp_dir, orig_db, patchers = setup_test_env()
+    queued_job = _job_payload(f"job-{endpoint}")
+    queued_job["job_type"] = "ingest_file"
+    upload_path = tmp_path / "upload.txt"
+    upload_path.write_bytes(b"hello")
+    try:
+        with patch("src.api.routes.documents.save_uploaded_file", return_value=(str(upload_path), "upload.txt")):
+            with patch("src.api.routes.documents.enqueue_tracked_job", return_value=queued_job):
+                with patch("src.api.routes.documents.audit_store.record_event", side_effect=RuntimeError("audit down")):
+                    response = client.post(
+                        f"/api/documents/{endpoint}?workspace_id=ws-a",
+                        files={"file": ("upload.txt", b"hello", "text/plain")},
+                    )
+
+        assert response.status_code == 503
+        assert upload_path.exists()
+    finally:
+        upload_path.unlink(missing_ok=True)
+        teardown_test_env(tmp_dir, orig_db, patchers)
 
 
 def test_upload_missing_mime_rejected_before_enqueue():
@@ -152,7 +219,6 @@ def test_upload_stream_enqueues_job_and_streams_job_status_without_running_kb_im
         uploaded_path = call_kwargs["kwargs"]["file_path"]
     finally:
         if uploaded_path:
-            from pathlib import Path
             Path(uploaded_path).unlink(missing_ok=True)
         teardown_test_env(tmp_dir, orig_db, patchers)
 

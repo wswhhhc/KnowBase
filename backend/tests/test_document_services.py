@@ -1,12 +1,35 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from unittest.mock import Mock
 
-from src.api.document_job_stream import done_payload, progress_payload
+from src.api.document_job_stream import done_event_source, done_payload, job_event_source, progress_payload
 from src.services.document_audit import redacted_url_for_audit, source_audit_identity
 from src.services.document_import_service import source_exists, submit_file_import, submit_url_import
 from src.services.document_job_service import enqueue_clear_workspace, enqueue_rebuild_index
 from src.services.document_operations import delete_source, import_demo_documents
+
+
+def _collect_sse_events(response) -> list[dict]:
+    async def collect() -> list[dict]:
+        events = []
+        async for item in response.body_iterator:
+            events.append({"event": item["event"], "data": json.loads(item["data"])})
+        return events
+
+    return asyncio.run(collect())
+
+
+def test_done_event_source_emits_exactly_one_done_event():
+    response = done_event_source({"existing_version": True, "message": "请选择版本策略"})
+
+    assert _collect_sse_events(response) == [
+        {
+            "event": "done",
+            "data": {"existing_version": True, "message": "请选择版本策略"},
+        }
+    ]
 
 
 def test_redacted_url_for_audit_removes_credentials_query_and_fragment():
@@ -58,6 +81,87 @@ def test_done_payload_preserves_existing_version_from_fallback():
         "message": "导入任务已完成",
         "job_id": "job-1",
     }
+
+
+def test_job_event_source_uses_fallback_when_succeeded_job_has_no_result():
+    response = job_event_source(
+        "job-1",
+        fallback_done={"chunk_count": 0, "message": "导入任务已完成"},
+        get_job=lambda _job_id: {
+            "id": "job-1",
+            "status": "succeeded",
+            "progress": {"phase": "done", "percent": 100},
+        },
+        poll_seconds=0,
+    )
+
+    assert _collect_sse_events(response) == [
+        {"event": "progress", "data": {"phase": "done", "percent": 100}},
+        {
+            "event": "done",
+            "data": {"chunk_count": 0, "message": "导入任务已完成", "job_id": "job-1"},
+        },
+    ]
+
+
+def test_job_event_source_deduplicates_progress_before_failed_error():
+    jobs = iter(
+        [
+            {
+                "id": "job-1",
+                "status": "running",
+                "progress": {"phase": "embedding", "percent": 60},
+            },
+            {
+                "id": "job-1",
+                "status": "failed",
+                "progress": {"phase": "embedding", "percent": 60},
+                "error": "embedding failed",
+            },
+        ]
+    )
+    response = job_event_source(
+        "job-1",
+        fallback_done={},
+        get_job=lambda _job_id: next(jobs),
+        poll_seconds=0,
+    )
+
+    assert _collect_sse_events(response) == [
+        {"event": "progress", "data": {"phase": "embedding", "percent": 60}},
+        {"event": "error", "data": {"job_id": "job-1", "message": "embedding failed"}},
+    ]
+
+
+def test_job_event_source_emits_canceled_error_after_progress():
+    response = job_event_source(
+        "job-1",
+        fallback_done={},
+        get_job=lambda _job_id: {
+            "id": "job-1",
+            "status": "canceled",
+            "progress": {"phase": "queued", "percent": 0},
+        },
+        poll_seconds=0,
+    )
+
+    assert _collect_sse_events(response) == [
+        {"event": "progress", "data": {"phase": "queued", "percent": 0}},
+        {"event": "error", "data": {"job_id": "job-1", "message": "导入任务已取消"}},
+    ]
+
+
+def test_job_event_source_emits_error_when_job_is_missing():
+    response = job_event_source(
+        "missing-job",
+        fallback_done={},
+        get_job=lambda _job_id: None,
+        poll_seconds=0,
+    )
+
+    assert _collect_sse_events(response) == [
+        {"event": "error", "data": {"job_id": "missing-job", "message": "任务不存在"}}
+    ]
 
 
 class _SourceKnowledgeBase:
