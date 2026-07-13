@@ -27,5 +27,5 @@ uv run uvicorn src.api.main:app --reload --port 8000
 ## 相关文档
 
 - 根项目说明：[`README.md`](../README.md)
-- 需求基线：[`docs/requirements.md`](../docs/requirements.md)
+- 产品边界：[`docs/requirements/product-boundaries.md`](../docs/requirements/product-boundaries.md)
 - 协作约定：[`CONTRIBUTING.md`](../CONTRIBUTING.md)
