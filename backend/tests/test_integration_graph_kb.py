@@ -269,6 +269,7 @@ class GraphKBIntegrationTests(unittest.TestCase):
         are included in the generated answer."""
         kb = MultiDocKnowledgeBase()
         fake_llm = FakeLLM([
+            '{"selected_doc_ids":["langgraph.txt:0:abc"],"reason":"most relevant"}',
             "LangGraph 支持持久化。",
             '{"quality_passed":false,"quality_reason":"need more","retry_strategy":"web_search"}',
             "LangGraph 支持持久化。联网资料表明这是正确的。【来源：网络来源 1】",
@@ -293,6 +294,7 @@ class GraphKBIntegrationTests(unittest.TestCase):
                                 thread_id=str(uuid4()),
                                 knowledge_base=kb,
                                 web_search_enabled=True,
+                                search_strategy="high_quality",
                             )
 
         self.assertTrue(result.get("used_web_search"))

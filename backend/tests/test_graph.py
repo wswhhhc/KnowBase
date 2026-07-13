@@ -84,6 +84,10 @@ class GraphRoutingTests(unittest.TestCase):
         question_type = detect_question_type("试用期年假怎么算", history)
         self.assertEqual(question_type, "knowledge_base")
 
+    def test_detect_question_type_routes_simple_greeting_to_clarification(self):
+        question_type = detect_question_type("你好！", [])
+        self.assertEqual(question_type, "clarification")
+
     def test_route_after_classifier_sends_memory_questions_to_memory_node(self):
         branch = route_after_classifier({"question_type": "chat_memory"})
         self.assertEqual(branch, "answer_from_history")
