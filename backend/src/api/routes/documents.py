@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sse_starlette.sse import EventSourceResponse
 
 from src.api.deps import get_knowledge_base, require_workspace_editor, require_workspace_viewer
+from src.api.document_job_stream import job_event_source
 from src.api.models import DemoImportResponse, IngestResponse, JobCreateResponse, URLIngestRequest, SourceOut
 from src.api.rate_limit import enforce_document_import_rate_limit
 from src.jobs.enqueue import enqueue_tracked_job
@@ -19,11 +18,17 @@ from src.persistence import audit_store, job_store
 from src.chat_utils import generate_suggested_questions
 from src.rag.models import normalize_source
 from src.rag.knowledge_base import KnowledgeBase
+from src.services.document_audit import (
+    record_demo_imported,
+    record_file_import_queued,
+    record_source_deleted,
+    record_url_import_queued,
+    record_workspace_mutation_queued,
+)
 from src.utils import save_uploaded_file
 
 router = APIRouter()
 _VERSIONED_SOURCE_RE = re.compile(r"^(.+?)\s+\(v\d+\)$")
-_JOB_SSE_POLL_SECONDS = 0.1
 
 
 def _source_identity(source_name: str) -> str:
@@ -64,154 +69,6 @@ def _collect_suggested_questions(
             texts.append(" ".join(chunk.content for chunk in source_chunks))
     docs_text = " ".join(texts).strip()
     return generate_suggested_questions(docs_text) if docs_text else []
-
-
-def _sse_event(event: str, payload: dict) -> dict:
-    return {"event": event, "data": json.dumps(payload, ensure_ascii=False)}
-
-
-def _progress_payload(progress: dict) -> dict:
-    return {key: value for key, value in progress.items() if key != "result"}
-
-
-def _done_payload(job: dict, fallback: dict) -> dict:
-    result = job.get("progress", {}).get("result")
-    payload = {**fallback, **result} if isinstance(result, dict) else dict(fallback)
-    if fallback.get("existing_version"):
-        payload["existing_version"] = True
-    payload["job_id"] = job["id"]
-    return payload
-
-
-def _redacted_url_for_audit(raw_url: str) -> dict:
-    parsed = urlsplit(raw_url)
-    host = parsed.hostname or ""
-    netloc_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
-    try:
-        port = parsed.port
-    except ValueError:
-        port = None
-    netloc = f"{netloc_host}:{port}" if port is not None else netloc_host
-    return {
-        "scheme": parsed.scheme,
-        "host": host,
-        "url": urlunsplit((parsed.scheme, netloc, parsed.path, "", "")),
-    }
-
-
-def _audit_url_import_queued(
-    *,
-    actor_user_id: str | None,
-    workspace_id: str,
-    job_id: str,
-    url: str,
-    version_mode: str,
-    stream: bool,
-) -> None:
-    audit_store.record_event(
-        action="document.url_import_queued",
-        actor_user_id=actor_user_id,
-        target_type="job",
-        target_id=job_id,
-        metadata={
-            "workspace_id": workspace_id,
-            "job_type": "ingest_url",
-            "version_mode": version_mode,
-            "stream": stream,
-            **_redacted_url_for_audit(url),
-        },
-    )
-
-
-def _audit_file_import_queued(
-    *,
-    actor_user_id: str | None,
-    workspace_id: str,
-    job_id: str,
-    source_name: str,
-    version_mode: str,
-    stream: bool,
-) -> None:
-    audit_store.record_event(
-        action="document.file_import_queued",
-        actor_user_id=actor_user_id,
-        target_type="job",
-        target_id=job_id,
-        metadata={
-            "workspace_id": workspace_id,
-            "job_type": "ingest_file",
-            "version_mode": version_mode,
-            "stream": stream,
-            "source_name": source_name,
-        },
-    )
-
-
-def _audit_workspace_mutation_queued(
-    *,
-    action: str,
-    actor_user_id: str | None,
-    workspace_id: str,
-    job_id: str,
-    job_type: str,
-) -> None:
-    audit_store.record_event(
-        action=action,
-        actor_user_id=actor_user_id,
-        target_type="job",
-        target_id=job_id,
-        metadata={
-            "workspace_id": workspace_id,
-            "job_type": job_type,
-        },
-    )
-
-
-def _source_audit_identity(source_name: str) -> tuple[str, dict]:
-    parsed = urlsplit(source_name)
-    if parsed.scheme in {"http", "https"} and parsed.hostname:
-        redacted = _redacted_url_for_audit(source_name)
-        return redacted["url"], {
-            "source_name": redacted["url"],
-            "source_scheme": redacted["scheme"],
-            "source_host": redacted["host"],
-        }
-    return source_name, {"source_name": source_name}
-
-
-def _job_event_source(job_id: str, *, fallback_done: dict) -> EventSourceResponse:
-    """Stream progress for an already queued import job."""
-
-    async def _event_stream():
-        last_progress: dict | None = None
-        while True:
-            job = job_store.get_job(job_id)
-            if job is None:
-                yield _sse_event("error", {"job_id": job_id, "message": "任务不存在"})
-                return
-
-            progress = _progress_payload(job.get("progress", {}))
-            if progress and progress != last_progress:
-                last_progress = dict(progress)
-                yield _sse_event("progress", progress)
-
-            status = job.get("status")
-            if status == "succeeded":
-                yield _sse_event("done", _done_payload(job, fallback_done))
-                return
-            if status == "failed":
-                yield _sse_event(
-                    "error",
-                    {"job_id": job_id, "message": job.get("error") or "导入任务失败"},
-                )
-                return
-            if status == "canceled":
-                yield _sse_event("error", {"job_id": job_id, "message": "导入任务已取消"})
-                return
-
-            await asyncio.sleep(_JOB_SSE_POLL_SECONDS)
-
-    return EventSourceResponse(_event_stream())
 
 
 @router.get("/sources")
@@ -278,7 +135,8 @@ async def upload_file_stream(
             },
             inject_job_id=True,
         )
-        _audit_file_import_queued(
+        record_file_import_queued(
+            audit_store.record_event,
             actor_user_id=actor_user_id,
             workspace_id=workspace_id,
             job_id=job["id"],
@@ -286,7 +144,7 @@ async def upload_file_stream(
             version_mode=actual_mode,
             stream=True,
         )
-        return _job_event_source(
+        return job_event_source(
             job["id"],
             fallback_done={
                 "chunk_count": 0,
@@ -295,6 +153,7 @@ async def upload_file_stream(
                 "suggested_questions": [],
                 "existing_version": existing,
             },
+            get_job=job_store.get_job,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -344,7 +203,8 @@ async def ingest_url_stream(
             },
             inject_job_id=True,
         )
-        _audit_url_import_queued(
+        record_url_import_queued(
+            audit_store.record_event,
             actor_user_id=actor_user_id,
             workspace_id=workspace_id,
             job_id=job["id"],
@@ -352,7 +212,7 @@ async def ingest_url_stream(
             version_mode=actual_mode,
             stream=True,
         )
-        return _job_event_source(
+        return job_event_source(
             job["id"],
             fallback_done={
                 "chunk_count": 0,
@@ -361,6 +221,7 @@ async def ingest_url_stream(
                 "suggested_questions": [],
                 "existing_version": existing,
             },
+            get_job=job_store.get_job,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -409,7 +270,8 @@ async def upload_file(
             },
             inject_job_id=True,
         )
-        _audit_file_import_queued(
+        record_file_import_queued(
+            audit_store.record_event,
             actor_user_id=actor_user_id,
             workspace_id=workspace_id,
             job_id=job["id"],
@@ -463,7 +325,8 @@ async def ingest_url(
             },
             inject_job_id=True,
         )
-        _audit_url_import_queued(
+        record_url_import_queued(
+            audit_store.record_event,
             actor_user_id=actor_user_id,
             workspace_id=workspace_id,
             job_id=job["id"],
@@ -499,16 +362,12 @@ async def import_demo_documents(
             imported_sources=imported_sources,
             suggested_questions=suggested,
         )
-        audit_store.record_event(
-            action="document.demo_imported",
+        record_demo_imported(
+            audit_store.record_event,
             actor_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
-            target_type="workspace",
-            target_id=workspace_id,
-            metadata={
-                "workspace_id": workspace_id,
-                "imported_sources": imported_sources,
-                "chunk_count": chunk_count,
-            },
+            workspace_id=workspace_id,
+            imported_sources=imported_sources,
+            chunk_count=chunk_count,
         )
         return response
     except ValueError as e:
@@ -525,17 +384,12 @@ async def delete_source(
     removed = kb.delete_source(source_name, workspace_id=workspace_id)
     if removed == 0:
         raise HTTPException(404, "来源不存在")
-    target_id, source_metadata = _source_audit_identity(source_name)
-    audit_store.record_event(
-        action="document.source_deleted",
+    record_source_deleted(
+        audit_store.record_event,
         actor_user_id=str(_workspace_access.get("id")) if _workspace_access else None,
-        target_type="source",
-        target_id=target_id,
-        metadata={
-            "workspace_id": workspace_id,
-            **source_metadata,
-            "removed_chunks": removed,
-        },
+        workspace_id=workspace_id,
+        source_name=source_name,
+        removed_chunks=removed,
     )
     return IngestResponse(
         chunk_count=removed, total_docs=kb.document_count_for_workspace(workspace_id),
@@ -558,7 +412,8 @@ async def clear_kb(
             kwargs={"workspace_id": workspace_id},
             inject_job_id=True,
         )
-        _audit_workspace_mutation_queued(
+        record_workspace_mutation_queued(
+            audit_store.record_event,
             action="document.clear_queued",
             actor_user_id=actor_user_id,
             workspace_id=workspace_id,
@@ -585,7 +440,8 @@ async def rebuild_index(
             kwargs={"workspace_id": workspace_id},
             inject_job_id=True,
         )
-        _audit_workspace_mutation_queued(
+        record_workspace_mutation_queued(
+            audit_store.record_event,
             action="document.rebuild_queued",
             actor_user_id=actor_user_id,
             workspace_id=workspace_id,
