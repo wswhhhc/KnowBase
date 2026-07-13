@@ -23,7 +23,7 @@
 - [x] Task 9：抽取 Dashboard 数据 hook 与纯指标模型
 - [x] Task 10：拆分 Dashboard 独立展示区块
 - [x] Task 11：统一 Chat 搜索偏好状态与控件
-- [ ] Task 11B：拆分 Chat 输入与消息区域
+- [x] Task 11B：拆分 Chat 输入与消息区域
 - [ ] Task 12：固化前端边界并同步文档
 - [ ] Checkpoint C：仓库全量质量门禁与关键 E2E 通过
 
