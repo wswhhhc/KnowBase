@@ -23,3 +23,13 @@ def test_documents_route_boundary_helper_detects_relocated_business_logic():
 
 def test_documents_route_matches_the_extracted_boundary():
     assert guard._check_documents_route_boundaries() == []
+
+
+def test_frontend_boundary_helpers_detect_known_api_and_preference_regressions():
+    assert guard._document_panel_boundary_violations("import * as api from '@/shared/api'")
+    assert guard._chat_page_preference_violations("localStorage.setItem('kb_search_strategy', 'deep')")
+
+
+def test_frontend_boundaries_match_the_extracted_modules():
+    assert guard._check_document_panel_boundaries() == []
+    assert guard._check_chat_page_preference_boundaries() == []

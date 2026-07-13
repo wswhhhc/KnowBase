@@ -98,6 +98,37 @@ def _check_documents_route_boundaries() -> list[str]:
     ]
 
 
+def _document_panel_boundary_violations(source: str) -> list[str]:
+    runtime_api_import = re.compile(
+        r"^\s*import\s+(?!type\b)(?:\*\s+as\s+\w+|\{[^}]*\})\s+from\s+['\"]@/shared/api['\"]",
+        re.MULTILINE,
+    )
+    return ["DocumentPanel 不能直接依赖运行时 API client"] if runtime_api_import.search(source) else []
+
+
+def _check_document_panel_boundaries() -> list[str]:
+    panel_path = ROOT / "frontend" / "src" / "components" / "sidebar" / "DocumentPanel.tsx"
+    return [
+        f"{message}: {panel_path.relative_to(ROOT)}"
+        for message in _document_panel_boundary_violations(_read(panel_path))
+    ]
+
+
+def _chat_page_preference_violations(source: str) -> list[str]:
+    preference_access = re.compile(
+        r"\blocalStorage\.(?:getItem|setItem)\(\s*['\"]kb_(?:web_search|search_strategy)['\"]"
+    )
+    return ["ChatPage 不能直接读写搜索偏好 localStorage"] if preference_access.search(source) else []
+
+
+def _check_chat_page_preference_boundaries() -> list[str]:
+    page_path = ROOT / "frontend" / "src" / "pages" / "chat" / "ChatPage.tsx"
+    return [
+        f"{message}: {page_path.relative_to(ROOT)}"
+        for message in _chat_page_preference_violations(_read(page_path))
+    ]
+
+
 def _check_active_docs_do_not_reference_legacy_paths() -> list[str]:
     violations: list[str] = []
     legacy_patterns = [
@@ -159,6 +190,8 @@ def main() -> int:
     violations = [
         *_check_forbidden_imports(),
         *_check_documents_route_boundaries(),
+        *_check_document_panel_boundaries(),
+        *_check_chat_page_preference_boundaries(),
         *_check_pages_are_real_containers(),
         *_check_component_page_shells(),
         *_check_active_docs_do_not_reference_legacy_paths(),

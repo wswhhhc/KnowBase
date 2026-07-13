@@ -93,7 +93,7 @@ config/     pydantic-settings + 运行时覆写
 - **持久化**: Chroma → `runtime/local/chroma_db/`，对话 → `runtime/local/conversations.db`（Alembic），checkpoints → `runtime/local/checkpoints.db`
 - **配置**: `backend/src/config/settings.py`（pydantic-settings），`CHROMA_API_KEY` 回退为 `SILICONFLOW_API_KEY`
 - **鉴权**: `deps.py:verify_api_key`，`API_KEY` 为空时本地开发跳过
-- **搜索策略**: `fast`(无 rerank)、`balanced`(条件 rerank)、`high_quality`(必 rerank)、`deep`(扩检索)，偏好存 `localStorage`。移动端收进弹层
+- **搜索策略**: `fast`(无 rerank)、`balanced`(条件 rerank)、`high_quality`(必 rerank)、`deep`(扩检索)；偏好由 `features/chat/hooks/useSearchPreferences.ts` 持久化，移动端收进复用弹层
 - **SSE 流**: `backend/src/api/chat_stream_service.py`（ChatStreamService），`chat.py` 路由仅 27 行。调试逻辑拆至 `chat_debug.py`，持久化拆至 `chat_persistence.py`
 - **文档导入**: `backend/src/services/` 负责导入、同步操作、维护任务和审计编排；`api/document_job_stream.py` 负责任务进度 SSE，`routes/documents.py` 只保留 HTTP 映射
 - **Pin/Exclude**: 独立 `pinned_sources` 表，非 debug_info JSON blob，通过 `/pin-state` 查询
@@ -151,7 +151,10 @@ config/     pydantic-settings + 运行时覆写
 |---|---|
 | `components/browser/` | BrowserPage 拆分：7 个子组件（BrowserHeader/DocumentActions/SearchToolbar/DebugSandbox/GridView/SliceView/ChunkDetailDialog） |
 | `components/sidebar/` | ConversationList/DocumentPanel/KBSummary/DashboardSummary |
-| `components/ChatArea.tsx` | 对话页（动态 EmptyState 按工作区分 onboarding/first-question/returning 三种场景；移动端检索策略弹层；搜索策略 radiogroup + localStorage） |
+| `pages/chat/ChatPage.tsx` | 对话页面装配：导航、搜索偏好接线、消息列表和输入编辑器 |
+| `components/chat/` | Chat 展示区块：搜索偏好控件、消息列表、输入编辑器 |
+| `features/chat/hooks/` | Chat 偏好持久化与输入编辑器状态 |
+| `features/dashboard/` | Dashboard 日志请求与纯指标模型 |
 | `components/MessageBubble.tsx` | 消息气泡（引用编号、证据标签、收藏/反馈/复制/导出、顶部操作主次分层 + 更多菜单） |
 | `components/EmptyState.tsx` | 三种空状态模式（onboarding/first-question/returning），根据工作区文档数和对话数动态渲染 |
 | `components/ErrorBoundary.tsx` | 组件级错误边界（支持 fallback prop） |

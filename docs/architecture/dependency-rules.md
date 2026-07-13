@@ -53,6 +53,8 @@ KnowBase 当前仓库的默认依赖方向如下：
 
 - 页面组件和 Sidebar 从根 `App.tsx` 反向拿类型
 - 所有 API 逻辑重新堆回单个 `lib/api.ts`
+- `components/sidebar/DocumentPanel.tsx` 直接调用 `shared/api/` 的运行时 client；文档交互应经由 `features/documents/hooks/`
+- `pages/chat/ChatPage.tsx` 直接读写 `kb_web_search` 或 `kb_search_strategy`；偏好应经由 `features/chat/hooks/useSearchPreferences.ts`
 
 ## 数据与样例
 
