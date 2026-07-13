@@ -11,7 +11,7 @@
 
 ![KnowBase 当前桌面界面](docs/screenshots/chat-overview.png)
 
-当前仓库已附带一张真实截图。其余展示位不再使用占位图，待补资源见 [docs/screenshots/TODO.md](docs/screenshots/TODO.md)。
+当前仓库已附带一张基于真实运行环境的界面截图。
 
 ## 项目亮点
 
@@ -192,21 +192,24 @@ bash scripts/run-checks.sh
 或按分步方式执行：
 
 ```bash
-cd backend && uv run pytest tests --tb=short -q
-cd frontend && npm test
-cd frontend && npm run build
+(cd backend && uv run pytest tests --tb=short -q)
+python scripts/check-structure.py
+(cd frontend && npm test)
+(cd frontend && npm run build)
+(cd frontend && npm run check-api-types)
 ```
 
 如果后端接口或 schema 有变更，再补这两步：
 
 ```bash
-cd backend && uv run python scripts/export_openapi.py
-cd frontend && npm run gen-api-types
+(cd backend && uv run python scripts/export_openapi.py)
+(cd frontend && npm run gen-api-types)
 ```
 
 GitHub Actions 当前会执行：
 
 - 后端 `pytest`
+- 结构守卫 `python scripts/check-structure.py`
 - 前端 `npm test`
 - 前端 `npm run build`
 - 前端生成类型漂移检查 `npm run check-api-types`

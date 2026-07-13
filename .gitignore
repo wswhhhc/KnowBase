@@ -40,8 +40,17 @@ output/
 .claude/worktrees/
 
 # Local test and evaluation artifacts
+.pytest_cache/
 .playwright-cli/
 frontend/coverage/
+
+# 一次性代理规划产物
+/task_plan.md
+/findings.md
+/progress.md
+/tasks/plan.md
+/tasks/todo.md
+/tasks/completion-audit.md
 
 # Keep generated API contract snapshots under version control
 !backend/openapi.json
