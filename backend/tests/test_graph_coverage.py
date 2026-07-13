@@ -609,6 +609,70 @@ class GenerateAnswerTests(unittest.TestCase):
         self.assertEqual(result["answer"], "three apprentices")
         mock_get_llm.assert_called_once_with(streaming=True, reasoning_mode="standard")
 
+    def test_simple_fact_question_limits_generation_context_to_top_three_documents(self):
+        class RecordingLLM(FakeLLM):
+            prompt = ""
+
+            def invoke(self, prompt):
+                self.prompt = prompt
+                return super().invoke(prompt)
+
+        docs = [
+            RetrievalResult(
+                chunk_id=f"facts:0:{index}",
+                document=Document(
+                    page_content=f"evidence-{index}",
+                    metadata={"source": "facts.txt", "chunk_id": f"facts:0:{index}"},
+                ),
+                score=1.0 - index * 0.01,
+            )
+            for index in range(5)
+        ]
+        fake_llm = RecordingLLM(["孙悟空有七十二般变化。"])
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            result = generate_answer(_state(
+                search_strategy="balanced",
+                context="full-context-marker",
+                documents=docs,
+                question="孙悟空有多少般变化",
+                messages=[],
+            ))
+
+        self.assertIn("七十二般变化", result["answer"])
+        self.assertIn("evidence-0", fake_llm.prompt)
+        self.assertIn("evidence-2", fake_llm.prompt)
+        self.assertNotIn("evidence-3", fake_llm.prompt)
+        self.assertNotIn("full-context-marker", fake_llm.prompt)
+
+    def test_standard_generation_timeout_returns_most_relevant_source_text(self):
+        class TimeoutLLM:
+            def stream(self, _prompt):
+                raise TimeoutError("The read operation timed out")
+
+        documents = [
+            RetrievalResult(
+                chunk_id="journey:0:1",
+                document=Document(
+                    page_content="孙悟空会七十二般变化，并拥有筋斗云。",
+                    metadata={"source": "西游记.txt", "chunk_id": "journey:0:1"},
+                ),
+                score=0.99,
+            )
+        ]
+        with patch("src.graph.utils._get_llm", return_value=TimeoutLLM()):
+            result = generate_answer(_state(
+                search_strategy="balanced",
+                context="some docs",
+                documents=documents,
+                sources=[{"index": 1, "source": "西游记.txt", "chunk_id": "journey:0:1"}],
+                question="孙悟空有多少般变化",
+                messages=[],
+            ))
+
+        self.assertIn("七十二般变化", result["answer"])
+        self.assertIn("[1]", result["answer"])
+        self.assertNotIn("timed out", result["answer"])
+
     def test_deep_generation_falls_back_to_standard_profile_after_deadline(self):
         class DeadlineLLM:
             def stream(self, _prompt):

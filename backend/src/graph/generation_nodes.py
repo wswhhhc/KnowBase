@@ -8,6 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from src.graph import utils as gu
 from src.graph.state import GraphState, GraphStateUpdate
+from src.utils import extract_context_terms
 
 
 logger = logging.getLogger(__name__)
@@ -17,11 +18,53 @@ _DEEP_GENERATION_DEADLINE_SECONDS = 20
 _DEEP_REASONING_RE = re.compile(
     r"(?:综合|比较|分析|权衡|推导|评估|方案|风险|影响|全文|多角度|步骤|因果|趋势)"
 )
+_SIMPLE_FACT_RE = re.compile(
+    r"(?:多少|几个|几位|是谁|何时|什么时候|哪里|哪[个些]|是否|有无|叫什么|是什么|多大|多久)"
+)
 
 
 def _requires_deep_reasoning(question: str) -> bool:
     normalized = re.sub(r"\s+", "", question)
     return len(normalized) >= 60 or bool(_DEEP_REASONING_RE.search(normalized))
+
+
+def _is_simple_fact_question(question: str) -> bool:
+    normalized = re.sub(r"\s+", "", question)
+    return len(normalized) <= 40 and bool(_SIMPLE_FACT_RE.search(normalized))
+
+
+def _compact_fact_context(state: GraphState, question: str, context: str) -> str:
+    documents = state.get("documents", [])
+    if not _is_simple_fact_question(question) or not documents:
+        return context
+    compact_context, _ = gu._format_context(documents[:3])
+    return compact_context or context
+
+
+def _build_extractive_fallback(state: GraphState, question: str) -> str:
+    documents = state.get("documents", [])
+    if not documents:
+        return "模型响应暂时超时，请稍后重试。"
+
+    query_terms = extract_context_terms(question, top_n=6)
+    best_sentence = ""
+    best_index = 1
+    best_score = -1
+    for index, result in enumerate(documents[:3], 1):
+        document = result.document
+        text = str(document.metadata.get("original_content") or document.page_content or "")[:4000].strip()
+        sentences = [part.strip() for part in re.split(r"(?<=[。！？!?])|\n+", text) if part.strip()]
+        for sentence in sentences or [text]:
+            score = sum(1 for term in query_terms if term and term in sentence)
+            if score > best_score:
+                best_sentence = sentence
+                best_index = index
+                best_score = score
+
+    excerpt = best_sentence[:500].strip()
+    if not excerpt:
+        return "模型响应暂时超时，请稍后重试。"
+    return f"根据最相关的参考文档：{excerpt}[{best_index}]"
 
 
 def generate_answer(state: GraphState, config: RunnableConfig | None = None) -> GraphStateUpdate:
@@ -33,6 +76,9 @@ def generate_answer(state: GraphState, config: RunnableConfig | None = None) -> 
     history = gu._messages_to_turns(state.get("messages", []))
     strategy = state.get("search_strategy", "balanced")
     token_callback = gu.get_stream_token_callback(config)
+
+    if not web_context:
+        context = _compact_fact_context(state, question, context)
 
     if web_context:
         context = f"{context}\n\n{web_context}" if context else web_context
@@ -97,18 +143,26 @@ def generate_answer(state: GraphState, config: RunnableConfig | None = None) -> 
             allow_partial_on_deadline=False,
         )
     except Exception as exc:
-        if reasoning_mode != "deep":
-            raise
-        logger.warning("深度生成超出时限，回退到标准生成: %s", exc)
-        fallback_llm = gu._get_llm(streaming=True, reasoning_mode="standard")
-        answer, token_usage = gu.run_llm_text(
-            fallback_llm,
-            formatted_prompt,
-            stream=True,
-            token_callback=None,
-            deadline_seconds=_STANDARD_GENERATION_DEADLINE_SECONDS,
-            allow_partial_on_deadline=False,
-        )
+        if reasoning_mode == "deep":
+            logger.warning("深度生成超出时限，回退到标准生成: %s", exc)
+            try:
+                fallback_llm = gu._get_llm(streaming=True, reasoning_mode="standard")
+                answer, token_usage = gu.run_llm_text(
+                    fallback_llm,
+                    formatted_prompt,
+                    stream=True,
+                    token_callback=None,
+                    deadline_seconds=_STANDARD_GENERATION_DEADLINE_SECONDS,
+                    allow_partial_on_deadline=False,
+                )
+            except Exception as fallback_exc:
+                logger.warning("标准生成回退失败，使用检索原文: %s", fallback_exc)
+                answer = _build_extractive_fallback(state, question)
+                token_usage = {}
+        else:
+            logger.warning("标准生成失败，使用检索原文: %s", exc)
+            answer = _build_extractive_fallback(state, question)
+            token_usage = {}
     if callable(token_callback) and answer:
         token_callback(answer)
 
