@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import zlib
 from typing import Literal
 
 from langchain_core.messages import AIMessage
@@ -76,6 +75,16 @@ def check_quality(state: GraphState) -> GraphStateUpdate:
     if web_context:
         context = f"{context}\n\n{web_context}" if context else web_context
 
+    strategy = state.get("search_strategy", "balanced")
+    if strategy in ("fast", "balanced") and answer:
+        return {
+            "quality_ok": True,
+            "quality_reason": "标准模式跳过 LLM 质量检查。",
+            "retry_strategy": "none",
+            "retry_count": retry_count,
+            "messages": [AIMessage(content=answer)],
+        }
+
     rule_result = _rule_check_quality(state)
     if rule_result is not None:
         update = {**rule_result, "retry_count": retry_count + 1}
@@ -87,26 +96,21 @@ def check_quality(state: GraphState) -> GraphStateUpdate:
             update["retry_count"] = retry_count
         return update
 
-    strategy = state.get("search_strategy", "balanced")
-    web_search_available = state.get("web_search_enabled", False) and _tavily_configured()
     token_usage = {}
-    if strategy != "high_quality" and not web_search_available and zlib.adler32((question + answer).encode("utf-8")) % 3 != 0:
-        decision = QualityDecision(quality_passed=True, quality_reason="质量检查采样跳过。")
-    else:
-        llm = gu._get_llm()
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "你是回答质量审核员。只输出 JSON，格式为 {{\"quality_passed\": true/false, \"quality_reason\": \"原因\", \"retry_strategy\": \"none|rewrite_query|expand_retrieval|insufficient_context\"}}。"),
-            ("human", "问题：{question}\n\n参考文档：{context}\n\n回答：{answer}"),
-        ])
+    llm = gu._get_llm(purpose="auxiliary")
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "你是回答质量审核员。只输出 JSON，格式为 {{\"quality_passed\": true/false, \"quality_reason\": \"原因\", \"retry_strategy\": \"none|rewrite_query|expand_retrieval|insufficient_context\"}}。"),
+        ("human", "问题：{question}\n\n参考文档：{context}\n\n回答：{answer}"),
+    ])
 
-        try:
-            result = llm.invoke(prompt.format(question=question, context=context[:3000], answer=answer))
-            decision = gu.parse_quality_decision(str(result.content))
-            token_usage = gu.extract_token_usage(result)
-        except Exception as exc:
-            logger.warning("LLM 质量检查失败，保守放行: %s", exc)
-            decision = QualityDecision(quality_passed=True, quality_reason="质量检查调用失败，保守放行。")
-            token_usage = {}
+    try:
+        result = llm.invoke(prompt.format(question=question, context=context[:3000], answer=answer))
+        decision = gu.parse_quality_decision(str(result.content))
+        token_usage = gu.extract_token_usage(result)
+    except Exception as exc:
+        logger.warning("LLM 质量检查失败，保守放行: %s", exc)
+        decision = QualityDecision(quality_passed=True, quality_reason="质量检查调用失败，保守放行。")
+        token_usage = {}
 
     update = {
         "quality_ok": decision.quality_passed,
@@ -147,6 +151,8 @@ def should_retry(state: GraphState) -> Literal["web_search", "rewrite_query", "r
         return "finalize"
     if state.get("retry_strategy") == "web_search":
         return "web_search"
+    if state.get("search_strategy") == "deep":
+        return "finalize"
     if state.get("retry_count", 0) < MAX_RETRIES:
         retry_strategy = state.get("retry_strategy", "expand_retrieval")
         if retry_strategy == "rewrite_query":

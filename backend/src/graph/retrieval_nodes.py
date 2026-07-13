@@ -78,7 +78,7 @@ def rewrite_query(state: GraphState) -> GraphStateUpdate:
         _rewrite_cache.move_to_end(cache_key)
         return {"rewritten_question": cached, "used_rewrite": cached != question}
 
-    llm = gu._get_llm()
+    llm = gu._get_llm(purpose="auxiliary")
     prompt = ChatPromptTemplate.from_messages([
         ("system", "你是查询改写助手。结合对话历史，把最新问题改写为独立、完整、适合检索工作区的中文问题。保留原文的指代解析，确保改写后的问题包含前文已建立的关键实体和条件。只返回改写后的问题。"),
         ("human", "对话历史：\n{history}\n\n最新问题：{question}"),
@@ -343,7 +343,7 @@ def rerank_docs(state: GraphState) -> GraphStateUpdate:
         f"ID: {result.chunk_id}\n来源: {result.document.metadata.get('source', '未知来源')}\n内容: {result.document.page_content[:500]}"
         for result in docs
     )
-    llm = gu._get_llm()
+    llm = gu._get_llm(purpose="auxiliary")
     prompt = ChatPromptTemplate.from_messages([
         ("system", "你是文档重排器。只输出 JSON，格式为 {{\"selected_doc_ids\":[\"chunk_id\"],\"reason\":\"简短原因\"}}。"),
         ("human", "问题：{query}\n最多选择 {k} 个最相关文档。\n\n候选文档：\n{docs_text}"),
@@ -361,7 +361,8 @@ def rerank_docs(state: GraphState) -> GraphStateUpdate:
     by_id = {result.chunk_id: result for result in docs}
     reranked = [by_id[doc_id] for doc_id in decision.selected_doc_ids[:top_k]]
     if not reranked:
-        reranked = docs[:top_k]
+        fallback_k = top_k_rerank if strategy == "deep" else top_k
+        reranked = docs[:fallback_k]
 
     context, sources = gu._format_context(reranked)
     return {

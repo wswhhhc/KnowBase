@@ -35,6 +35,11 @@ _MEMORY_PATTERNS = (
     r"我刚刚.*问.*什么", r"你刚才.*说.*什么", r"你刚刚.*说.*什么",
 )
 
+_GREETING_RE = re.compile(r"(?:你好|您好|嗨|hello|hi|在吗|谢谢|感谢|再见)[！!。.?？]*", re.IGNORECASE)
+_OBVIOUS_KNOWLEDGE_RE = re.compile(
+    r"(?:什么|怎么|如何|为何|为什么|谁|哪里|哪[个些]|多少|几个|是否|能否|介绍|说明|区别|含义|作用|流程|时间|要求|原因|方法)"
+)
+
 _SCOPE_RULES: list[tuple[tuple[str, ...], str]] = [
     (("考勤", "请假", "制度", "规范", "休假", "加班", "报销", "办公"), "local_file"),
     (("飞书", "文档", "手册"), "local_file"),
@@ -44,6 +49,9 @@ _SCOPE_RULES: list[tuple[tuple[str, ...], str]] = [
 def detect_question_type(question: str, chat_history: list[tuple[str, str]]) -> QuestionType:
     """Regex-based question routing (fallback when LLM classifier is unavailable)."""
     normalized = re.sub(r"\s+", "", question.lower())
+
+    if _GREETING_RE.fullmatch(normalized):
+        return "clarification"
 
     if chat_history:
         if any(re.search(pattern, normalized) for pattern in _SUMMARY_PATTERNS):
@@ -71,13 +79,19 @@ def route_question(state: GraphState) -> GraphStateUpdate:
 
     # Rule-based routing first — fast path for obvious cases
     question_type = detect_question_type(state["question"], history)
-    if question_type in ("chat_memory", "conversation_summary"):
+    strategy = state.get("search_strategy", "balanced")
+    is_obvious_knowledge_question = bool(_OBVIOUS_KNOWLEDGE_RE.search(state["question"]))
+    if (
+        question_type != "knowledge_base"
+        or strategy in ("fast", "balanced")
+        or is_obvious_knowledge_question
+    ):
         search_filter = _route_search_scope(state["question"], question_type)
         return {"question_type": question_type, "search_filter": search_filter}
 
     # LLM routing for knowledge_base vs clarification ambiguity
     try:
-        llm = gu._get_llm()
+        llm = gu._get_llm(purpose="auxiliary")
         history_text = gu._format_chat_history(history, limit=3) if history else "（无历史）"
         prompt = ChatPromptTemplate.from_messages([
             (

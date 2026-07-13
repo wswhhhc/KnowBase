@@ -12,6 +12,7 @@ from src.graph import (
     get_graph,
     _initial_state,
 )
+from src.graph import utils as gu
 from src.graph.routing import (
     _route_search_scope,
     route_question,
@@ -307,6 +308,23 @@ class RerankDocsTests(unittest.TestCase):
         self.assertTrue(result["used_rerank"])
         self.assertGreater(len(result.get("documents", [])), 0)
 
+    def test_deep_rerank_failure_uses_only_strongest_fallback_documents(self):
+        docs = [_doc(1.0 - index * 0.01, f"a:0:{index}") for index in range(12)]
+        fake_llm = FakeLLM(["not valid json at all"])
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            result = rerank_docs(_state(
+                search_strategy="deep",
+                documents=docs,
+                question="请综合分析这些文档中的关键事实和相互关系",
+            ))
+
+        self.assertTrue(result["used_rerank"])
+        self.assertEqual(len(result["documents"]), 3)
+        self.assertEqual(
+            [document.chunk_id for document in result["documents"]],
+            ["a:0:0", "a:0:1", "a:0:2"],
+        )
+
 
 # =============================================================================
 # _rule_check_quality — all 4 exit branches
@@ -472,6 +490,23 @@ class CheckQualityTests(unittest.TestCase):
         self.assertFalse(result["quality_ok"])
         self.assertEqual(result.get("retry_strategy"), "web_search")
 
+    def test_balanced_mode_skips_llm_quality_check_and_retry(self):
+        with patch("src.graph.quality_nodes.get_runtime_setting", side_effect=_quality_enabled_setting):
+            with patch("src.graph.utils._get_llm", side_effect=AssertionError("standard mode must not call LLM quality")):
+                result = check_quality(_state(
+                    question_type="knowledge_base",
+                    documents=[_doc(0.9)],
+                    context="some context",
+                    answer="A reasonable answer with details.",
+                    search_strategy="balanced",
+                    retry_count=0,
+                ))
+
+        self.assertTrue(result["quality_ok"])
+        self.assertEqual(result["retry_strategy"], "none")
+        self.assertEqual(result["retry_count"], 0)
+        self.assertEqual(result["quality_reason"], "标准模式跳过 LLM 质量检查。")
+
     def test_llm_quality_passes(self):
         fake_llm = FakeLLM([
             FakeResponse(
@@ -482,21 +517,14 @@ class CheckQualityTests(unittest.TestCase):
         with patch("src.graph.quality_nodes.get_runtime_setting", side_effect=_quality_enabled_setting):
             with patch("src.graph.utils._get_llm", return_value=fake_llm):
                 with patch("src.graph.quality_nodes._tavily_configured", return_value=False):
-                    with patch("src.graph.quality_nodes.zlib.adler32", return_value=0):
-                        result = check_quality(_state(
-                            question_type="knowledge_base",
-                            documents=[_doc(0.9)],
-                            context="some context",
-                            answer="A reasonable answer with details.",
-                            search_strategy="high_quality",
-                            retry_count=0,
-                        ))
-        # With hash=0, the sampling check `hash % 3 != 0` is False → it won't skip
-        # Wait: check_quality line 766:
-        # if strategy != "high_quality" and not web_search_available and hash(question + answer) % 3 != 0:
-        #     # sampling skip
-        # Since strategy="high_quality", the condition is False immediately, so we go to LLM
-        # llm returns quality_passed=true
+                    result = check_quality(_state(
+                        question_type="knowledge_base",
+                        documents=[_doc(0.9)],
+                        context="some context",
+                        answer="A reasonable answer with details.",
+                        search_strategy="high_quality",
+                        retry_count=0,
+                    ))
         self.assertTrue(result["quality_ok"])
         self.assertEqual(result["token_count"], 13)
         self.assertEqual(result["prompt_tokens"], 9)
@@ -507,17 +535,16 @@ class CheckQualityTests(unittest.TestCase):
         with patch("src.graph.quality_nodes.get_runtime_setting", side_effect=_quality_enabled_setting):
             with patch("src.graph.utils._get_llm", return_value=fake_llm):
                 with patch("src.graph.quality_nodes._tavily_configured", return_value=True):
-                    with patch("src.graph.quality_nodes.zlib.adler32", return_value=0):
-                        result = check_quality(_state(
-                            question_type="knowledge_base",
-                            documents=[_doc(0.9)],
-                            context="some context",
-                            answer="A reasonable answer.",
-                            search_strategy="balanced",
-                            web_search_enabled=True,
-                            used_web_search=False,
-                            retry_count=0,
-                        ))
+                    result = check_quality(_state(
+                        question_type="knowledge_base",
+                        documents=[_doc(0.9)],
+                        context="some context",
+                        answer="A reasonable answer.",
+                        search_strategy="high_quality",
+                        web_search_enabled=True,
+                        used_web_search=False,
+                        retry_count=0,
+                    ))
         self.assertFalse(result["quality_ok"])
         self.assertEqual(result.get("retry_strategy"), "web_search")
 
@@ -546,17 +573,85 @@ class GenerateAnswerTests(unittest.TestCase):
     """generate_answer: deep+web, web_error_no_context, history, web sources."""
 
     def test_deep_strategy_sets_comprehensive_prompt(self):
-        fake_llm = FakeLLM(["这是一个综合答案。"])
-        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+        class RecordingLLM(FakeLLM):
+            prompt = ""
+
+            def invoke(self, prompt):
+                self.prompt = prompt
+                return super().invoke(prompt)
+
+        fake_llm = RecordingLLM(["这是一个综合答案。"])
+        with patch("src.graph.utils._get_llm", return_value=fake_llm) as mock_get_llm:
             result = generate_answer(_state(
                 search_strategy="deep",
                 context="some docs",
                 used_web_search=False,
                 web_context="",
-                question="test?",
+                question="请综合比较三个实施方案，分析它们的长期影响、风险和适用条件",
                 messages=[],
             ))
         self.assertIn("答案", result.get("answer", result.get("sources", str(result))))
+        self.assertIn("不要把同一团队中的相关实体自动归入问题所问类别", fake_llm.prompt)
+        mock_get_llm.assert_called_once_with(streaming=True, reasoning_mode="deep")
+
+    def test_deep_strategy_uses_standard_reasoning_for_simple_fact_question(self):
+        fake_llm = FakeLLM(["three apprentices"])
+        with patch("src.graph.utils._get_llm", return_value=fake_llm) as mock_get_llm:
+            result = generate_answer(_state(
+                search_strategy="deep",
+                context="some docs",
+                used_web_search=False,
+                web_context="",
+                question="唐僧有几个徒弟",
+                messages=[],
+            ))
+
+        self.assertEqual(result["answer"], "three apprentices")
+        mock_get_llm.assert_called_once_with(streaming=True, reasoning_mode="standard")
+
+    def test_deep_generation_falls_back_to_standard_profile_after_deadline(self):
+        class DeadlineLLM:
+            def stream(self, _prompt):
+                raise gu.LLMDeadlineExceeded("deep generation exceeded budget")
+
+        fallback_llm = FakeLLM(["fallback answer"])
+        with patch("src.graph.utils._get_llm", side_effect=[DeadlineLLM(), fallback_llm]) as mock_get_llm:
+            result = generate_answer(_state(
+                search_strategy="deep",
+                context="some docs",
+                used_web_search=False,
+                web_context="",
+                question="请综合比较这些方案并分析各自影响",
+                messages=[],
+            ))
+
+        self.assertEqual(result["answer"], "fallback answer")
+        self.assertEqual(
+            mock_get_llm.call_args_list,
+            [
+                unittest.mock.call(streaming=True, reasoning_mode="deep"),
+                unittest.mock.call(streaming=True, reasoning_mode="standard"),
+            ],
+        )
+
+    def test_generation_buffers_tokens_until_answer_is_complete(self):
+        streamed_tokens: list[str] = []
+        fake_llm = FakeLLM(["complete answer"])
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            with patch("src.graph.utils.get_stream_token_callback", return_value=streamed_tokens.append):
+                with patch("src.graph.utils.run_llm_text", return_value=("complete answer", {})) as mock_run_llm_text:
+                    result = generate_answer(_state(
+                        search_strategy="balanced",
+                        context="some docs",
+                        question="简单事实问题",
+                        messages=[],
+                    ))
+
+        self.assertEqual(result["answer"], "complete answer")
+        self.assertEqual(streamed_tokens, ["complete answer"])
+        _, kwargs = mock_run_llm_text.call_args
+        self.assertIsNone(kwargs["token_callback"])
+        self.assertFalse(kwargs["allow_partial_on_deadline"])
 
     def test_web_search_error_no_context_returns_error(self):
         result = generate_answer(_state(
@@ -634,6 +729,28 @@ class RouteQuestionTests(unittest.TestCase):
                 messages=[HumanMessage(content="hi"), AIMessage(content="hello")],
             ))
         self.assertEqual(result["question_type"], "knowledge_base")
+
+    def test_balanced_mode_uses_rule_route_without_llm(self):
+        with patch("src.graph.utils._get_llm") as mock_get_llm:
+            result = route_question(_state(
+                question="唐僧有几个徒弟",
+                search_strategy="balanced",
+                messages=[],
+            ))
+
+        self.assertEqual(result["question_type"], "knowledge_base")
+        mock_get_llm.assert_not_called()
+
+    def test_deep_mode_skips_llm_router_for_obvious_fact_question(self):
+        with patch("src.graph.utils._get_llm") as mock_get_llm:
+            result = route_question(_state(
+                question="唐僧有几个徒弟",
+                search_strategy="deep",
+                messages=[],
+            ))
+
+        self.assertEqual(result["question_type"], "knowledge_base")
+        mock_get_llm.assert_not_called()
 
     def test_llm_exception_falls_back_to_rule(self):
         """LLM throws → silently falls back to detect_question_type result."""

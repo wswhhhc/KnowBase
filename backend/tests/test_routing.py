@@ -54,6 +54,15 @@ class ClarificationRoutingTests(unittest.TestCase):
         })
         self.assertEqual(target, "finalize")
 
+    def test_should_retry_deep_quality_failure_does_not_repeat_full_pipeline(self):
+        target = should_retry({
+            "quality_ok": False,
+            "retry_count": 0,
+            "retry_strategy": "expand_retrieval",
+            "search_strategy": "deep",
+        })
+        self.assertEqual(target, "finalize")
+
 
 if __name__ == "__main__":
     unittest.main()

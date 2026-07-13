@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+from typing import Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_openai import ChatOpenAI
@@ -19,14 +21,67 @@ from src.utils import json_from_text
 logger = logging.getLogger(__name__)
 
 
-def _get_llm(*, streaming: bool = False) -> ChatOpenAI:
+_STANDARD_ANSWER_MAX_TOKENS = 1024
+_DEEP_ANSWER_MAX_TOKENS = 2048
+_AUXILIARY_MAX_TOKENS = 256
+_STANDARD_REQUEST_TIMEOUT_SECONDS = 15
+_STANDARD_STREAM_CHUNK_TIMEOUT_SECONDS = 10
+_DEEP_REQUEST_TIMEOUT_SECONDS = 30
+_DEEP_STREAM_CHUNK_TIMEOUT_SECONDS = 10
+_AUXILIARY_REQUEST_TIMEOUT_SECONDS = 8
+_STANDARD_THINKING_BUDGET = 128
+_DEEP_THINKING_BUDGET = 512
+
+
+class LLMDeadlineExceeded(TimeoutError):
+    """Raised when an application-level LLM wall-clock budget is exhausted."""
+
+
+def _get_llm(
+    *,
+    streaming: bool = False,
+    reasoning_mode: Literal["standard", "deep"] = "standard",
+    purpose: Literal["answer", "auxiliary"] = "answer",
+) -> ChatOpenAI:
+    model = get_runtime_setting("llm_model", LLM_MODEL)
+    if purpose == "auxiliary":
+        max_tokens = min(LLM_MAX_TOKENS, _AUXILIARY_MAX_TOKENS)
+        request_timeout = _AUXILIARY_REQUEST_TIMEOUT_SECONDS
+        stream_chunk_timeout = _STANDARD_STREAM_CHUNK_TIMEOUT_SECONDS
+        extra_body = {
+            "enable_thinking": False,
+            "thinking_budget": _STANDARD_THINKING_BUDGET,
+        }
+    elif reasoning_mode == "deep":
+        max_tokens = min(LLM_MAX_TOKENS, _DEEP_ANSWER_MAX_TOKENS)
+        request_timeout = _DEEP_REQUEST_TIMEOUT_SECONDS
+        stream_chunk_timeout = _DEEP_STREAM_CHUNK_TIMEOUT_SECONDS
+        extra_body = {
+            "enable_thinking": True,
+            "thinking_budget": _DEEP_THINKING_BUDGET,
+        }
+        if str(model).endswith("DeepSeek-V4-Flash"):
+            extra_body["reasoning_effort"] = "high"
+    else:
+        max_tokens = min(LLM_MAX_TOKENS, _STANDARD_ANSWER_MAX_TOKENS)
+        request_timeout = _STANDARD_REQUEST_TIMEOUT_SECONDS
+        stream_chunk_timeout = _STANDARD_STREAM_CHUNK_TIMEOUT_SECONDS
+        extra_body = {
+            "enable_thinking": False,
+            "thinking_budget": _STANDARD_THINKING_BUDGET,
+        }
+
     return ChatOpenAI(
-        model=get_runtime_setting("llm_model", LLM_MODEL),
+        model=model,
         temperature=get_runtime_setting("llm_temperature", LLM_TEMPERATURE),
-        max_tokens=LLM_MAX_TOKENS,
+        max_tokens=max_tokens,
         openai_api_key=require_siliconflow_api_key(),
         openai_api_base=get_runtime_setting("siliconflow_base_url", SILICONFLOW_BASE_URL),
         streaming=streaming,
+        request_timeout=request_timeout,
+        stream_chunk_timeout=stream_chunk_timeout,
+        max_retries=0,
+        extra_body=extra_body,
     )
 
 
@@ -46,6 +101,8 @@ def run_llm_text(
     *,
     stream: bool = False,
     token_callback: object | None = None,
+    deadline_seconds: float | None = None,
+    allow_partial_on_deadline: bool = True,
 ) -> tuple[str, dict[str, int]]:
     if not stream or not hasattr(llm, "stream"):
         result = llm.invoke(prompt)
@@ -54,19 +111,40 @@ def run_llm_text(
     content_parts: list[str] = []
     token_usage: dict[str, int] = {}
     saw_stream_chunk = False
-    for chunk in llm.stream(prompt):
-        saw_stream_chunk = True
-        content = getattr(chunk, "content", "") or ""
-        if content:
-            text = str(content)
-            content_parts.append(text)
-            if callable(token_callback):
-                token_callback(text)
-        chunk_usage = extract_token_usage(chunk)
-        if chunk_usage:
-            token_usage = chunk_usage
+    started_at = time.monotonic()
+    stream_iterator = llm.stream(prompt)
+    deadline_hit = False
+    try:
+        for chunk in stream_iterator:
+            if deadline_seconds is not None and time.monotonic() - started_at >= deadline_seconds:
+                deadline_hit = True
+                if content_parts and allow_partial_on_deadline:
+                    break
+                raise LLMDeadlineExceeded(
+                    f"LLM streaming exceeded {deadline_seconds:g} seconds before producing an answer."
+                )
+
+            saw_stream_chunk = True
+            content = getattr(chunk, "content", "") or ""
+            if content:
+                text = str(content)
+                content_parts.append(text)
+                if callable(token_callback):
+                    token_callback(text)
+            chunk_usage = extract_token_usage(chunk)
+            if chunk_usage:
+                token_usage = chunk_usage
+    finally:
+        if deadline_hit:
+            close_stream = getattr(stream_iterator, "close", None)
+            if callable(close_stream):
+                close_stream()
 
     if not saw_stream_chunk:
+        if deadline_seconds is not None and time.monotonic() - started_at >= deadline_seconds:
+            raise LLMDeadlineExceeded(
+                f"LLM streaming exceeded {deadline_seconds:g} seconds before producing a chunk."
+            )
         result = llm.invoke(prompt)
         return str(result.content).strip(), extract_token_usage(result)
 
