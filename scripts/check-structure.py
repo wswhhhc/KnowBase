@@ -80,6 +80,24 @@ def _check_component_page_shells() -> list[str]:
     return violations
 
 
+def _document_route_boundary_violations(source: str) -> list[str]:
+    boundary_patterns = [
+        (re.compile(r"\basyncio\.sleep\s*\("), "Documents 路由不能重新实现任务轮询"),
+        (re.compile(r"\baudit_store\.record_event\s*\("), "Documents 路由不能直接拼装审计事件"),
+        (re.compile(r"src\.jobs\.document_tasks:"), "Documents 路由不能直接拼装后台任务 target path"),
+        (re.compile(r"\bgenerate_suggested_questions\s*\("), "Documents 路由不能直接收集推荐问题"),
+    ]
+    return [message for pattern, message in boundary_patterns if pattern.search(source)]
+
+
+def _check_documents_route_boundaries() -> list[str]:
+    route_path = ROOT / "backend" / "src" / "api" / "routes" / "documents.py"
+    return [
+        f"{message}: {route_path.relative_to(ROOT)}"
+        for message in _document_route_boundary_violations(_read(route_path))
+    ]
+
+
 def _check_active_docs_do_not_reference_legacy_paths() -> list[str]:
     violations: list[str] = []
     legacy_patterns = [
@@ -140,6 +158,7 @@ def _check_compose_uses_production_commands() -> list[str]:
 def main() -> int:
     violations = [
         *_check_forbidden_imports(),
+        *_check_documents_route_boundaries(),
         *_check_pages_are_real_containers(),
         *_check_component_page_shells(),
         *_check_active_docs_do_not_reference_legacy_paths(),

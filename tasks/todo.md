@@ -2,13 +2,13 @@
 
 ## P0：后端 Documents
 
-- [ ] Task 1：锁定 Documents 路由行为
-- [ ] Task 2：抽取文档审计模块
-- [ ] Task 3：抽取后台任务 SSE 适配器
-- [ ] Task 4A：抽取文件与 URL 导入编排服务
-- [ ] Task 4B：抽取同步文档操作
-- [ ] Task 4C：抽取清空与重建任务契约
-- [ ] Task 5：固化后端结构边界
+- [x] Task 1：锁定 Documents 路由行为
+- [x] Task 2：抽取文档审计模块
+- [x] Task 3：抽取后台任务 SSE 适配器
+- [x] Task 4A：抽取文件与 URL 导入编排服务
+- [x] Task 4B：抽取同步文档操作
+- [x] Task 4C：抽取清空与重建任务契约
+- [x] Task 5：固化后端结构边界
 - [ ] Checkpoint A：后端全量测试、OpenAPI 与结构守卫通过
 
 ## P0：前端 DocumentPanel

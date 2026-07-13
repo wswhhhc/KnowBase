@@ -95,6 +95,7 @@ config/     pydantic-settings + 运行时覆写
 - **鉴权**: `deps.py:verify_api_key`，`API_KEY` 为空时本地开发跳过
 - **搜索策略**: `fast`(无 rerank)、`balanced`(条件 rerank)、`high_quality`(必 rerank)、`deep`(扩检索)，偏好存 `localStorage`。移动端收进弹层
 - **SSE 流**: `backend/src/api/chat_stream_service.py`（ChatStreamService），`chat.py` 路由仅 27 行。调试逻辑拆至 `chat_debug.py`，持久化拆至 `chat_persistence.py`
+- **文档导入**: `backend/src/services/` 负责导入、同步操作、维护任务和审计编排；`api/document_job_stream.py` 负责任务进度 SSE，`routes/documents.py` 只保留 HTTP 映射
 - **Pin/Exclude**: 独立 `pinned_sources` 表，非 debug_info JSON blob，通过 `/pin-state` 查询
 - **前端 API 客户端**: `frontend/src/shared/api/` 下（非旧 `lib/api.ts`），含 SSEParser 和 createChatStreamAdapter
 - **前端字号**: `text-2xs`(10px) / `text-xs`(12px) / `text-sm`(14px)，禁用 `text-[Xpx]`
@@ -125,7 +126,8 @@ config/     pydantic-settings + 运行时覆写
 | `api/chat_stream_service.py` | SSE 流编排（~190 行，调试/持久化拆至独立模块） |
 | `api/chat_debug.py` | DebugState dataclass + 节点调试信息累加 |
 | `api/chat_persistence.py` | 对话持久化 + debug payload 序列化 |
-| `api/routes/` | 路由层（7 个路由文件，平均 <50 行） |
+| `api/routes/` | 路由层：HTTP 协议、鉴权、参数校验与响应映射 |
+| `services/` | 文档导入等跨 `rag/jobs/persistence` 的应用用例编排，不依赖 FastAPI 协议对象 |
 | `graph/graph.py` | LangGraph 图定义 |
 | `graph/history_nodes.py` | 历史记录与重写节点 |
 | `graph/generation_nodes.py` | 回答生成节点 |
