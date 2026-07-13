@@ -6,6 +6,7 @@ KnowBase 当前仓库的默认依赖方向如下：
 
 - `api/` 只处理 HTTP 协议、鉴权、参数校验和响应映射
 - `services/` 负责需要协调 `rag`、`jobs`、`persistence` 的应用用例；服务只返回普通 Python 数据，不依赖 FastAPI 请求/响应对象或 `api.models`
+- Documents 任务的 `EventSourceResponse` 只在 `api/document_job_stream.py` 创建；Documents 路由不得直接轮询任务、直接入队或自行创建任务 SSE 响应
 - `graph/` 与 `rag/` 负责核心问答与知识库逻辑，不反向依赖 `api.models`
 - `persistence/` 负责 Postgres/SQLite repository、SQLAlchemy session 和业务持久化细节，路由与服务直接依赖 repository / persistence helpers
 - `jobs/` 负责 RQ 入队、worker 执行和任务状态更新，不承载 HTTP 请求/响应对象

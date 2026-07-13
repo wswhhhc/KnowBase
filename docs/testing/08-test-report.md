@@ -4,6 +4,8 @@
 > **测试环境**: Windows 11 Pro 10.0.26200 / Python 3.12 / Node.js 22.14
 > **测试执行人**: Claude Code
 
+> **历史快照说明**：本报告中的数量、覆盖率和命令只代表 2026-06-25 当次测试。当前仓库门禁以 `bash scripts/run-checks.sh`、`tasks/completion-audit.md` 和最新 `progress.md` 为准；2026-07-13 的最新结果为后端 714 通过/1 跳过、前端 312 通过、关键 E2E 6 通过。
+
 ---
 
 ## 1. 测试汇总

@@ -33,10 +33,10 @@
 
 ## 每项任务的完成门槛
 
-- [ ] 仅包含当前任务范围内的改动
-- [ ] 现有功能、接口、文案和错误行为保持不变
-- [ ] 目标测试通过
-- [ ] `python scripts/check-structure.py` 通过
-- [ ] 阶段 Checkpoint 执行 `bash scripts/run-checks.sh`
-- [ ] 无未使用 import、死代码或临时兼容 wrapper
-- [ ] 提交说明使用中文
+- [x] 仅包含当前任务范围内的改动
+- [x] 现有功能、接口、文案和错误行为保持不变
+- [x] 目标测试通过
+- [x] `python scripts/check-structure.py` 通过
+- [x] 阶段 Checkpoint 执行 `bash scripts/run-checks.sh`
+- [x] 无未使用 import、死代码或临时兼容 wrapper
+- [x] 提交说明使用中文
