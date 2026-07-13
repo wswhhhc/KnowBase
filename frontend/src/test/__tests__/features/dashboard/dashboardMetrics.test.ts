@@ -48,8 +48,8 @@ const logs: QueryLogEntry[] = [
     completion_tokens: 800,
     llm_model: 'model-a',
     estimated_cost: 0.03,
-    ttfb_ms: null,
-    first_token_ms: null,
+    ttfb_ms: 0,
+    first_token_ms: 0,
   },
   {
     timestamp: '2026-07-11T09:00:00Z',
@@ -71,8 +71,8 @@ const logs: QueryLogEntry[] = [
     completion_tokens: 0,
     llm_model: null,
     estimated_cost: null,
-    ttfb_ms: null,
-    first_token_ms: null,
+    ttfb_ms: 0,
+    first_token_ms: 0,
   },
 ]
 
@@ -80,7 +80,13 @@ describe('dashboardMetrics', () => {
   it('normalizes legacy arrays and API response objects without losing the backend cost summary', () => {
     expect(normalizeQueryLogs(logs)).toEqual({ logs, totalCostSummary: null })
 
-    const response: QueryLogsResponse = { logs, total_cost: 1.23 }
+    const response: QueryLogsResponse = {
+      logs,
+      total_cost: 1.23,
+      total_tokens: 3000,
+      total_prompt_tokens: 1800,
+      total_completion_tokens: 1200,
+    }
     expect(normalizeQueryLogs(response)).toEqual({ logs, totalCostSummary: 1.23 })
   })
 

@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, ScrollArea } from '@/components/ui'
 import { BarChart3, PanelRightOpen, ArrowLeft, TrendingUp, Clock, CheckCircle2, XCircle, HelpCircle, AlertTriangle, Sun, Moon, Globe, ChevronDown, ChevronUp, DollarSign } from 'lucide-react'
-import * as api from '@/shared/api'
-import type { QueryLogEntry, QueryLogsResponse } from '@/shared/api'
 import { motion } from 'framer-motion'
 import type { ViewType } from '@/app/navigation'
 import { Progress, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Separator } from '@/components/ui'
+import { useDashboardData } from '@/features/dashboard/hooks/useDashboardData'
+import { buildDashboardMetrics } from '@/features/dashboard/model/dashboardMetrics'
 
 interface DashboardPageProps {
   onOpenSidebar: () => void
@@ -13,117 +13,23 @@ interface DashboardPageProps {
   onNavigate: (v: ViewType) => void
 }
 
-interface AggregatedStats {
-  total: number
-  answeredTotal: number
-  qualityPassed: number
-  qualityFailed: number
-  webSearchCount: number
-  avgElapsed: number
-  qualityRate: number
-  webSearchRate: number
-  errorCount: number
-  avgRetrieval: number
-  last24h: number
-}
-
 export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }: DashboardPageProps) {
-  const [logs, setLogs] = useState<QueryLogEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [days, setDays] = useState(7)
   const [showAllLogs, setShowAllLogs] = useState(false)
-  const [totalCostSummary, setTotalCostSummary] = useState<number | null>(null)
-
-  const hasError = (log: QueryLogEntry) => Boolean(log.error?.trim())
-  const answeredLogs = logs.filter((log) => !hasError(log))
-  const qualityPassed = answeredLogs.filter((log) => log.quality_ok).length
-  const qualityFailed = answeredLogs.filter((log) => !log.quality_ok).length
-  const webSearchCount = answeredLogs.filter((log) => log.used_web_search).length
-
-  useEffect(() => {
-    setLoading(true)
-    api.queryLogs(days, 1000)
-      .then((result: QueryLogsResponse | QueryLogEntry[]) => {
-        if (Array.isArray(result)) {
-          setLogs(result)
-          setTotalCostSummary(null)
-          return
-        }
-        setLogs(result.logs ?? [])
-        setTotalCostSummary(result.total_cost)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [days])
-
-  const stats: AggregatedStats = logs.length > 0 ? {
-    total: logs.length,
-    answeredTotal: answeredLogs.length,
-    qualityPassed,
-    qualityFailed,
-    webSearchCount,
-    avgElapsed: Math.round(logs.reduce((a, b) => a + b.elapsed_ms, 0) / logs.length),
-    qualityRate: answeredLogs.length > 0 ? qualityPassed / answeredLogs.length : 0,
-    webSearchRate: answeredLogs.length > 0 ? webSearchCount / answeredLogs.length : 0,
-    errorCount: logs.filter((l) => hasError(l)).length,
-    avgRetrieval: Math.round(logs.reduce((a, b) => a + (b.retrieval_count || 0), 0) / logs.length),
-    last24h: logs.filter((l) => Date.now() - new Date(l.timestamp).getTime() < 86400000).length,
-  } : {
-    total: 0,
-    answeredTotal: 0,
-    qualityPassed: 0,
-    qualityFailed: 0,
-    webSearchCount: 0,
-    avgElapsed: 0,
-    qualityRate: 0,
-    webSearchRate: 0,
-    errorCount: 0,
-    avgRetrieval: 0,
-    last24h: 0,
-  }
-
-  // Perf metrics from log entries
-  const typedLogs = logs
-  const ttfbValues = typedLogs.map(l => l.ttfb_ms || 0).filter(Boolean)
-  const firstTokenValues = typedLogs.map(l => l.first_token_ms || 0).filter(Boolean)
-  const avgTtfb = ttfbValues.length ? Math.round(ttfbValues.reduce((a, b) => a + b, 0) / ttfbValues.length) : 0
-  const avgFirstToken = firstTokenValues.length ? Math.round(firstTokenValues.reduce((a, b) => a + b, 0) / firstTokenValues.length) : 0
-
-  // Token cost estimation
-  const totalTokens = typedLogs.reduce((sum, l) => sum + (l.token_count || 0), 0)
-  const totalPromptTokens = typedLogs.reduce((sum, l) => sum + (l.prompt_tokens || 0), 0)
-  const totalCompletionTokens = typedLogs.reduce((sum, l) => sum + (l.completion_tokens || 0), 0)
-  const hasPerLogCost = typedLogs.some((log) => log.estimated_cost != null)
-  const fallbackEstimatedCost = hasPerLogCost
-    ? typedLogs.reduce((sum, l) => sum + (l.estimated_cost || 0), 0)
-    : (totalTokens / 1_000_000) * 0.5
-  const effectiveCost = totalCostSummary ?? fallbackEstimatedCost
-  const totalTokenCost = effectiveCost > 0
-    ? (effectiveCost < 0.01 ? '<¥0.01' : `¥${effectiveCost.toFixed(2)}`)
-    : 'N/A'
-
-  // Time distribution (hourly buckets)
-  const hourlyData = Array.from({ length: 24 }, (_, h) => ({
-    hour: h,
-    count: logs.filter((l) => new Date(l.timestamp).getHours() === h).length,
-    tokens: typedLogs
-      .filter((l) => new Date(l.timestamp).getHours() === h)
-      .reduce((sum, log) => sum + (log.token_count || 0), 0),
-    avgMs: (() => {
-      const hLogs = logs.filter((l) => new Date(l.timestamp).getHours() === h)
-      return hLogs.length ? Math.round(hLogs.reduce((a, b) => a + b.elapsed_ms, 0) / hLogs.length) : 0
-    })(),
-  }))
-
-  const maxHourlyCount = Math.max(...hourlyData.map((h) => h.count), 1)
-  const maxHourlyTokens = Math.max(...hourlyData.map((h) => h.tokens), 1)
-  const tokenLinePoints = hourlyData
-    .map((h, index) => {
-      const x = (index / (hourlyData.length - 1)) * 100
-      const y = 100 - ((h.tokens || 0) / maxHourlyTokens) * 100
-      return `${x},${y}`
-    })
-    .join(' ')
+  const { logs, loading, days, setDays, totalCostSummary } = useDashboardData()
+  const {
+    stats,
+    avgTtfb,
+    avgFirstToken,
+    totalTokens,
+    totalPromptTokens,
+    totalCompletionTokens,
+    totalTokenCost,
+    usesBackendTotalCost,
+    hourlyData,
+    maxHourlyCount,
+    maxHourlyTokens,
+    tokenLinePoints,
+  } = buildDashboardMetrics(logs, { now: new Date(), totalCostSummary })
 
   return (
     <div className="flex flex-col h-full">
@@ -188,7 +94,7 @@ export default function DashboardPage({ onOpenSidebar, sidebarOpen, onNavigate }
                 <StatCard icon={BarChart3} label="总 Token 消耗" value={totalTokens.toLocaleString()}
                   sub={`输入 ${totalPromptTokens.toLocaleString()} / 输出 ${totalCompletionTokens.toLocaleString()}`} delay={0.12} color="violet" />
                 <StatCard icon={DollarSign} label="Token 估算" value={totalTokenCost}
-                  sub={`${totalCostSummary !== null ? '合计' : '估算'} ${totalTokenCost}`} delay={0.15} color="amber" />
+                  sub={`${usesBackendTotalCost ? '合计' : '估算'} ${totalTokenCost}`} delay={0.15} color="amber" />
               </div>
 
               {/* Hourly distribution — editorial bar chart */}

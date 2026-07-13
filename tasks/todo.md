@@ -20,7 +20,7 @@
 
 ## P1：页面级热点
 
-- [ ] Task 9：抽取 Dashboard 数据 hook 与纯指标模型
+- [x] Task 9：抽取 Dashboard 数据 hook 与纯指标模型
 - [ ] Task 10：拆分 Dashboard 独立展示区块
 - [ ] Task 11：统一 Chat 搜索偏好状态与控件
 - [ ] Task 11B：拆分 Chat 输入与消息区域
