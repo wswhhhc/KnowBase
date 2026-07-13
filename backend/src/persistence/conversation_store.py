@@ -31,6 +31,48 @@ def create_conversation(
     return conversation_repository.create_conversation(get_connection, title, thread_id, workspace_id)
 
 
+def persist_conversation_turn(
+    *,
+    title: str,
+    question: str,
+    thread_id: str,
+    workspace_id: str,
+    answer: str,
+    final_sources: list,
+    final_quality: str,
+    debug_payload: str,
+    pinned_chunk_ids: list[str],
+    excluded_chunk_ids: list[str],
+) -> tuple[str, int]:
+    if _use_sqlalchemy():
+        return conversation_repository.persist_conversation_turn_with_session(
+            _session_factory(),
+            title=title,
+            question=question,
+            thread_id=thread_id,
+            workspace_id=workspace_id,
+            answer=answer,
+            final_sources=final_sources,
+            final_quality=final_quality,
+            debug_payload=debug_payload,
+            pinned_chunk_ids=pinned_chunk_ids,
+            excluded_chunk_ids=excluded_chunk_ids,
+        )
+    return conversation_repository.persist_conversation_turn(
+        get_connection,
+        title=title,
+        question=question,
+        thread_id=thread_id,
+        workspace_id=workspace_id,
+        answer=answer,
+        final_sources=final_sources,
+        final_quality=final_quality,
+        debug_payload=debug_payload,
+        pinned_chunk_ids=pinned_chunk_ids,
+        excluded_chunk_ids=excluded_chunk_ids,
+    )
+
+
 def get_conversation_by_thread(thread_id: str) -> dict | None:
     if _use_sqlalchemy():
         return conversation_repository.get_conversation_by_thread_with_session(_session_factory(), thread_id)

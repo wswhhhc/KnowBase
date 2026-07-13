@@ -6,55 +6,8 @@ import json
 
 from src.api.models import DebugInfo
 from src.chat_utils import generate_title
-from src.persistence import conversation_store, message_store, pin_state_store
-
-
-class ConversationWorkspaceMismatchError(ValueError):
-    """Raised when a thread is already bound to another workspace."""
-
-
-def get_conversation_by_thread(thread_id: str) -> dict | None:
-    return conversation_store.get_conversation_by_thread(thread_id)
-
-
-def create_conversation(title: str, *, thread_id: str | None = None, workspace_id: str = "") -> dict:
-    return conversation_store.create_conversation(
-        title,
-        thread_id=thread_id,
-        workspace_id=workspace_id,
-    )
-
-
-def replace_pin_state(
-    thread_id: str,
-    *,
-    pinned_chunk_ids: list[str] | None = None,
-    excluded_chunk_ids: list[str] | None = None,
-) -> None:
-    pin_state_store.replace_pin_state(
-        thread_id,
-        pinned_chunk_ids=pinned_chunk_ids,
-        excluded_chunk_ids=excluded_chunk_ids,
-    )
-
-
-def add_message(
-    conv_id: str,
-    role: str,
-    content: str,
-    *,
-    sources: list | None = None,
-    quality_reason: str = "",
-    debug_info: str = "{}",
-) -> int:
-    return message_store.add_message(
-        conv_id,
-        role,
-        content,
-        sources=sources,
-        quality_reason=quality_reason,
-        debug_info=debug_info,
-    )
+from src.persistence import conversation_store
+from src.persistence.conversation_repository import ConversationWorkspaceMismatchError
 
 
 def build_debug_payload(
@@ -87,34 +40,24 @@ def persist_conversation_turn(
     excluded_chunk_ids: list[str],
 ) -> tuple[str, int]:
     """Persist the conversation turn and return (conversation_id, assistant_message_id)."""
-    conversation_id = ""
-    assistant_message_id = 0
-
-    existing = get_conversation_by_thread(thread_id)
+    existing = conversation_store.get_conversation_by_thread(thread_id)
     if existing:
         existing_workspace_id = str(existing.get("workspace_id") or "")
         if existing_workspace_id != workspace_id:
             raise ConversationWorkspaceMismatchError("会话与当前工作区不匹配")
-        conversation_id = existing["id"]
+        title = question[:30]
     else:
         title = generate_title(question)
-        conversation = create_conversation(title, thread_id=thread_id, workspace_id=workspace_id)
-        conversation_id = conversation["id"]
 
-    replace_pin_state(
-        thread_id,
+    return conversation_store.persist_conversation_turn(
+        title=title,
+        question=question,
+        thread_id=thread_id,
+        workspace_id=workspace_id,
+        answer=answer,
+        final_sources=final_sources,
+        final_quality=final_quality,
+        debug_payload=debug_payload,
         pinned_chunk_ids=pinned_chunk_ids,
         excluded_chunk_ids=excluded_chunk_ids,
     )
-
-    add_message(conversation_id, "user", question)
-    assistant_message_id = add_message(
-        conversation_id,
-        "assistant",
-        answer,
-        sources=final_sources,
-        quality_reason=final_quality,
-        debug_info=debug_payload,
-    )
-
-    return conversation_id, assistant_message_id

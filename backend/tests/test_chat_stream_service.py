@@ -10,6 +10,7 @@ from unittest.mock import patch
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, AIMessageChunk
 
+from src.api.chat_persistence import ConversationWorkspaceMismatchError
 from src.api.chat_stream_service import ChatStreamService
 from src.api.models import ChatRequest
 from src.rag.models import KBChunk
@@ -107,8 +108,9 @@ def _accept_answer(state):
 
 
 class ChatStreamServiceTests(unittest.TestCase):
+    @patch.object(ChatStreamService, "_persist", return_value=("conv-1", 2))
     @patch("src.api.chat_stream_service.run_query")
-    def test_workspace_id_is_forwarded_to_run_query(self, mock_run_query):
+    def test_workspace_id_is_forwarded_to_run_query(self, mock_run_query, _mock_persist):
         mock_run_query.return_value = iter([
             ("updates", {"finalize": {"evidence_level": "none", "outcome_category": "success"}}),
         ])
@@ -125,9 +127,15 @@ class ChatStreamServiceTests(unittest.TestCase):
         _, kwargs = mock_run_query.call_args
         self.assertEqual(kwargs["workspace_id"], "ws-alpha")
 
+    @patch.object(ChatStreamService, "_persist", return_value=("conv-1", 2))
     @patch("src.api.chat_stream_service.settings")
     @patch("src.api.chat_stream_service.run_query")
-    def test_real_chat_refreshes_kb_before_running_graph(self, mock_run_query, mock_settings):
+    def test_real_chat_refreshes_kb_before_running_graph(
+        self,
+        mock_run_query,
+        mock_settings,
+        _mock_persist,
+    ):
         mock_settings.e2e_fake_ai = False
         kb = RefreshableKB()
 
@@ -170,22 +178,56 @@ class ChatStreamServiceTests(unittest.TestCase):
 
         self.assertEqual(token_texts, ["实时"])
 
-    @patch("src.api.chat_persistence.replace_pin_state")
+    @patch(
+        "src.api.chat_stream_service.persist_conversation_turn",
+        side_effect=ConversationWorkspaceMismatchError("会话与当前工作区不匹配"),
+    )
+    @patch("src.api.chat_stream_service.run_query")
+    def test_workspace_race_emits_error_without_done(
+        self,
+        mock_run_query,
+        _mock_persist_conversation_turn,
+    ):
+        mock_run_query.return_value = iter([
+            ("updates", {"finalize": {"evidence_level": "none", "outcome_category": "success"}}),
+        ])
+        body = ChatRequest(
+            question="测试",
+            web_search_enabled=False,
+            search_strategy="balanced",
+            workspace_id="ws-alpha",
+        )
+
+        events = list(
+            ChatStreamService(
+                body,
+                kb=object(),
+                authorized_workspace_id=body.workspace_id,
+            ).run()
+        )
+
+        self.assertNotIn("done", [event["event"] for event in events])
+        error = next(event for event in events if event["event"] == "error")
+        self.assertIn("工作区", json.loads(error["data"])["message"])
+
+    @patch(
+        "src.api.chat_persistence.conversation_store.persist_conversation_turn",
+        return_value=("conv-1", 2),
+    )
     @patch("src.api.chat_stream_service.record_query_metrics")
-    @patch("src.api.chat_persistence.add_message", side_effect=[1, 2])
-    @patch("src.api.chat_persistence.create_conversation", return_value={"id": "conv-1"})
     @patch("src.api.chat_persistence.generate_title", return_value="测试标题")
-    @patch("src.api.chat_persistence.get_conversation_by_thread", return_value=None)
+    @patch(
+        "src.api.chat_persistence.conversation_store.get_conversation_by_thread",
+        return_value=None,
+    )
     @patch("src.api.chat_stream_service.run_query")
     def test_first_token_metrics_are_persisted_after_the_first_token(
         self,
         mock_run_query,
         _mock_get_conversation,
         _mock_generate_title,
-        _mock_create_conversation,
-        _mock_add_message,
         mock_record_query_metrics,
-        _mock_replace_pin_state,
+        _mock_persist_conversation_turn,
     ):
         """Metrics should distinguish first SSE event time from first token time."""
 

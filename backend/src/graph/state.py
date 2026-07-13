@@ -43,7 +43,7 @@ class GraphSource(TypedDict, total=False):
 
 
 class GraphConfig(TypedDict):
-    configurable: dict[str, str]
+    configurable: dict[str, object]
 
 
 class GraphState(TypedDict):

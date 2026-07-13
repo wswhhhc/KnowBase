@@ -11,7 +11,11 @@ from langchain_core.messages import AIMessageChunk
 
 from src.api.chat_debug import DebugState, accumulate_node_debug
 from src.api.models import ChatRequest, ChatSource, DebugInfo, NodeDebug
-from src.api.chat_persistence import build_debug_payload, persist_conversation_turn
+from src.api.chat_persistence import (
+    ConversationWorkspaceMismatchError,
+    build_debug_payload,
+    persist_conversation_turn,
+)
 from src.chat_utils import NODE_LABELS, record_query_metrics
 from src.config.settings import settings
 from src.graph import run_query
@@ -326,6 +330,8 @@ class ChatStreamService:
                 completion_tokens=self.debug_info.completion_tokens if self.debug_info.completion_tokens is not None else self.debug_state.completion_tokens,
             )
             return conversation_id, assistant_message_id
+        except ConversationWorkspaceMismatchError:
+            raise
         except Exception as exc:  # pragma: no cover - defensive fallback
             logger.exception("保存聊天记录或指标失败: %s", exc)
             return "", 0
