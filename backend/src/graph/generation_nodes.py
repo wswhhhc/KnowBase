@@ -21,6 +21,18 @@ _DEEP_REASONING_RE = re.compile(
 _SIMPLE_FACT_RE = re.compile(
     r"(?:多少|几个|几位|是谁|何时|什么时候|哪里|哪[个些]|是否|有无|叫什么|是什么|多大|多久)"
 )
+_CITATION_RE = re.compile(r"\[\d+(?:\s*,\s*\d+)*\]")
+_INCOMPLETE_ENDINGS = (
+    "根据参考",
+    "根据文档",
+    "根据资料",
+    "答案是",
+    "分别是",
+    "包括",
+    "如下",
+    "：",
+    ":",
+)
 
 
 def _requires_deep_reasoning(question: str) -> bool:
@@ -65,6 +77,16 @@ def _build_extractive_fallback(state: GraphState, question: str) -> str:
     if not excerpt:
         return "模型响应暂时超时，请稍后重试。"
     return f"根据最相关的参考文档：{excerpt}[{best_index}]"
+
+
+def _is_incomplete_answer(answer: str) -> bool:
+    normalized = answer.strip()
+    if not normalized:
+        return True
+    without_citations = _CITATION_RE.sub("", normalized).strip()
+    if any(without_citations.endswith(ending) for ending in _INCOMPLETE_ENDINGS):
+        return True
+    return len(without_citations) < 8 and not _CITATION_RE.search(normalized)
 
 
 def generate_answer(state: GraphState, config: RunnableConfig | None = None) -> GraphStateUpdate:
@@ -163,6 +185,10 @@ def generate_answer(state: GraphState, config: RunnableConfig | None = None) -> 
             logger.warning("标准生成失败，使用检索原文: %s", exc)
             answer = _build_extractive_fallback(state, question)
             token_usage = {}
+    if _is_incomplete_answer(answer):
+        logger.warning("模型回答不完整，使用检索原文兜底: %r", answer)
+        answer = _build_extractive_fallback(state, question)
+        token_usage = {}
     if callable(token_callback) and answer:
         token_callback(answer)
 
