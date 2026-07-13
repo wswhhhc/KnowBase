@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef } from 'react'
 import { ConfirmDialog, Separator } from '@/components/ui'
 import type { DocSource } from '@/shared/api'
-import DocumentImportSection from '@/components/sidebar/document-panel/DocumentImportSection'
+import DocumentImportControls from '@/components/sidebar/document-panel/DocumentImportControls'
+import DocumentImportFeedback from '@/components/sidebar/document-panel/DocumentImportFeedback'
 import DocumentSourceList from '@/components/sidebar/document-panel/DocumentSourceList'
 import { useDocumentImport } from '@/features/documents/hooks/useDocumentImport'
 import { useDocumentMutations } from '@/features/documents/hooks/useDocumentMutations'
@@ -25,20 +26,25 @@ export default function DocumentPanel({
   onOpenKnowledgeBase,
   canManageKnowledgeBase = true,
 }: DocumentPanelProps) {
-  const [deleteSourceTarget, setDeleteSourceTarget] = useState<string | null>(null)
-  const [clearOpen, setClearOpen] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const importController = useDocumentImport({ workspaceId, workspaceName, onRefresh })
   const mutations = useDocumentMutations({ workspaceId, onRefresh })
 
   return (
     <div className="space-y-4">
       {canManageKnowledgeBase ? (
-        <DocumentImportSection
+        <DocumentImportControls
           controller={importController}
           workspaceName={workspaceName}
-          onSendQuestion={onSendQuestion}
-          onOpenKnowledgeBase={onOpenKnowledgeBase}
-        />
+          fileInputRef={fileInputRef}
+        >
+          <DocumentImportFeedback
+            controller={importController}
+            onSendQuestion={onSendQuestion}
+            onOpenKnowledgeBase={onOpenKnowledgeBase}
+            onContinueImport={() => fileInputRef.current?.click()}
+          />
+        </DocumentImportControls>
       ) : (
         <div className="rounded-xl border border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground">
           <p className="font-medium text-foreground/80">当前账号为只读权限</p>
@@ -50,22 +56,22 @@ export default function DocumentPanel({
       <DocumentSourceList
         sources={sources}
         canManageKnowledgeBase={canManageKnowledgeBase}
-        onClear={() => setClearOpen(true)}
-        onDelete={setDeleteSourceTarget}
+        onClear={() => mutations.setClearOpen(true)}
+        onDelete={mutations.setDeleteSourceTarget}
       />
 
       <ConfirmDialog
-        open={Boolean(deleteSourceTarget)}
-        onOpenChange={(open) => { if (!open) setDeleteSourceTarget(null) }}
+        open={Boolean(mutations.deleteSourceTarget)}
+        onOpenChange={(open) => { if (!open) mutations.setDeleteSourceTarget(null) }}
         title="删除引用文档"
-        description={`确定要删除"${deleteSourceTarget ?? ''}"吗？关联的段落将被移除。`}
+        description={`确定要删除"${mutations.deleteSourceTarget ?? ''}"吗？关联的段落将被移除。`}
         onConfirm={async () => {
-          if (deleteSourceTarget) await mutations.deleteSource(deleteSourceTarget)
+          if (mutations.deleteSourceTarget) await mutations.deleteSource(mutations.deleteSourceTarget)
         }}
       />
       <ConfirmDialog
-        open={clearOpen}
-        onOpenChange={setClearOpen}
+        open={mutations.clearOpen}
+        onOpenChange={mutations.setClearOpen}
         title="清空知识库"
         description="确定要清空整个知识库中的所有文档和段落吗？此操作不可撤销。"
         onConfirm={mutations.clearKnowledgeBase}

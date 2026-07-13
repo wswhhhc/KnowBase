@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
@@ -91,5 +91,36 @@ describe('DashboardPage interactions', () => {
     await waitFor(() => {
       expect(screen.getAllByText('你好').length).toBeGreaterThanOrEqual(1)
     })
+  })
+
+  it('expands and collapses long logs while preserving error and formatting details', async () => {
+    const logs = Array.from({ length: 16 }, (_, index) => ({
+      ...mockQueryLogs[0],
+      question: `查询 ${index}`,
+      quality_ok: index !== 15,
+      used_web_search: index === 15,
+      elapsed_ms: index === 15 ? 2345 : 1500,
+      retrieval_count: index === 15 ? 7 : 3,
+      token_count: index === 15 ? 321 : 12000,
+      estimated_cost: index === 15 ? 0.0123 : 0.006,
+    }))
+    vi.mocked(api.queryLogs).mockResolvedValue({ logs } as any)
+
+    await act(async () => { render(<DashboardPage {...defaultProps} />) })
+    const table = await screen.findByRole('table')
+    expect(within(table).queryByText('查询 15')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('全部加载'))
+    const errorQuestion = within(table).getByText('查询 15')
+    const errorRow = errorQuestion.closest('tr')!
+    expect(within(errorRow).getByText('✗ 失败')).toBeInTheDocument()
+    expect(within(errorRow).getByText('Globe')).toBeInTheDocument()
+    expect(within(errorRow).getByText('2345ms')).toBeInTheDocument()
+    expect(within(errorRow).getByText('7')).toBeInTheDocument()
+    expect(within(errorRow).getByText('321')).toBeInTheDocument()
+    expect(within(errorRow).getByText('¥0.0123')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('收起'))
+    expect(within(table).queryByText('查询 15')).not.toBeInTheDocument()
   })
 })

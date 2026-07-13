@@ -11,14 +11,19 @@ interface SearchPreferencesPanelProps {
   onSearchStrategyChange: (strategy: SearchStrategy) => void
 }
 
-export default function SearchPreferencesPanel({
+interface SearchStrategyOptionsProps {
+  variant: 'desktop' | 'mobile'
+  searchStrategy: SearchStrategy
+  onSearchStrategyChange: (strategy: SearchStrategy) => void
+  onSelect?: () => void
+}
+
+function SearchStrategyOptions({
   variant,
-  webSearch,
-  onWebSearchChange,
   searchStrategy,
   onSearchStrategyChange,
-}: SearchPreferencesPanelProps) {
-  const [strategyDialogOpen, setStrategyDialogOpen] = useState(false)
+  onSelect,
+}: SearchStrategyOptionsProps) {
   const strategyRefs = useRef<Array<HTMLButtonElement | null>>([])
   const isMobile = variant === 'mobile'
 
@@ -51,6 +56,71 @@ export default function SearchPreferencesPanel({
         break
     }
   }
+
+  return (
+    <div
+      className={isMobile ? 'grid gap-2' : 'flex items-center gap-0.5 rounded-md border border-border p-0.5'}
+      role="radiogroup"
+      aria-label="检索策略"
+    >
+      {SEARCH_STRATEGIES.map(({ key, icon: Icon, label, description }, index) => {
+        const option = (
+          <button
+            key={key}
+            ref={(node) => { strategyRefs.current[index] = node }}
+            role="radio"
+            aria-label={label}
+            aria-checked={searchStrategy === key}
+            tabIndex={searchStrategy === key ? 0 : -1}
+            onClick={() => {
+              onSearchStrategyChange(key)
+              onSelect?.()
+            }}
+            onKeyDown={(event) => handleStrategyKeyDown(event, index)}
+            className={isMobile
+              ? `rounded-lg border px-3 py-3 text-left transition-colors ${
+                searchStrategy === key
+                  ? 'border-primary/30 bg-primary/10 text-primary'
+                  : 'border-border text-foreground hover:bg-muted/40'
+              }`
+              : `inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors ${
+                searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`}
+          >
+            {isMobile ? (
+              <>
+                <div className="flex items-center gap-2 text-sm font-medium"><Icon className="h-4 w-4" />{label}</div>
+                <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+              </>
+            ) : (
+              <><Icon className="h-3 w-3" />{label}</>
+            )}
+          </button>
+        )
+
+        if (isMobile) return option
+        return (
+          <TooltipProvider key={key}>
+            <Tooltip>
+              <TooltipTrigger asChild>{option}</TooltipTrigger>
+              <TooltipContent>{description}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )
+      })}
+    </div>
+  )
+}
+
+export default function SearchPreferencesPanel({
+  variant,
+  webSearch,
+  onWebSearchChange,
+  searchStrategy,
+  onSearchStrategyChange,
+}: SearchPreferencesPanelProps) {
+  const [strategyDialogOpen, setStrategyDialogOpen] = useState(false)
+  const isMobile = variant === 'mobile'
 
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
@@ -93,54 +163,22 @@ export default function SearchPreferencesPanel({
                   </div>
                   <Switch checked={webSearch} onCheckedChange={onWebSearchChange} />
                 </div>
-                <div className="grid gap-2">
-                  {SEARCH_STRATEGIES.map(({ key, icon: Icon, label, description }) => (
-                    <button
-                      key={key}
-                      onClick={() => {
-                        onSearchStrategyChange(key)
-                        setStrategyDialogOpen(false)
-                      }}
-                      className={`rounded-lg border px-3 py-3 text-left transition-colors ${
-                        searchStrategy === key
-                          ? 'border-primary/30 bg-primary/10 text-primary'
-                          : 'border-border text-foreground hover:bg-muted/40'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 text-sm font-medium"><Icon className="h-4 w-4" />{label}</div>
-                      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-                    </button>
-                  ))}
-                </div>
+                <SearchStrategyOptions
+                  variant="mobile"
+                  searchStrategy={searchStrategy}
+                  onSearchStrategyChange={onSearchStrategyChange}
+                  onSelect={() => setStrategyDialogOpen(false)}
+                />
               </div>
             </DialogContent>
           </Dialog>
         </>
       ) : (
-        <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5" role="radiogroup" aria-label="检索策略">
-          {SEARCH_STRATEGIES.map(({ key, icon: Icon, label, description }, index) => (
-            <TooltipProvider key={key}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    ref={(node) => { strategyRefs.current[index] = node }}
-                    role="radio"
-                    aria-checked={searchStrategy === key}
-                    tabIndex={searchStrategy === key ? 0 : -1}
-                    onClick={() => onSearchStrategyChange(key)}
-                    onKeyDown={(event) => handleStrategyKeyDown(event, index)}
-                    className={`inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors ${
-                      searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <Icon className="h-3 w-3" />{label}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>{description}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ))}
-        </div>
+        <SearchStrategyOptions
+          variant="desktop"
+          searchStrategy={searchStrategy}
+          onSearchStrategyChange={onSearchStrategyChange}
+        />
       )}
     </div>
   )
