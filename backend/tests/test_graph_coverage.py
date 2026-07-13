@@ -673,6 +673,55 @@ class GenerateAnswerTests(unittest.TestCase):
         self.assertIn("[1]", result["answer"])
         self.assertNotIn("timed out", result["answer"])
 
+    def test_normally_closed_short_answer_uses_source_fallback(self):
+        documents = [
+            RetrievalResult(
+                chunk_id="journey:0:2",
+                document=Document(
+                    page_content="猪八戒会三十六般变化，但不如孙悟空精通。",
+                    metadata={"source": "西游记.txt", "chunk_id": "journey:0:2"},
+                ),
+                score=0.99,
+            )
+        ]
+        fake_llm = FakeLLM(["根据参考"])
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            result = generate_answer(_state(
+                search_strategy="balanced",
+                context="some docs",
+                documents=documents,
+                sources=[{"index": 1, "source": "西游记.txt", "chunk_id": "journey:0:2"}],
+                question="猪八戒有多少般变化",
+                messages=[],
+            ))
+
+        self.assertIn("三十六般变化", result["answer"])
+        self.assertIn("[1]", result["answer"])
+        self.assertNotEqual(result["answer"], "根据参考")
+
+    def test_short_but_cited_fact_answer_is_preserved(self):
+        documents = [
+            RetrievalResult(
+                chunk_id="journey:0:3",
+                document=Document(
+                    page_content="孙悟空大闹天宫。",
+                    metadata={"source": "西游记.txt", "chunk_id": "journey:0:3"},
+                ),
+                score=0.99,
+            )
+        ]
+        fake_llm = FakeLLM(["孙悟空[1]"])
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            result = generate_answer(_state(
+                search_strategy="balanced",
+                context="some docs",
+                documents=documents,
+                question="谁大闹天宫",
+                messages=[],
+            ))
+
+        self.assertEqual(result["answer"], "孙悟空[1]")
+
     def test_deep_generation_falls_back_to_standard_profile_after_deadline(self):
         class DeadlineLLM:
             def stream(self, _prompt):
@@ -761,7 +810,7 @@ class GenerateAnswerTests(unittest.TestCase):
     def test_usage_metadata_dict_updates_token_count(self):
         fake_llm = MagicMock()
         fake_llm.invoke.return_value = FakeResponse(
-            "answer",
+            "complete answer",
             usage_metadata={"input_tokens": 11, "output_tokens": 7},
         )
         with patch("src.graph.utils._get_llm", return_value=fake_llm):
