@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useMemo } from 'react'
-import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, ScrollArea, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Skeleton } from '@/components/ui'
+import { Button, ScrollArea, Skeleton } from '@/components/ui'
 import EmptyState from '@/components/EmptyState'
 import MessageBubble from '@/components/MessageBubble'
 import { useChat } from '@/hooks/useChat'
@@ -7,9 +7,11 @@ import type { PinnedSource } from '@/hooks/useChat'
 import type { Source } from '@/shared/api'
 import type { ViewType } from '@/app/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3, Globe, SlidersHorizontal, Zap, Scale, FileSearch, Search } from 'lucide-react'
+import { PanelRightOpen, Square, Sparkles, BookOpen, BarChart3 } from 'lucide-react'
 import { OPEN_DOCUMENTS_PANEL_EVENT } from '@/lib/ui-events'
 import type { WorkspaceSummary } from '@/types/workspace-summary'
+import SearchPreferencesPanel from '@/components/chat/SearchPreferencesPanel'
+import { useSearchPreferences } from '@/features/chat/hooks/useSearchPreferences'
 
 interface ChatPageProps {
   chat: ReturnType<typeof useChat>
@@ -24,37 +26,11 @@ interface ChatPageProps {
   canManageApp?: boolean
 }
 
-const STRATEGIES = [
-  { key: 'fast', icon: Zap, label: '快速' },
-  { key: 'balanced', icon: Scale, label: '标准' },
-  { key: 'high_quality', icon: FileSearch, label: '严谨' },
-  { key: 'deep', icon: Search, label: '深度' },
-] as const
-
-const DEFAULT_SEARCH_STRATEGY = 'balanced'
-
-function isStrategyKey(value: string): value is typeof STRATEGIES[number]['key'] {
-  return STRATEGIES.some(({ key }) => key === value)
-}
-
-const STRATEGY_DESC: Record<string, string> = {
-  fast: '快速回答：不重排，最快响应。适合简单事实性问题',
-  balanced: '标准模式：智能判断是否需要重排。适合大多数情况',
-  high_quality: '严谨模式：强制重排+质量检查。质量优先，速度次之',
-  deep: '深度检索：扩检索+综合回答。需要全面覆盖时使用',
-}
-
 export default function ChatPage({ chat, onOpenSidebar, sidebarOpen, onNavigate, isLoadingMessages, onCitationClick, onSendQuestion, workspaceSummary, isMobile = false, canManageApp = true }: ChatPageProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const strategyRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [input, setInput] = useState('')
-  const [webSearch, setWebSearch] = useState(() => localStorage.getItem('kb_web_search') === 'true')
-  const [strategyDialogOpen, setStrategyDialogOpen] = useState(false)
-  const [searchStrategy, setSearchStrategy] = useState(() => {
-    const stored = localStorage.getItem('kb_search_strategy')
-    return stored && isStrategyKey(stored) ? stored : DEFAULT_SEARCH_STRATEGY
-  })
+  const { webSearch, setWebSearch, searchStrategy, setSearchStrategy } = useSearchPreferences()
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -64,9 +40,6 @@ export default function ChatPage({ chat, onOpenSidebar, sidebarOpen, onNavigate,
 
   const prevLoadingRef = useRef(isLoadingMessages)
 
-  // Persist search preferences across sessions
-  useEffect(() => { localStorage.setItem('kb_web_search', String(webSearch)) }, [webSearch])
-  useEffect(() => { localStorage.setItem('kb_search_strategy', searchStrategy) }, [searchStrategy])
   useEffect(() => {
     if (prevLoadingRef.current && !isLoadingMessages) {
       requestAnimationFrame(() => {
@@ -83,36 +56,6 @@ export default function ChatPage({ chat, onOpenSidebar, sidebarOpen, onNavigate,
     if (!q || chat.isStreaming) return
     setInput('')
     chat.sendMessage(q, webSearch, searchStrategy)
-  }
-
-  const focusStrategyAtIndex = (index: number) => {
-    const nextIndex = (index + STRATEGIES.length) % STRATEGIES.length
-    const nextStrategy = STRATEGIES[nextIndex]
-    setSearchStrategy(nextStrategy.key)
-    strategyRefs.current[nextIndex]?.focus()
-  }
-
-  const handleStrategyKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
-    switch (event.key) {
-      case 'ArrowRight':
-      case 'ArrowDown':
-        event.preventDefault()
-        focusStrategyAtIndex(index + 1)
-        break
-      case 'ArrowLeft':
-      case 'ArrowUp':
-        event.preventDefault()
-        focusStrategyAtIndex(index - 1)
-        break
-      case 'Home':
-        event.preventDefault()
-        focusStrategyAtIndex(0)
-        break
-      case 'End':
-        event.preventDefault()
-        focusStrategyAtIndex(STRATEGIES.length - 1)
-        break
-    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -186,101 +129,13 @@ export default function ChatPage({ chat, onOpenSidebar, sidebarOpen, onNavigate,
 
           <div className="hidden h-4 w-px bg-border xl:block" />
 
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-                      <Globe className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">搜索</span>
-                      <Switch checked={webSearch} onCheckedChange={setWebSearch} />
-                    </label>
-                  </TooltipTrigger>
-                  <TooltipContent>联网搜索开关</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              {isMobile ? (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setStrategyDialogOpen(true)}
-                    aria-label="检索与策略"
-                    className="gap-1 px-2"
-                  >
-                    <SlidersHorizontal className="h-3.5 w-3.5" />
-                    {STRATEGIES.find(({ key }) => key === searchStrategy)?.label}
-                  </Button>
-                  <Dialog open={strategyDialogOpen} onOpenChange={setStrategyDialogOpen}>
-                    <DialogContent className="max-w-sm">
-                      <DialogHeader>
-                        <DialogTitle>检索与策略</DialogTitle>
-                        <DialogDescription>按问题复杂度选择检索强度，移动端默认收起以保留主任务空间。</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 pt-2">
-                        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-                          <div>
-                            <p className="text-sm font-medium text-foreground">联网搜索</p>
-                            <p className="text-xs text-muted-foreground">需要最新信息时开启</p>
-                          </div>
-                          <Switch checked={webSearch} onCheckedChange={setWebSearch} />
-                        </div>
-                        <div className="grid gap-2">
-                          {STRATEGIES.map(({ key, icon: Icon, label }) => (
-                            <button
-                              key={key}
-                              onClick={() => {
-                                setSearchStrategy(key)
-                                setStrategyDialogOpen(false)
-                              }}
-                              className={`rounded-lg border px-3 py-3 text-left transition-colors ${
-                                searchStrategy === key
-                                  ? 'border-primary/30 bg-primary/10 text-primary'
-                                  : 'border-border text-foreground hover:bg-muted/40'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 text-sm font-medium">
-                                <Icon className="h-4 w-4" />
-                                {label}
-                              </div>
-                              <p className="mt-1 text-xs text-muted-foreground">{STRATEGY_DESC[key]}</p>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </>
-              ) : (
-                <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5" role="radiogroup" aria-label="检索策略">
-                  {STRATEGIES.map(({ key, icon: Icon, label }, index) => (
-                    <TooltipProvider key={key}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            ref={(node) => { strategyRefs.current[index] = node }}
-                            role="radio"
-                            aria-checked={searchStrategy === key}
-                            tabIndex={searchStrategy === key ? 0 : -1}
-                            onClick={() => setSearchStrategy(key)}
-                            onKeyDown={(event) => handleStrategyKeyDown(event, index)}
-                            className={`inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors ${
-                              searchStrategy === key ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'
-                            }`}>
-                            <Icon className="h-3 w-3" />
-                            {label}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{STRATEGY_DESC[key]}</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <SearchPreferencesPanel
+            variant={isMobile ? 'mobile' : 'desktop'}
+            webSearch={webSearch}
+            onWebSearchChange={setWebSearch}
+            searchStrategy={searchStrategy}
+            onSearchStrategyChange={setSearchStrategy}
+          />
         </div>
       </header>
 
