@@ -13,9 +13,9 @@
 
 ## P0：前端 DocumentPanel
 
-- [ ] Task 6：抽取文档导入 hook
-- [ ] Task 7：抽取删除与清空 hook
-- [ ] Task 8：拆分 DocumentPanel 展示区块
+- [x] Task 6：抽取文档导入 hook
+- [x] Task 7：抽取删除与清空 hook
+- [x] Task 8：拆分 DocumentPanel 展示区块
 - [ ] Checkpoint B：前端全量测试、构建和 editor-jobs E2E 通过
 
 ## P1：页面级热点
