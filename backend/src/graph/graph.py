@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import weakref
@@ -146,8 +147,23 @@ def _initial_state(question: str) -> GraphState:
     }
 
 
-def _graph_config(thread_id: str, **configurable: object) -> GraphConfig:
-    return {"configurable": {"thread_id": thread_id, **configurable}}
+def _graph_config(
+    thread_id: str,
+    *,
+    workspace_id: str = "",
+    **configurable: object,
+) -> GraphConfig:
+    checkpoint_thread_id = json.dumps(
+        [workspace_id, thread_id],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return {
+        "configurable": {
+            "thread_id": checkpoint_thread_id,
+            **configurable,
+        }
+    }
 
 
 def _state_with_overrides(question: str, **overrides: object) -> GraphState:
@@ -158,7 +174,12 @@ def _state_with_overrides(question: str, **overrides: object) -> GraphState:
 
 def _stream_query(question: str, thread_id: str, knowledge_base: KnowledgeBase, **state_overrides: object) -> Iterable[GraphStateUpdate]:
     graph = get_graph(knowledge_base)
-    for update in graph.stream(_state_with_overrides(question, **state_overrides), config=_graph_config(thread_id), stream_mode="updates"):
+    workspace_id = str(state_overrides.get("workspace_id") or "")
+    for update in graph.stream(
+        _state_with_overrides(question, **state_overrides),
+        config=_graph_config(thread_id, workspace_id=workspace_id),
+        stream_mode="updates",
+    ):
         yield update
 
 
@@ -170,8 +191,10 @@ def _stream_query_with_tokens(
     **state_overrides: object,
 ) -> Generator[tuple[str, object], None, None]:
     graph = get_graph(knowledge_base)
+    workspace_id = str(state_overrides.get("workspace_id") or "")
     config = _graph_config(
         thread_id,
+        workspace_id=workspace_id,
         **({"token_callback": token_callback} if token_callback is not None else {}),
     )
     for mode, data in graph.stream(
@@ -212,4 +235,7 @@ def run_query(
 
     graph = get_graph(knowledge_base)
     state = _state_with_overrides(question, **overrides)
-    return graph.invoke(state, config=_graph_config(thread_id))
+    return graph.invoke(
+        state,
+        config=_graph_config(thread_id, workspace_id=workspace_id),
+    )

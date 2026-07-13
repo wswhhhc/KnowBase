@@ -11,21 +11,19 @@ from langchain_core.messages import AIMessageChunk
 
 from src.api.chat_debug import DebugState, accumulate_node_debug
 from src.api.models import ChatRequest, ChatSource, DebugInfo, NodeDebug
-from src.api.chat_persistence import build_debug_payload, persist_conversation_turn
+from src.api.chat_persistence import (
+    ConversationWorkspaceMismatchError,
+    build_debug_payload,
+    persist_conversation_turn,
+)
 from src.chat_utils import NODE_LABELS, record_query_metrics
 from src.config.settings import settings
 from src.graph import run_query
-from src.persistence import conversation_store
 from src.rag.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
 ANSWER_STREAM_NODES = {"generate_answer", "answer_from_history", "summarize_history"}
-
-
-def get_conversation_by_thread(thread_id: str) -> dict | None:
-    return conversation_store.get_conversation_by_thread(thread_id)
-
 
 class ChatStreamService:
     """Orchestrates the LangGraph query stream and translates it into SSE events.
@@ -35,11 +33,17 @@ class ChatStreamService:
     and testable.
     """
 
-    def __init__(self, body: ChatRequest, kb: KnowledgeBase) -> None:
+    def __init__(
+        self,
+        body: ChatRequest,
+        kb: KnowledgeBase,
+        *,
+        authorized_workspace_id: str,
+    ) -> None:
         self.body = body
         self.kb = kb
         self.thread_id = body.thread_id or str(uuid4())
-        self.workspace_id = self._resolve_workspace_id()
+        self.workspace_id = authorized_workspace_id
         self.t0 = time.monotonic()
 
         # Accumulators filled during streaming
@@ -63,25 +67,6 @@ class ChatStreamService:
         self._ttfb_set = False
         self._manual_token_streamed = False
         self._stream_error: Exception | None = None
-
-    def _resolve_workspace_id(self) -> str:
-        """Use the persisted conversation workspace when a thread already exists."""
-        if not self.body.thread_id:
-            return self.body.workspace_id
-
-        conversation = get_conversation_by_thread(self.thread_id)
-        if not conversation:
-            return self.body.workspace_id
-
-        workspace_id = str(conversation.get("workspace_id", ""))
-        if workspace_id != self.body.workspace_id:
-            logger.info(
-                "Chat thread workspace mismatch resolved to persisted scope: thread_id=%s requested=%s persisted=%s",
-                self.thread_id,
-                self.body.workspace_id,
-                workspace_id,
-            )
-        return workspace_id
 
     # ── Public entry point ──────────────────────────────────────────────
 
@@ -345,6 +330,8 @@ class ChatStreamService:
                 completion_tokens=self.debug_info.completion_tokens if self.debug_info.completion_tokens is not None else self.debug_state.completion_tokens,
             )
             return conversation_id, assistant_message_id
+        except ConversationWorkspaceMismatchError:
+            raise
         except Exception as exc:  # pragma: no cover - defensive fallback
             logger.exception("保存聊天记录或指标失败: %s", exc)
             return "", 0

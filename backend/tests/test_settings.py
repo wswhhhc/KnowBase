@@ -221,13 +221,15 @@ class SettingsTests(unittest.TestCase):
 
         with patch.object(api_main, "get_runtime_setting", return_value="sk-live-1234567890"):
             with patch.object(api_main, "_is_configured_api_key", return_value=True):
-                with patch.object(api_main, "get_knowledge_base", return_value=fake_kb):
-                    async def _run():
-                        async with api_main.lifespan(api_main.app):
-                            return None
+                with patch.object(api_main, "init_db") as mock_init_db:
+                    with patch.object(api_main, "get_knowledge_base", return_value=fake_kb):
+                        async def _run():
+                            async with api_main.lifespan(api_main.app):
+                                return None
 
-                    asyncio.run(_run())
+                        asyncio.run(_run())
 
+        mock_init_db.assert_called_once()
         fake_kb.load_preset_documents.assert_called_once()
 
 

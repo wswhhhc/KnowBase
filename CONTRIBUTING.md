@@ -9,6 +9,7 @@
 - Python 3.11+（推荐 3.12，GitHub CI 也使用 3.12）
 - Node.js 20+
 - `uv`
+- Docker 或独立 Postgres 16（仅在本地运行真实 Postgres 并发测试时需要）
 
 ### 初始化
 
@@ -104,6 +105,13 @@ cd backend
 uv run pytest tests --tb=short -q
 ```
 
+默认本地套件会在未设置测试库时跳过真实 Postgres 并发测试。数据库/事务相关改动应使用专用数据库 `knowbase_test` 补跑，测试会清空其中的会话、消息和 pin state：
+
+```bash
+KNOWBASE_TEST_POSTGRES_URL=postgresql+psycopg://user@localhost:5432/knowbase_test \
+  uv run pytest tests/test_chat_turn_postgres.py -q
+```
+
 ### 前端
 
 ```bash
@@ -132,7 +140,7 @@ cd frontend
 npm run build
 ```
 
-类型检查（`tsc -b`）和 Vite 打包一并执行。这是提交前应完成的本地检查；当前 CI 默认执行前端单测，不替代构建自检。
+类型检查（`tsc -b`）和 Vite 打包一并执行。这是提交前应完成的本地检查，CI 也会重复执行以阻止构建回归。
 
 ### 前端 API 类型漂移检查
 
@@ -200,6 +208,7 @@ npm run gen-api-types
 - 改动目标和原因清晰。
 - 后端 + 前端测试已在本地通过。
 - 如果你改动的是认证、权限、导航或关键用户流，Playwright E2E 已在本地通过。
+- 如果你改动的是数据库迁移、会话事务或锁语义，真实 Postgres 并发测试已通过。
 - `npm run build` 无报错。
 - 如果接口或 OpenAPI 变更，`scripts/export_openapi.py` 与 `npm run gen-api-types` 已执行并提交生成物。
 - `npm run check-api-types` 通过。

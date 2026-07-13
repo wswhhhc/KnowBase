@@ -148,6 +148,49 @@ class GraphRoutingTests(unittest.TestCase):
 
         self.assertIn("第一轮问什么", result["answer"])
 
+    def test_run_query_does_not_share_thread_memory_across_workspaces(self):
+        kb = EmptyKnowledgeBase()
+        thread_id = str(uuid4())
+        secret_question = "alpha 工作区的私密问题"
+        run_query(
+            question=secret_question,
+            thread_id=thread_id,
+            knowledge_base=kb,
+            workspace_id="ws-alpha",
+        )
+
+        fake_llm = FakeLLM([f"你上一轮问的是：{secret_question}。"])
+        with patch("src.graph.utils._get_llm", return_value=fake_llm):
+            result = run_query(
+                question="我刚刚问了什么",
+                thread_id=thread_id,
+                knowledge_base=kb,
+                workspace_id="ws-beta",
+            )
+
+        self.assertNotIn(secret_question, result["answer"])
+
+    @patch("src.graph.graph.get_graph")
+    def test_stream_query_scopes_checkpoint_thread_to_workspace(self, mock_get_graph):
+        mock_get_graph.return_value.stream.return_value = iter([])
+
+        for workspace_id in ("ws-alpha", "ws-beta"):
+            events = run_query(
+                question="测试",
+                thread_id="shared-thread",
+                knowledge_base=EmptyKnowledgeBase(),
+                workspace_id=workspace_id,
+                stream_tokens=True,
+            )
+            list(events)
+
+        configs = [
+            call.kwargs["config"]["configurable"]
+            for call in mock_get_graph.return_value.stream.call_args_list
+        ]
+        self.assertNotEqual(configs[0]["thread_id"], configs[1]["thread_id"])
+        self.assertNotEqual(configs[0]["thread_id"], "shared-thread")
+
     def test_run_query_retries_with_expanded_retrieval_when_quality_fails(self):
         from src.graph.graph import _GRAPH_CACHE
         _GRAPH_CACHE.clear()

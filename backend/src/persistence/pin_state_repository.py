@@ -16,7 +16,7 @@ ConnectionFactory = Callable[[], sqlite3.Connection]
 SessionFactory = sessionmaker[Session]
 
 
-def _normalize_pin_inputs(
+def normalize_pin_inputs(
     pinned_chunk_ids: list[str] | None = None,
     excluded_chunk_ids: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
@@ -39,7 +39,7 @@ def replace_pin_state_with_session(
     pinned_chunk_ids: list[str] | None = None,
     excluded_chunk_ids: list[str] | None = None,
 ) -> None:
-    pinned_chunk_ids, excluded_chunk_ids = _normalize_pin_inputs(pinned_chunk_ids, excluded_chunk_ids)
+    pinned_chunk_ids, excluded_chunk_ids = normalize_pin_inputs(pinned_chunk_ids, excluded_chunk_ids)
 
     now = datetime.now(UTC).isoformat()
     rows = [
@@ -88,7 +88,7 @@ def replace_pin_state(
     pinned_chunk_ids: list[str] | None = None,
     excluded_chunk_ids: list[str] | None = None,
 ) -> None:
-    pinned_chunk_ids, excluded_chunk_ids = _normalize_pin_inputs(pinned_chunk_ids, excluded_chunk_ids)
+    pinned_chunk_ids, excluded_chunk_ids = normalize_pin_inputs(pinned_chunk_ids, excluded_chunk_ids)
 
     conn = get_conn()
     now = datetime.now(UTC).isoformat()

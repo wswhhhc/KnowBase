@@ -10,6 +10,7 @@ from unittest.mock import patch
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, AIMessageChunk
 
+from src.api.chat_persistence import ConversationWorkspaceMismatchError
 from src.api.chat_stream_service import ChatStreamService
 from src.api.models import ChatRequest
 from src.rag.models import KBChunk
@@ -107,8 +108,9 @@ def _accept_answer(state):
 
 
 class ChatStreamServiceTests(unittest.TestCase):
+    @patch.object(ChatStreamService, "_persist", return_value=("conv-1", 2))
     @patch("src.api.chat_stream_service.run_query")
-    def test_workspace_id_is_forwarded_to_run_query(self, mock_run_query):
+    def test_workspace_id_is_forwarded_to_run_query(self, mock_run_query, _mock_persist):
         mock_run_query.return_value = iter([
             ("updates", {"finalize": {"evidence_level": "none", "outcome_category": "success"}}),
         ])
@@ -119,15 +121,21 @@ class ChatStreamServiceTests(unittest.TestCase):
             workspace_id="ws-alpha",
         )
 
-        service = ChatStreamService(body, kb=object())
+        service = ChatStreamService(body, kb=object(), authorized_workspace_id="ws-alpha")
         list(service.run())
 
         _, kwargs = mock_run_query.call_args
         self.assertEqual(kwargs["workspace_id"], "ws-alpha")
 
+    @patch.object(ChatStreamService, "_persist", return_value=("conv-1", 2))
     @patch("src.api.chat_stream_service.settings")
     @patch("src.api.chat_stream_service.run_query")
-    def test_real_chat_refreshes_kb_before_running_graph(self, mock_run_query, mock_settings):
+    def test_real_chat_refreshes_kb_before_running_graph(
+        self,
+        mock_run_query,
+        mock_settings,
+        _mock_persist,
+    ):
         mock_settings.e2e_fake_ai = False
         kb = RefreshableKB()
 
@@ -145,7 +153,7 @@ class ChatStreamServiceTests(unittest.TestCase):
             workspace_id="ws-alpha",
         )
 
-        list(ChatStreamService(body, kb=kb).run())
+        list(ChatStreamService(body, kb=kb, authorized_workspace_id=body.workspace_id).run())
 
         self.assertEqual(kb.refresh_calls, 1)
 
@@ -161,7 +169,7 @@ class ChatStreamServiceTests(unittest.TestCase):
         mock_run_query.side_effect = _run_query
         body = ChatRequest(question="测试", web_search_enabled=False, search_strategy="balanced")
 
-        events = list(ChatStreamService(body, kb=object()).run())
+        events = list(ChatStreamService(body, kb=object(), authorized_workspace_id=body.workspace_id).run())
         token_texts = [
             json.loads(event["data"])["text"]
             for event in events
@@ -170,51 +178,56 @@ class ChatStreamServiceTests(unittest.TestCase):
 
         self.assertEqual(token_texts, ["实时"])
 
-    @patch("src.api.chat_stream_service.get_conversation_by_thread")
+    @patch(
+        "src.api.chat_stream_service.persist_conversation_turn",
+        side_effect=ConversationWorkspaceMismatchError("会话与当前工作区不匹配"),
+    )
     @patch("src.api.chat_stream_service.run_query")
-    def test_existing_thread_workspace_overrides_request_workspace(
+    def test_workspace_race_emits_error_without_done(
         self,
         mock_run_query,
-        mock_get_conversation_by_thread,
+        _mock_persist_conversation_turn,
     ):
-        mock_get_conversation_by_thread.return_value = {
-            "id": "conv-1",
-            "thread_id": "thread-1",
-            "workspace_id": "ws-alpha",
-        }
         mock_run_query.return_value = iter([
             ("updates", {"finalize": {"evidence_level": "none", "outcome_category": "success"}}),
         ])
         body = ChatRequest(
             question="测试",
-            thread_id="thread-1",
             web_search_enabled=False,
             search_strategy="balanced",
-            workspace_id="ws-beta",
+            workspace_id="ws-alpha",
         )
 
-        service = ChatStreamService(body, kb=object())
-        list(service.run())
+        events = list(
+            ChatStreamService(
+                body,
+                kb=object(),
+                authorized_workspace_id=body.workspace_id,
+            ).run()
+        )
 
-        _, kwargs = mock_run_query.call_args
-        self.assertEqual(kwargs["workspace_id"], "ws-alpha")
+        self.assertNotIn("done", [event["event"] for event in events])
+        error = next(event for event in events if event["event"] == "error")
+        self.assertIn("工作区", json.loads(error["data"])["message"])
 
-    @patch("src.api.chat_persistence.replace_pin_state")
+    @patch(
+        "src.api.chat_persistence.conversation_store.persist_conversation_turn",
+        return_value=("conv-1", 2),
+    )
     @patch("src.api.chat_stream_service.record_query_metrics")
-    @patch("src.api.chat_persistence.add_message", side_effect=[1, 2])
-    @patch("src.api.chat_persistence.create_conversation", return_value={"id": "conv-1"})
     @patch("src.api.chat_persistence.generate_title", return_value="测试标题")
-    @patch("src.api.chat_persistence.get_conversation_by_thread", return_value=None)
+    @patch(
+        "src.api.chat_persistence.conversation_store.get_conversation_by_thread",
+        return_value=None,
+    )
     @patch("src.api.chat_stream_service.run_query")
     def test_first_token_metrics_are_persisted_after_the_first_token(
         self,
         mock_run_query,
         _mock_get_conversation,
         _mock_generate_title,
-        _mock_create_conversation,
-        _mock_add_message,
         mock_record_query_metrics,
-        _mock_replace_pin_state,
+        _mock_persist_conversation_turn,
     ):
         """Metrics should distinguish first SSE event time from first token time."""
 
@@ -226,7 +239,7 @@ class ChatStreamServiceTests(unittest.TestCase):
 
         mock_run_query.side_effect = _delayed_sequence
         body = ChatRequest(question="测试", web_search_enabled=False, search_strategy="balanced")
-        service = ChatStreamService(body, kb=object())
+        service = ChatStreamService(body, kb=object(), authorized_workspace_id=body.workspace_id)
 
         events = list(service.run())
         done_events = [event for event in events if event["event"] == "done"]
@@ -256,7 +269,7 @@ class ChatStreamServiceTests(unittest.TestCase):
         ])
         body = ChatRequest(question="测试", web_search_enabled=False, search_strategy="balanced")
 
-        events = list(ChatStreamService(body, kb=object()).run())
+        events = list(ChatStreamService(body, kb=object(), authorized_workspace_id=body.workspace_id).run())
         token_texts = [
             json.loads(event["data"])["text"]
             for event in events
@@ -283,7 +296,11 @@ class ChatStreamServiceTests(unittest.TestCase):
             search_strategy="balanced",
             workspace_id="ws-alpha",
         )
-        service = ChatStreamService(body, kb=WorkspaceScopedGraphKB())
+        service = ChatStreamService(
+            body,
+            kb=WorkspaceScopedGraphKB(),
+            authorized_workspace_id=body.workspace_id,
+        )
 
         events = list(service.run())
         debug_payload = json.loads(next(event["data"] for event in events if event["event"] == "debug"))
@@ -323,7 +340,11 @@ class ChatStreamServiceTests(unittest.TestCase):
             workspace_id="ws-e2e",
         )
 
-        events = list(ChatStreamService(body, kb=E2EFakeChatKB()).run())
+        events = list(ChatStreamService(
+            body,
+            kb=E2EFakeChatKB(),
+            authorized_workspace_id=body.workspace_id,
+        ).run())
         done_payload = json.loads(next(event["data"] for event in events if event["event"] == "done"))
         sources_payload = json.loads(next(event["data"] for event in events if event["event"] == "sources"))
 

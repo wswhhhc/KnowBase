@@ -5,6 +5,7 @@ KnowBase 当前仓库的默认依赖方向如下：
 ## 后端
 
 - `api/` 只处理 HTTP 协议、鉴权、参数校验和响应映射
+- Chat 的 `thread_id` 是全局唯一的会话标识；已有会话必须按持久化工作区授权，请求工作区不一致时拒绝，不允许在流服务内静默覆盖。图 checkpoint 必须同时绑定已授权工作区，会话工作区复核、pin state 和消息写入必须由 persistence 层在单个事务中完成
 - `services/` 负责需要协调 `rag`、`jobs`、`persistence` 的应用用例；服务只返回普通 Python 数据，不依赖 FastAPI 请求/响应对象或 `api.models`
 - Documents 任务的 `EventSourceResponse` 只在 `api/document_job_stream.py` 创建；Documents 路由不得直接轮询任务、直接入队或自行创建任务 SSE 响应
 - `graph/` 与 `rag/` 负责核心问答与知识库逻辑，不反向依赖 `api.models`

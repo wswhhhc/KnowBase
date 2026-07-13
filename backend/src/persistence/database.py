@@ -42,28 +42,28 @@ def get_connection() -> sqlite3.Connection:
 
 def run_migrations() -> None:
     """Run Alembic migrations to bring the database schema up to date."""
-    ini_path = Path(__file__).resolve().parents[2] / "alembic.ini"
-    if not ini_path.exists():
-        return
-
     configured_db = (Path(DATA_DIR) / "conversations.db").resolve()
     current_db = get_db_path().resolve()
     if current_db != configured_db:
         return
 
+    ini_path = Path(__file__).resolve().parents[2] / "alembic.ini"
+    if not ini_path.exists():
+        raise RuntimeError(f"Alembic config not found: {ini_path}")
+
     try:
         from alembic import command
         from alembic.config import Config
-    except ModuleNotFoundError:
-        logger.warning("Alembic not installed; skipping migrations for %s", current_db)
-        return
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("Alembic is required to migrate the configured database") from exc
 
     try:
         alembic_cfg = Config(str(ini_path))
         alembic_cfg.set_main_option("sqlalchemy.url", settings.storage.database_url)
         command.upgrade(alembic_cfg, "head")
-    except Exception as exc:
-        logger.warning("Alembic migration failed: %s", exc)
+    except Exception:
+        logger.exception("Alembic migration failed for the configured database")
+        raise
 
 
 def init_db() -> None:
@@ -104,6 +104,7 @@ def init_db() -> None:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_conversations_thread_id ON conversations(thread_id);
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
