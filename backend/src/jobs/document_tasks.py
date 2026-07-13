@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from src.chat_utils import generate_suggested_questions
+from src.config.settings import settings
 from src.persistence import audit_store, job_store
 from src.rag.knowledge_base import KnowledgeBase
 
@@ -173,7 +174,10 @@ def clear_workspace_documents(
     job_id: str | None = None,
     kb: KnowledgeBase | None = None,
 ) -> dict:
-    knowledge_base = kb or KnowledgeBase(require_embeddings=False)
+    # E2E uses the deterministic local embedding implementation. Initializing
+    # Chroma without an embedding function makes it select its default Rust
+    # binding, which is unavailable in the isolated E2E environment.
+    knowledge_base = kb or KnowledgeBase(require_embeddings=settings.e2e_fake_ai)
     if job_id:
         job_store.update_job_progress(
             job_id,

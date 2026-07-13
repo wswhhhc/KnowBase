@@ -9,14 +9,14 @@
 - [x] Task 4B：抽取同步文档操作
 - [x] Task 4C：抽取清空与重建任务契约
 - [x] Task 5：固化后端结构边界
-- [ ] Checkpoint A：后端全量测试、OpenAPI 与结构守卫通过
+- [x] Checkpoint A：后端全量测试、OpenAPI 与结构守卫通过
 
 ## P0：前端 DocumentPanel
 
 - [x] Task 6：抽取文档导入 hook
 - [x] Task 7：抽取删除与清空 hook
 - [x] Task 8：拆分 DocumentPanel 展示区块
-- [ ] Checkpoint B：前端全量测试、构建和 editor-jobs E2E 通过
+- [x] Checkpoint B：前端全量测试、构建和 editor-jobs E2E 通过
 
 ## P1：页面级热点
 
